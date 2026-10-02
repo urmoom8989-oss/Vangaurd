@@ -8,9 +8,9 @@ and keyboard.
 
 ```bash
 npm install
-npm run dev        # dev server at http://localhost:5173
+npm run dev        # dev server at http://localhost:8080
 npm run build      # production build -> dist/
-npm run preview    # serve the production build (http://localhost:4173)
+npm run preview    # serve the production build (http://localhost:8080)
 npm run build:standalone # bundle the original game and assets into one HTML file
 ```
 

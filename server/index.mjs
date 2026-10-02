@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { WebSocket, WebSocketServer } from 'ws';
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 8080;
 const MATCH_MIN_SIZE = Math.max(6, Math.min(12, Number(process.env.MATCH_MIN_SIZE) || 6));
 const MATCH_MAX_SIZE = Math.max(MATCH_MIN_SIZE, Math.min(12, Number(process.env.MATCH_MAX_SIZE) || 12));
 const MATCH_START_GRACE_MS = 30_000;

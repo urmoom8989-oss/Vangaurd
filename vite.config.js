@@ -9,12 +9,15 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   clearScreen: false,
   server: {
-    port: 5173,
+    port: 8080,
     // The Vite error overlay would cover the canvas; core shows its own small diagnostics instead.
     hmr: { overlay: false },
   },
   optimizeDeps: { noDiscovery: true, include: [] },
   assetsInclude: ['**/*.hdr', '**/*.exr', '**/*.ktx2', '**/*.glb', '**/*.gltf', '**/*.bin'],
+  preview: {
+    port: 8080,
+  },
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 4096,

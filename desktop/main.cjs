@@ -5,7 +5,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const GAME_ROOT = path.join(process.resourcesPath, 'game');
-const PREFERRED_PORT = 43171;
+const PREFERRED_PORT = 8080;
 const CSP = [
   "default-src 'self'",
   "script-src 'self' 'wasm-unsafe-eval'",

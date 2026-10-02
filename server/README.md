@@ -20,6 +20,6 @@ Environment variables:
 - `MATCH_MIN_SIZE` — minimum players needed before the 30-second fill window begins; defaults to 6 and cannot be lower than 6.
 - `MATCH_MAX_SIZE` — maximum players in a room before the match starts; defaults to 12.
 - `ALLOWED_ORIGINS` — optional comma-separated WebSocket Origin allowlist. Leave unset for the desktop/standalone prototype; configure the exact hosted web origins before public production use.
-- `PORT` — provided by Railway automatically.
+- `PORT` — provided by Railway automatically; defaults to `8080` for local runs. In Railway Networking, route the public domain to internal port `8080`.
 
 The queue and rooms are in memory. Keep one Railway replica for this prototype; restarts clear active queues. No storage bucket or database is needed for live matchmaking. Add Redis for shared queues across replicas and a database only when persistent accounts, match results, or stats are required.

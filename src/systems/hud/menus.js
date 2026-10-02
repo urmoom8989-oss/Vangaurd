@@ -579,8 +579,13 @@ export function createMenus(hud) {
   }
 
   const MULTIPLAYER_URL_KEY = 'vangaurd.multiplayer.url.v1';
-  try { multiplayerServerInput.value = globalThis.localStorage?.getItem(MULTIPLAYER_URL_KEY) || DEFAULT_MULTIPLAYER_URL; }
-  catch { multiplayerServerInput.value = DEFAULT_MULTIPLAYER_URL; }
+  try {
+    const savedUrl = globalThis.localStorage?.getItem(MULTIPLAYER_URL_KEY) || '';
+    multiplayerServerInput.value = DEFAULT_MULTIPLAYER_URL || savedUrl;
+    if (DEFAULT_MULTIPLAYER_URL && savedUrl !== DEFAULT_MULTIPLAYER_URL) {
+      globalThis.localStorage?.setItem(MULTIPLAYER_URL_KEY, DEFAULT_MULTIPLAYER_URL);
+    }
+  } catch { multiplayerServerInput.value = DEFAULT_MULTIPLAYER_URL; }
 
   function normalizeMatchmakingUrl(value) {
     const raw = String(value || '').trim();
@@ -652,6 +657,7 @@ export function createMenus(hud) {
     }
     const url = persistMultiplayerServer();
     if (!url) return Promise.reject(new Error(multiplayerStatusText.textContent));
+    const serverHost = new URL(url).host;
     return new Promise((resolve, reject) => {
       const socket = new WebSocket(url);
       st.multiplayerSocket = socket;
@@ -711,8 +717,9 @@ export function createMenus(hud) {
       });
       socket.addEventListener('error', () => {
         clearTimeout(timeout);
-        if (!settled) { settled = true; reject(new Error('Could not connect. Check the Railway URL and service deployment.')); }
-        multiplayerStatusText.textContent = 'Connection failed. Check the Railway URL and service deployment.';
+        const message = `Could not connect to ${serverHost}. Check the matchmaking service deployment and Railway domain target port.`;
+        if (!settled) { settled = true; reject(new Error(message)); }
+        multiplayerStatusText.textContent = message;
       });
       socket.addEventListener('close', () => {
         clearTimeout(timeout);

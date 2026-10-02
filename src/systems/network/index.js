@@ -8,6 +8,8 @@ export default function createSystem(ctx) {
   let session = null;
   let localPlayerId = null;
   let sendClock = 0;
+  let receivedStateCount = 0;
+  let lastReceivedStateAt = 0;
 
   function emitSend(message) {
     events.emit('network:send', message);
@@ -37,10 +39,11 @@ export default function createSystem(ctx) {
   function makeRemote(member) {
     const group = new THREE.Group();
     group.name = `remote-player:${member.id}`;
+    group.frustumCulled = false;
     const primary = member.team === 'alpha' ? 0x467f9e : 0x963f38;
-    const cloth = new THREE.MeshStandardMaterial({ color: primary, roughness: 0.84, metalness: 0.04 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x252a28, roughness: 0.92 });
-    const skin = new THREE.MeshStandardMaterial({ color: 0x9b765d, roughness: 0.88 });
+    const cloth = new THREE.MeshBasicMaterial({ color: primary });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x252a28 });
+    const skin = new THREE.MeshBasicMaterial({ color: 0xc99c79 });
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.27, 0.72, 3, 8), cloth);
     torso.position.y = 1.06;
     torso.castShadow = true;
@@ -75,8 +78,13 @@ export default function createSystem(ctx) {
     muzzle.position.set(0, 1.25, -0.82);
     group.add(muzzle);
     group.add(makeNameplate(member.name, member.team));
+    group.traverse((object) => {
+      object.layers.set(ctx.layers.WORLD);
+      object.frustumCulled = false;
+    });
     scene.add(group);
-    const initial = new THREE.Vector3();
+    const initial = initialTeamSpawn(member);
+    group.position.copy(initial);
     const remote = {
       id: member.id,
       name: member.name,
@@ -86,7 +94,7 @@ export default function createSystem(ctx) {
       head,
       muzzle,
       target: initial.clone(),
-      hasState: false,
+      hasState: true,
       yaw: 0,
       pitch: 0,
       targetYaw: 0,
@@ -114,6 +122,22 @@ export default function createSystem(ctx) {
     return remote;
   }
 
+  function initialTeamSpawn(member) {
+    const world = ctx.services.world;
+    const spawns = world.spawnPoints?.ai || world.spawnPoints?.player || [];
+    if (!spawns.length) return ctx.services.player.state.position.clone();
+    const bounds = world.bounds;
+    const centerZ = bounds ? (bounds.min.z + bounds.max.z) * 0.5 : 0;
+    const wantsSouth = member.team === 'alpha';
+    let candidates = spawns.filter((spawn) => wantsSouth
+      ? spawn.position.z >= centerZ
+      : spawn.position.z < centerZ);
+    if (!candidates.length) candidates = spawns;
+    let hash = 0;
+    for (let i = 0; i < String(member.id).length; i++) hash = (hash * 31 + member.id.charCodeAt(i)) >>> 0;
+    return candidates[hash % candidates.length].position.clone();
+  }
+
   function disposeRemote(remote) {
     remote.damageable?.unregister?.();
     scene.remove(remote.group);
@@ -132,6 +156,8 @@ export default function createSystem(ctx) {
     if (!match?.matchId || !Array.isArray(match.roster)) return;
     session = match;
     localPlayerId = match.playerId;
+    const localMember = match.roster.find((member) => member.id === localPlayerId);
+    session.localTeam = localMember?.team || null;
     for (const member of match.roster) {
       if (!member?.id || member.id === localPlayerId) continue;
       makeRemote(member);
@@ -141,6 +167,7 @@ export default function createSystem(ctx) {
   function clearSession() {
     for (const remote of remotes.values()) disposeRemote(remote);
     session = null;
+    ctx.services.hud.setNetworkPlayers?.([]);
   }
 
   function receiveState(message) {
@@ -153,6 +180,8 @@ export default function createSystem(ctx) {
     remote.targetPitch = state.pitch;
     remote.alive = state.alive !== false;
     remote.group.visible = remote.alive;
+    receivedStateCount++;
+    lastReceivedStateAt = performance.now();
     if (!remote.hasState) {
       remote.group.position.copy(remote.target);
       remote.yaw = state.yaw;
@@ -211,7 +240,29 @@ export default function createSystem(ctx) {
     const p = event?.position;
     if (p && [p.x, p.y, p.z].every(Number.isFinite)) emitSend({ type: 'player_respawn', position: { x: p.x, y: p.y, z: p.z } });
   };
-  const onGamemodeStart = () => { if (session) emitSend({ type: 'player_ready' }); };
+  function sendPlayerState() {
+    if (!session) return;
+    const player = ctx.services.player.state;
+    const p = player.position;
+    emitSend({
+      type: 'player_state',
+      state: {
+        position: { x: p.x, y: p.y, z: p.z },
+        yaw: player.yaw,
+        pitch: player.pitch,
+        stance: player.stance,
+        moving: !!player.moving,
+        sprinting: !!player.sprinting,
+        weaponId: ctx.services.weapons.state?.id,
+        alive: player.alive !== false,
+      },
+    });
+  }
+  const onGamemodeStart = () => {
+    if (!session) return;
+    emitSend({ type: 'player_ready' });
+    sendPlayerState();
+  };
   const onNetworkMessage = (message) => onMessage(message);
   const onNetworkSession = (match) => setSession(match);
   const onNetworkClear = () => clearSession();
@@ -234,20 +285,7 @@ export default function createSystem(ctx) {
       sendClock += dt;
       if (sendClock >= SNAPSHOT_INTERVAL) {
         sendClock %= SNAPSHOT_INTERVAL;
-        const p = player.position;
-        emitSend({
-          type: 'player_state',
-          state: {
-            position: { x: p.x, y: p.y, z: p.z },
-            yaw: player.yaw,
-            pitch: player.pitch,
-            stance: player.stance,
-            moving: !!player.moving,
-            sprinting: !!player.sprinting,
-            weaponId: ctx.services.weapons.state?.id,
-            alive: player.alive !== false,
-          },
-        });
+        sendPlayerState();
       }
       for (const remote of remotes.values()) {
         if (!remote.hasState) continue;
@@ -259,6 +297,13 @@ export default function createSystem(ctx) {
         remote.fireFlash = Math.max(0, remote.fireFlash - dt);
         remote.muzzle.material.opacity = remote.fireFlash > 0 ? Math.min(0.95, remote.fireFlash * 9) : 0;
       }
+      ctx.services.hud.setNetworkPlayers?.([...remotes.values()]
+        .filter((remote) => remote.hasState && remote.alive)
+        .map((remote) => ({
+          x: remote.group.position.x,
+          z: remote.group.position.z,
+          team: remote.team === session.localTeam ? 'friendly' : 'enemy',
+        })));
     },
     dispose() {
       events.off('network:message', onNetworkMessage);
@@ -269,6 +314,21 @@ export default function createSystem(ctx) {
       events.off('gamemode:start', onGamemodeStart);
       clearSession();
     },
-    get state() { return { active: !!session, matchId: session?.matchId || null, players: remotes.size }; },
+    get state() {
+      return {
+        active: !!session,
+        matchId: session?.matchId || null,
+        players: remotes.size,
+        remotePlayers: [...remotes.values()].map((remote) => ({
+          id: remote.id,
+          team: remote.team,
+          visible: remote.group.visible,
+          position: remote.group.position.toArray(),
+          hasState: remote.hasState,
+        })),
+        receivedStateCount,
+        lastReceivedStateAt,
+      };
+    },
   };
 }

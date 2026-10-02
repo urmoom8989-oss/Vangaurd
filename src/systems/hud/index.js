@@ -71,6 +71,7 @@ export default function createSystem(ctx) {
     minimap: null,
     stats: { kills: 0, headshots: 0, deaths: 0, shotsFired: 0, shotsHit: 0, streak: 0, bestStreak: 0, score: 0, best: 0, combatTime: 0 },
     deathInfo: { killer: '', faction: '', weaponId: '', weaponName: '', kind: '', distance: null },
+    networkPlayers: [],
   };
 
   let compass, minimap, center, feed, panels, menus;
@@ -645,6 +646,9 @@ export default function createSystem(ctx) {
     setMatchInfo(o = {}) {
       for (const k of ['wave', 'hostiles', 'objective', 'timer', 'lives', 'modeName', 'score', 'streak', 'kills', 'headshots']) if (k in o) matchOverride[k] = o[k];
     },
+    setNetworkPlayers(players = []) {
+      hud.networkPlayers = Array.isArray(players) ? players : [];
+    },
     openMenu(name) {
       if (name === 'main') hud.mode = 'boot';
       if (name === 'pause') hud.mode = 'pause';
@@ -847,13 +851,27 @@ export default function createSystem(ctx) {
     for (let i = 0; i < pings.length && nb < blips.length; i++) {
       const pg = pings[i];
       const b = blips[nb++];
-      b.x = pg.x; b.z = pg.z; b.alpha = clamp01((pg.until - hud.uiTime) / 0.8); b.kind = pg.kind === 'enemy' ? 'enemy' : pg.kind === 'obj' ? 'obj' : 'ping'; b.age = hud.uiTime - pg.born;
+      b.x = pg.x; b.z = pg.z; b.alpha = clamp01((pg.until - hud.uiTime) / 0.8); b.kind = pg.kind === 'enemy' ? 'enemy' : pg.kind === 'friend' ? 'friend' : pg.kind === 'obj' ? 'obj' : 'ping'; b.age = hud.uiTime - pg.born;
       if (nc < compassItems.length && pg.kind !== 'obj') {
         const c = compassItems[nc++];
-        c.kind = 'enemy';
+        c.kind = pg.kind === 'friend' ? 'friend' : 'enemy';
         c.bearing = (Math.atan2(pg.x - ps.position.x, -(pg.z - ps.position.z)) * 180) / Math.PI;
         c.alpha = b.alpha;
         c.clampEdge = false;
+      }
+    }
+    for (const remote of hud.networkPlayers) {
+      if (nb >= blips.length) break;
+      const b = blips[nb++];
+      b.x = remote.x; b.z = remote.z; b.alpha = 1;
+      b.kind = remote.team === 'friendly' ? 'friend' : 'enemy';
+      b.age = 0;
+      if (nc < compassItems.length) {
+        const c = compassItems[nc++];
+        c.kind = b.kind;
+        c.bearing = (Math.atan2(remote.x - ps.position.x, -(remote.z - ps.position.z)) * 180) / Math.PI;
+        c.alpha = 1;
+        c.clampEdge = true;
       }
     }
     const objP = objectivePos;
