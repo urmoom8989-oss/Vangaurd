@@ -1,0 +1,70 @@
+{
+  "name": "vangaurd",
+  "private": true,
+  "version": "0.1.3",
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "author": "Vangaurd",
+  "description": "Vangaurd - an original first-person shooter built with Three.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:standalone": "node tools/build-standalone.mjs",
+    "desktop:mac": "npm run build && electron-builder --mac dmg zip --arm64 --x64",
+    "desktop:win": "npm run build && electron-builder --win nsis zip --x64",
+    "desktop:all": "npm run build && electron-builder --mac dmg zip --arm64 --x64 && electron-builder --win nsis zip --x64",
+    "preview": "vite preview",
+    "shot": "node tools/shot.mjs",
+    "perf": "node tools/perf.mjs",
+    "audio": "node tools/audio.mjs"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.20.0",
+    "lil-gui": "^0.21.0",
+    "n8ao": "^2.0.1",
+    "postprocessing": "^6.39.5",
+    "three": "^0.186.0",
+    "three-mesh-bvh": "^0.9.15"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "electron": "^38.2.0",
+    "electron-builder": "^26.0.12",
+    "playwright": "1.62.0",
+    "vite": "^8.3.0"
+  },
+  "build": {
+    "appId": "com.vangaurd.game",
+    "productName": "Vangaurd",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/main.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist",
+        "to": "game",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.games",
+      "icon": "build/icons/vangaurd.icns",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "icon": "build/icons/vangaurd.ico",
+      "target": ["nsis", "zip"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

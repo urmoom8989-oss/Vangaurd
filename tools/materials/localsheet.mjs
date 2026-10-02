@@ -1,0 +1,11 @@
+import { chromium } from 'playwright';
+import fs from 'node:fs';
+const out = process.argv[2]; const ids = process.argv[3].split(',');
+import { CACHE } from "./fetch.mjs"; const C = CACHE + "/";
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1600, height: 400 } });
+const imgs = ids.map(i => `data:image/jpeg;base64,${fs.readFileSync(C + i + '/diff.jpg').toString('base64')}`);
+const html = `<body style="margin:0;background:#222;color:#fff;font:14px sans-serif;display:flex;flex-wrap:wrap">${ids.map((i,k)=>`<div style="width:380px;margin:4px"><img src="${imgs[k]}" width=380 height=380><div>${i}</div></div>`).join('')}</body>`;
+await p.setContent(html, { waitUntil: 'load' });
+await p.screenshot({ path: out, fullPage: true });
+await b.close();

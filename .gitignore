@@ -1,0 +1,6 @@
+node_modules/
+dist/
+shots/
+release/
+Vangaurd-standalone.html
+.DS_Store

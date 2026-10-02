@@ -1,0 +1,225 @@
+{
+ "sets": {
+  "concrete_wall_007": {
+   "gpu": 9786776,
+   "disk": 8559084,
+   "res": 2048
+  },
+  "red_brick_03": {
+   "gpu": 2446744,
+   "disk": 2447804,
+   "res": 1024
+  },
+  "concrete_floor_02": {
+   "gpu": 9786776,
+   "disk": 8968529,
+   "res": 2048
+  },
+  "dirty_concrete": {
+   "gpu": 2446744,
+   "disk": 2231170,
+   "res": 1024
+  },
+  "asphalt_02": {
+   "gpu": 9786776,
+   "disk": 9059245,
+   "res": 2048
+  },
+  "painted_plaster_wall": {
+   "gpu": 12582992,
+   "disk": 8593423,
+   "res": 2048
+  },
+  "damaged_plaster": {
+   "gpu": 9786776,
+   "disk": 8959042,
+   "res": 2048
+  },
+  "green_metal_rust": {
+   "gpu": 3145808,
+   "disk": 1521231,
+   "res": 1024
+  },
+  "rust_coarse_01": {
+   "gpu": 2446744,
+   "disk": 2208401,
+   "res": 1024
+  },
+  "worn_corrugated_iron": {
+   "gpu": 2446744,
+   "disk": 2239276,
+   "res": 1024
+  },
+  "rusty_corrugated_iron": {
+   "gpu": 2446744,
+   "disk": 1663187,
+   "res": 1024
+  },
+  "weathered_planks": {
+   "gpu": 9786776,
+   "disk": 8420802,
+   "res": 2048
+  },
+  "green_rough_planks": {
+   "gpu": 3145808,
+   "disk": 2525224,
+   "res": 1024
+  },
+  "dirt": {
+   "gpu": 2446744,
+   "disk": 2190301,
+   "res": 1024
+  },
+  "rocky_trail": {
+   "gpu": 2446744,
+   "disk": 2447796,
+   "res": 1024
+  },
+  "gravel_stones": {
+   "gpu": 2446744,
+   "disk": 2235199,
+   "res": 1024
+  },
+  "rubble": {
+   "gpu": 2446744,
+   "disk": 2231612,
+   "res": 1024
+  },
+  "cobblestone_floor_001": {
+   "gpu": 2446744,
+   "disk": 2250817,
+   "res": 1024
+  },
+  "roof_tiles_14": {
+   "gpu": 2446744,
+   "disk": 2173013,
+   "res": 1024
+  },
+  "asbestos_sheet_02": {
+   "gpu": 2446744,
+   "disk": 1970984,
+   "res": 1024
+  },
+  "floor_tiles_08": {
+   "gpu": 2446744,
+   "disk": 2079608,
+   "res": 1024
+  },
+  "concrete_pavement": {
+   "gpu": 9786776,
+   "disk": 8872997,
+   "res": 2048
+  },
+  "granular_concrete": {
+   "gpu": 2446744,
+   "disk": 2207631,
+   "res": 1024
+  },
+  "hessian_380": {
+   "gpu": 2446744,
+   "disk": 2125638,
+   "res": 1024
+  },
+  "stretch_poplin": {
+   "gpu": 2446744,
+   "disk": 1983568,
+   "res": 1024
+  },
+  "rough_linen": {
+   "gpu": 2446744,
+   "disk": 2121267,
+   "res": 1024
+  },
+  "metal_plate": {
+   "gpu": 2446744,
+   "disk": 2209466,
+   "res": 1024
+  },
+  "metal_plate_02": {
+   "gpu": 2446744,
+   "disk": 1439118,
+   "res": 1024
+  },
+  "rusty_metal_04": {
+   "gpu": 2446744,
+   "disk": 2241663,
+   "res": 1024
+  },
+  "burned_ground_01": {
+   "gpu": 2446744,
+   "disk": 2447812,
+   "res": 1024
+  },
+  "oriented_strand_board": {
+   "gpu": 2446744,
+   "disk": 2247873,
+   "res": 1024
+  },
+  "brown_leather": {
+   "gpu": 2446744,
+   "disk": 2207412,
+   "res": 1024
+  },
+  "container_side": {
+   "gpu": 3145808,
+   "disk": 1820967,
+   "res": 1024
+  },
+  "concrete_block_wall": {
+   "gpu": 2446744,
+   "disk": 2178759,
+   "res": 1024
+  },
+  "square_concrete_pavers": {
+   "gpu": 2446744,
+   "disk": 2028843,
+   "res": 1024
+  },
+  "tarred_gravel": {
+   "gpu": 2446744,
+   "disk": 2183145,
+   "res": 1024
+  },
+  "distressed_painted_planks": {
+   "gpu": 3145808,
+   "disk": 1945953,
+   "res": 1024
+  },
+  "rebar_reinforced_concrete": {
+   "gpu": 3145808,
+   "disk": 2589933,
+   "res": 1024
+  },
+  "rusty_metal_shutter": {
+   "gpu": 3145808,
+   "disk": 2334208,
+   "res": 1024
+  },
+  "peeling_painted_wall": {
+   "gpu": 3145808,
+   "disk": 2260639,
+   "res": 1024
+  },
+  "dense_sand": {
+   "gpu": 2446744,
+   "disk": 2183278,
+   "res": 1024
+  },
+  "rusty_painted_metal": {
+   "gpu": 2446744,
+   "disk": 1894655,
+   "res": 1024
+  },
+  "painted_metal_shutter": {
+   "gpu": 3145808,
+   "disk": 1678183,
+   "res": 1024
+  }
+ },
+ "shared": {
+  "gpu": 2796336,
+  "disk": 2464928
+ },
+ "totalGpuBytes": 167775280,
+ "totalDiskBytes": 140643684
+}
