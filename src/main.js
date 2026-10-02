@@ -34,6 +34,7 @@ const intParam = (k) => {
 
 window.__SHOT_READY__ = false;
 window.__SHOT_FAILED__ = null;
+window.__APP_STARTUP_READY__ = false;
 
 // Never let the Vite error overlay cover the frame: a broken system is reported via
 // [system:<name>] console errors / window.__SYSTEM_ERRORS__ / #core-diag instead.
@@ -236,6 +237,9 @@ async function boot() {
   try { await ctx.services.hud.prepareStartup?.(); }
   catch (e) { console.warn('[core] startup map warmup failed; continuing to menu', e); }
   loop.start();
+  await nextFrame();
+  await nextFrame();
+  window.__APP_STARTUP_READY__ = true;
   bootOverlay.classList.toggle('hidden', !bootOverlayEnabled);
   const deploy = () => {
     input.lock();

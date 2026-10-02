@@ -11,7 +11,7 @@ const CSP = [
   "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
-  "connect-src 'self' https://*.up.railway.app wss://*.up.railway.app https://*.railway.app wss://*.railway.app",
+  "connect-src 'self' http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:* https://*.up.railway.app wss://*.up.railway.app https://*.railway.app wss://*.railway.app",
   "worker-src 'self' blob:",
   "media-src 'self' blob:",
   "font-src 'self' data:",
@@ -138,7 +138,7 @@ function createWindow() {
     height: 900,
     minWidth: 960,
     minHeight: 600,
-    show: true,
+    show: false,
     backgroundColor: '#090b0a',
     autoHideMenuBar: true,
     title: 'Vangaurd',
@@ -147,12 +147,28 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       spellcheck: false,
+      backgroundThrottling: false,
     },
   });
 
   window.setMenu(null);
   window.webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
     if (isMainFrame) showLaunchError(`Could not load the packaged game (${code}): ${description}\n${url}`);
+  });
+  window.webContents.on('did-finish-load', () => {
+    const startedAt = Date.now();
+    const revealWhenReady = async () => {
+      if (window.isDestroyed()) return;
+      try {
+        const ready = await window.webContents.executeJavaScript('window.__APP_STARTUP_READY__ === true');
+        if (ready || Date.now() - startedAt >= 90_000) {
+          window.show();
+          return;
+        }
+      } catch { /* renderer is still booting */ }
+      setTimeout(revealWhenReady, 100);
+    };
+    revealWhenReady();
   });
   window.webContents.on('render-process-gone', (_event, details) => {
     showLaunchError(`The game renderer stopped unexpectedly (${details.reason}${details.exitCode ? `, exit ${details.exitCode}` : ''}).`);

@@ -1,5 +1,8 @@
 node_modules/
 dist/
+/.env.production.local
+/.env.local
+/.env.*.local
 /shots/
 release/
 Vangaurd-standalone.html

@@ -669,7 +669,9 @@ export default function createSystem(ctx) {
     cooldown = Math.max(cooldown - dt, -dt);
     const fireDown = input.isDown('fire');
     const firePressed = input.pressed('fire');
-    const canFire = !sprinting && sprintOutT <= 0 && !state.reloading && (!clip || clip.name === 'inspect' || clip.name === 'fireMode') && holsterT < 0 && equipT <= cur.cfg.equipTime * 0.25;
+    const matchState = ctx.services.gamemode.state || {};
+    const onlineLobbyBlocked = matchState.matchType === 'tdm' && !['match-live', 'match-dead'].includes(matchState.stage);
+    const canFire = !onlineLobbyBlocked && !sprinting && sprintOutT <= 0 && !state.reloading && (!clip || clip.name === 'inspect' || clip.name === 'fireMode') && holsterT < 0 && equipT <= cur.cfg.equipTime * 0.25;
     if (canFire && (fireDown || firePressed)) {
       if (clip && (clip.name === 'inspect' || clip.name === 'fireMode') && firePressed) { stopClip(); state.inspecting = false; }
       const auto = state.fireMode === 'auto';

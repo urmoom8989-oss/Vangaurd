@@ -26,10 +26,10 @@ import { createStorage } from './storage.js';
  * Shot mode: inert 'sandbox' unless the preset has a `gamemode` block (see src/shots/gamemode.js), so it never
  * covers other systems' captures. Everything is driven by ctx.time / a deterministic UI clock.
  */
-const IN_GAME = { warmup: true, live: true, intermission: true, 'match-live': true, 'match-dead': true };
+const IN_GAME = { warmup: true, live: true, intermission: true, matchmaking: true, 'match-live': true, 'match-dead': true };
 const PHASE_OF = {
   boot: 'warmup', sandbox: 'live', menu: 'warmup', deploying: 'warmup', warmup: 'warmup',
-  live: 'live', intermission: 'live', 'match-live': 'live', 'match-dead': 'live', dead: 'live', ended: 'ended',
+  live: 'live', intermission: 'live', matchmaking: 'live', 'match-live': 'live', 'match-dead': 'live', dead: 'live', ended: 'ended',
 };
 const INTRO_LINES = ['Hold Vardanek', 'Day 3 — 17:42 local', 'S/Sgt. Tomas Rehn', 'Task Force Iron Vigil', 'Vardanek · Plaza District'];
 const DEATH_REDEPLOY = 6.0; // seconds before auto-redeploy
@@ -52,7 +52,7 @@ export default function createSystem(ctx) {
     mode: sandboxOnly ? 'sandbox' : MODE_ID,
     matchType: 'protection',
     playerTeam: 'player',
-    scoreLimit: 30,
+    scoreLimit: 50,
     winner: '',
     matchTime: 0,
     phase: sandboxOnly ? 'live' : 'warmup',
@@ -152,6 +152,8 @@ export default function createSystem(ctx) {
   let savedScale = 1;
   let spawnProtect = 0;
   let matchRespawn = 0;
+  let onlineQueueing = false;
+  let queueStatus = { queued: 1, minimum: 6, maximum: 12, startsIn: null };
   const matchFactions = [];
   const matchBotRespawns = [];
   const matchSpawnRng = rng.fork('match-spawns');
@@ -578,12 +580,32 @@ export default function createSystem(ctx) {
     }
   }
 
+  function beginMatchmaking() {
+    state.playerTeam = 'blue';
+    state.scoreLimit = 50;
+    state.score.blue = 0; state.score.red = 0; state.score.player = 0;
+    state.matchTime = 0;
+    state.enemiesTotal = state.enemiesRemaining = state.enemiesAlive = 0;
+    resolveObjective();
+    const spawn = S().world.spawnPoints?.player?.[0];
+    if (spawn) respawnPlayer(spawn);
+    resupply('matchmaking');
+    try { S().player.setInvulnerable?.(true); } catch { /* optional */ }
+    try { S().ai.setEnabled(false); } catch { /* optional */ }
+    setInputEnabled(true);
+    hudVisible(true);
+    G.fade = 0;
+    G.paused = false;
+    setStage('matchmaking');
+    notify('Matchmaking · searching for players. You are deployed in the game.', { kind: 'objective', duration: 8 });
+  }
+
   function beginMatch() {
     const assignedPlayer = onlineMatch?.roster?.find((member) => member.id === onlineMatch.playerId);
     state.playerTeam = state.matchType === 'tdm'
       ? assignedPlayer?.team === 'bravo' ? 'red' : 'blue'
       : 'player';
-    state.scoreLimit = 30;
+    state.scoreLimit = 50;
     state.score.blue = 0; state.score.red = 0; state.score.player = 0;
     state.matchTime = 0;
     matchFactions.length = 0;
@@ -593,12 +615,12 @@ export default function createSystem(ctx) {
     if (spawn) respawnPlayer(spawn);
     resupply('match start');
     try { S().player.setInvulnerable?.(true); spawnProtect = SPAWN_PROTECT; } catch { /* optional */ }
-    try { S().ai.setEnabled(!onlineMatch); } catch { /* optional */ }
+    try { S().ai.setEnabled(!(onlineMatch || onlineQueueing)); } catch { /* optional */ }
     setInputEnabled(true);
     hudVisible(true);
     state.wave = 1; state.round = 1; state.lives = 0;
     state.kills = state.deaths = state.headshots = state.streak = state.bestStreak = 0;
-    state.enemiesTotal = 5;
+    state.enemiesTotal = onlineMatch || onlineQueueing ? 0 : 5;
     state.enemiesRemaining = state.enemiesTotal;
     state.enemiesAlive = state.enemiesTotal;
     matchRespawn = 0;
@@ -606,7 +628,7 @@ export default function createSystem(ctx) {
     G.paused = false;
     G.countdown = 0;
     setStage('match-live');
-    if (!onlineMatch) spawnMatchRoster(spawn || { position: objective.clone(), yaw: 0 });
+    if (!onlineMatch && !onlineQueueing) spawnMatchRoster(spawn || { position: objective.clone(), yaw: 0 });
     notify(onlineMatch ? `Online Team Deathmatch · ${state.playerTeam.toUpperCase()} team` : `Team Deathmatch · first to ${state.scoreLimit}`, { kind: 'banner', duration: 3.5 });
     events.emit('gamemode:start', { mode: state.matchType, difficulty: G.diffKey });
   }
@@ -673,7 +695,8 @@ export default function createSystem(ctx) {
     if (state.matchType === 'tdm') {
       cinematic.stop();
       resolveObjective();
-      beginMatch();
+      if (onlineQueueing && !onlineMatch) beginMatchmaking();
+      else beginMatch();
       return;
     }
     state.playerTeam = 'player';
@@ -1184,6 +1207,9 @@ export default function createSystem(ctx) {
           }
         }
         break;
+      case 'matchmaking':
+        if (!G.paused) G.fade = Math.max(0, G.fade - uiDt * 1.6);
+        break;
       case 'dead': {
         const D = G.death;
         if (!G.paused) {
@@ -1246,12 +1272,22 @@ export default function createSystem(ctx) {
     const timed = G.stage === 'warmup' || G.stage === 'intermission';
     const sec = timed ? Math.max(0, Math.ceil(G.countdown - 1e-6)) : -1;
     const matchScore = state.matchType === 'tdm' ? `${state.score.blue}:${state.score.red}` : `${state.score.player}`;
-    if (G.stage === hudMatchStage && sec === hudMatchSec && hudMatchKey === (timed ? state.wave : -1) && hudMatchScore === matchScore) return;
+    const matchKey = G.stage === 'matchmaking' ? `${queueStatus.queued}/${queueStatus.maximum}/${queueStatus.startsIn}` : timed ? state.wave : -1;
+    if (G.stage === hudMatchStage && sec === hudMatchSec && hudMatchKey === matchKey && hudMatchScore === matchScore) return;
     hudMatchStage = G.stage;
     hudMatchSec = sec;
-    hudMatchKey = timed ? state.wave : -1;
+    hudMatchKey = matchKey;
     hudMatchScore = matchScore;
-    if (state.matchType === 'tdm') {
+    if (G.stage === 'matchmaking') {
+      hudMatch.wave = null;
+      hudMatch.hostiles = null;
+      hudMatch.timer = queueStatus.startsIn === null
+        ? `SEARCHING · ${queueStatus.queued}/${queueStatus.maximum}`
+        : queueStatus.startsIn > 0
+          ? `STARTING IN ${queueStatus.startsIn}`
+          : 'STARTING MATCH';
+      hudMatch.objective = 'TEAM DEATHMATCH · SEARCHING FOR PLAYERS';
+    } else if (state.matchType === 'tdm') {
       hudMatch.wave = 'TDM';
       hudMatch.hostiles = null;
       hudMatch.timer = `FIRST TO ${state.scoreLimit}`;
@@ -1284,8 +1320,21 @@ export default function createSystem(ctx) {
   function on(name, fn) { events.on(name, fn); off.push([name, fn]); }
 
   function wireEvents() {
-    on('network:session', (match) => { onlineMatch = match?.matchId ? match : null; });
+    on('network:session', (match) => {
+      onlineMatch = match?.matchId ? match : null;
+      if (onlineMatch && onlineQueueing && G.stage === 'matchmaking') beginMatch();
+    });
     on('network:clear', () => { onlineMatch = null; });
+    on('gamemode:online-queue', ({ active } = {}) => { onlineQueueing = !!active; });
+    on('gamemode:queue-status', (status = {}) => {
+      queueStatus = {
+        queued: Number.isFinite(status.queued) ? status.queued : queueStatus.queued,
+        minimum: Number.isFinite(status.minimum) ? status.minimum : queueStatus.minimum,
+        maximum: Number.isFinite(status.maximum) ? status.maximum : queueStatus.maximum,
+        startsIn: Number.isFinite(status.startsIn) ? status.startsIn : null,
+      };
+      syncHudMatch();
+    });
     on('network:score', (message) => {
       if (!onlineMatch || message.matchId !== onlineMatch.matchId) return;
       state.score.blue = message.score?.alpha || 0;

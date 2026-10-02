@@ -125,7 +125,7 @@ export function createMenus(hud) {
   const entryMenu = el('div', 'od-menu od-entry-menu', entry);
   const entryItems = [
     item(entryMenu, 'Singleplayer', 'Play immediately against AI', startSingleplayer),
-    item(entryMenu, 'Multiplayer', 'Ready up and wait for other players', startMultiplayer),
+    item(entryMenu, 'Multiplayer', 'Open the deployment menu, then queue for a match', startMultiplayer),
   ];
   const entryFoot = el('div', 'od-foot', entry);
   entryFoot.innerHTML = `<span class="hint"><span class="od-key">↑↓</span>Navigate</span><span class="hint"><span class="od-key">ENTER</span>Select</span><span class="sp"></span><span class="ver">Vangaurd · Build 0.7</span>`;
@@ -154,7 +154,7 @@ export function createMenus(hud) {
   el('div', 'sub', title).textContent = '';
   const mainMenu = el('div', 'od-menu', main);
   const modes = [
-    ['tdm', 'Team Deathmatch', '5 vs 5 · First team to 30'],
+    ['tdm', 'Team Deathmatch', '6-12 player · First team to 50'],
     ['protection', 'Protection', 'Hold Vardanek · Wave survival'],
   ];
   let modeIndex = Math.max(0, modes.findIndex(([key]) => key === ctx.services.gamemode.state?.matchType));
@@ -177,6 +177,10 @@ export function createMenus(hud) {
   multiplayerStatus.setAttribute('role', 'status');
   multiplayerStatus.setAttribute('aria-live', 'polite');
   const multiplayerStatusText = el('div', '', multiplayerStatus);
+  const multiplayerServerConfigure = el('button', 'od-btn', multiplayerStatus);
+  multiplayerServerConfigure.type = 'button';
+  multiplayerServerConfigure.textContent = 'Set up online connection';
+  multiplayerServerConfigure.hidden = true;
   const multiplayerServerLabel = el('label', 'od-mp-server-label', multiplayerStatus);
   multiplayerServerLabel.textContent = 'Railway server URL';
   const multiplayerServerInput = el('input', 'od-mp-server-input', multiplayerServerLabel);
@@ -187,6 +191,10 @@ export function createMenus(hud) {
   const multiplayerServerSave = el('button', 'od-btn', multiplayerActions);
   multiplayerServerSave.type = 'button';
   multiplayerServerSave.textContent = 'Save server';
+  multiplayerServerLabel.hidden = true;
+  multiplayerServerInput.hidden = true;
+  multiplayerServerSave.hidden = true;
+  multiplayerActions.hidden = true;
   const multiplayerLeave = el('button', 'od-btn', multiplayerActions);
   multiplayerLeave.type = 'button';
   multiplayerLeave.textContent = 'Leave room';
@@ -447,6 +455,7 @@ export function createMenus(hud) {
     sel: { entry: 0, main: 0, pause: 0, settings: 0 },
     sessionType: null,
     waitingForPlayers: false,
+    queueJoinPending: false,
     tab: 'graphics',
     armoryPage: 'level',
     armoryWeaponId: 'rifle',
@@ -473,7 +482,7 @@ export function createMenus(hud) {
     if (selected >= 0) modeIndex = selected;
     const [key, label, sub] = modes[modeIndex];
     mainItems[1].querySelector('.d').textContent = st.sessionType === 'multiplayer'
-      ? 'Ready up to join the player queue'
+      ? 'Team Deathmatch · Up to 12 players'
       : 'Start immediately against AI';
     modeCards.forEach(({ key: cardKey, button }) => {
       const active = cardKey === key;
@@ -481,10 +490,10 @@ export function createMenus(hud) {
       button.setAttribute('aria-pressed', String(active));
     });
     cardK.textContent = key === 'protection' ? 'Mission · Protection' : `Match · ${label}`;
-    cardT.textContent = key === 'protection' ? 'Hold Vardanek' : '5 vs 5 · First to 30';
+    cardT.textContent = key === 'protection' ? 'Hold Vardanek' : 'Up to 12 players · First to 50';
     cardP.textContent = key === 'protection'
       ? 'Crimson Vanguard contractors are pushing into the old town. Hold the plaza against escalating waves until the relief column arrives.'
-      : 'Join the defending squad. Four AI teammates face five Crimson Vanguard soldiers. The first side to 30 eliminations wins.';
+      : 'Join the Team Deathmatch queue. The match starts automatically when players are ready, with up to 12 players per game. First side to 50 wins.';
     refreshCard();
   }
   function drawModeThumbnails() {
@@ -548,21 +557,23 @@ export function createMenus(hud) {
 
   function updateSessionUI() {
     const multiplayer = st.sessionType === 'multiplayer';
+    const hasServerUrl = !!multiplayerServerInput.value.trim();
     const selectedMode = modes[modeIndex]?.[0];
     if (multiplayer && selectedMode === 'protection') {
       modeIndex = 0;
       ctx.services.gamemode.setMode?.('tdm');
     }
-    mainItems[1].firstChild.nodeValue = st.waitingForPlayers ? 'Cancel Queue' : st.multiplayerMatch ? 'Deploy Online Match' : multiplayer ? 'Quick Join' : 'Start Game';
+    mainItems[1].firstChild.nodeValue = st.waitingForPlayers ? 'Cancel Queue' : st.multiplayerMatch ? 'Online Match' : multiplayer ? 'Queue for Match' : 'Start Game';
     mainItems[1].querySelector('.d').textContent = st.waitingForPlayers
-      ? 'Cancel your current matchmaking request'
-      : st.multiplayerMatch ? 'Deploy into the reserved online TDM room'
-      : multiplayer ? 'Ready up to join the player queue' : 'Start immediately against AI';
+      ? 'Team Deathmatch · matchmaking in progress'
+      : st.multiplayerMatch ? 'You are already deployed in the online match'
+      : multiplayer ? 'Up to 12 players · First to 50' : 'Start immediately against AI';
     modeCards.forEach(({ key, button }) => { button.hidden = multiplayer && key === 'protection'; });
     multiplayerStatus.hidden = !multiplayer;
+    multiplayerServerConfigure.hidden = !multiplayer || hasServerUrl;
     multiplayerLeave.hidden = !st.multiplayerMatch;
     if (multiplayer && !multiplayerStatusText.textContent) {
-      multiplayerStatusText.textContent = st.waitingForPlayers ? 'Connecting to the matchmaking queue…' : 'Save your Railway server URL, then Quick Join.';
+      multiplayerStatusText.textContent = 'Team Deathmatch · Up to 12 players · First to 50.';
     }
     displayMode(modes[modeIndex][0]);
   }
@@ -572,7 +583,11 @@ export function createMenus(hud) {
   catch { multiplayerServerInput.value = DEFAULT_MULTIPLAYER_URL; }
 
   function normalizeMatchmakingUrl(value) {
-    const parsed = new URL(value.trim());
+    const raw = String(value || '').trim();
+    if (!raw) throw new Error('Online matchmaking is not configured for this installation. Select “Set up online connection” and enter the match service address.');
+    let parsed;
+    try { parsed = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`); }
+    catch { throw new Error('Enter a valid matchmaking server address, such as https://your-service.up.railway.app.'); }
     if (!['http:', 'https:', 'ws:', 'wss:'].includes(parsed.protocol)) throw new Error('Use an HTTP(S) Railway service URL.');
     const secure = parsed.protocol === 'https:' || parsed.protocol === 'wss:';
     parsed.protocol = secure ? 'wss:' : 'ws:';
@@ -582,7 +597,7 @@ export function createMenus(hud) {
     return parsed.toString();
   }
 
-  function saveMultiplayerServer() {
+  function persistMultiplayerServer() {
     try {
       const wsUrl = normalizeMatchmakingUrl(multiplayerServerInput.value);
       const saved = wsUrl.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:').replace(/\/ws$/, '');
@@ -596,6 +611,37 @@ export function createMenus(hud) {
     }
   }
 
+  function showServerConfiguration() {
+    multiplayerServerConfigure.hidden = true;
+    multiplayerActions.hidden = false;
+    multiplayerServerLabel.hidden = false;
+    multiplayerServerInput.hidden = false;
+    multiplayerServerSave.hidden = false;
+  }
+
+  async function saveMultiplayerServer() {
+    const wsUrl = persistMultiplayerServer();
+    if (!wsUrl) return null;
+    try {
+      await connectMatchmaking();
+      multiplayerServerLabel.hidden = true;
+      multiplayerServerInput.hidden = true;
+      multiplayerServerSave.hidden = true;
+      multiplayerActions.hidden = true;
+      multiplayerServerConfigure.hidden = true;
+      return wsUrl;
+    } catch (error) {
+      showServerConfiguration();
+      multiplayerStatusText.textContent = error.message || 'Could not connect. Check the Railway URL and service deployment.';
+      return null;
+    }
+  }
+
+  multiplayerServerConfigure.addEventListener('click', () => {
+    showServerConfiguration();
+    multiplayerServerInput.focus();
+  });
+
   function connectMatchmaking() {
     if (st.multiplayerSocket?.readyState === WebSocket.OPEN) return Promise.resolve(st.multiplayerSocket);
     if (st.multiplayerSocket?.readyState === WebSocket.CONNECTING) {
@@ -604,7 +650,7 @@ export function createMenus(hud) {
         st.multiplayerSocket.addEventListener('error', () => reject(new Error('Could not connect to the Railway matchmaking service.')), { once: true });
       });
     }
-    const url = saveMultiplayerServer();
+    const url = persistMultiplayerServer();
     if (!url) return Promise.reject(new Error(multiplayerStatusText.textContent));
     return new Promise((resolve, reject) => {
       const socket = new WebSocket(url);
@@ -627,10 +673,20 @@ export function createMenus(hud) {
           st.multiplayerPlayerId = message.playerId;
         } else if (message.type === 'queue_status') {
           st.waitingForPlayers = true;
-          multiplayerStatusText.textContent = `Searching Team Deathmatch · ${message.queued}/${message.required} players queued.`;
+          const queued = Number.isFinite(message.queued) ? message.queued : 1;
+          const maximum = Number.isFinite(message.maximum) ? message.maximum : 12;
+          const startsIn = Number.isFinite(message.startsIn) ? message.startsIn : null;
+          const status = startsIn === null
+            ? `Searching Team Deathmatch · ${queued}/${maximum} players (12 max).`
+            : startsIn > 0
+              ? `Searching Team Deathmatch · ${queued}/${maximum} players · match starts in ${startsIn}s.`
+              : 'Team Deathmatch starting…';
+          multiplayerStatusText.textContent = status;
+          ctx.events.emit('gamemode:queue-status', { ...message, queued, maximum, startsIn });
           updateSessionUI();
         } else if (message.type === 'queue_cancelled') {
           st.waitingForPlayers = false;
+          ctx.events.emit('gamemode:online-queue', { active: false });
           multiplayerStatusText.textContent = 'Matchmaking queue cancelled.';
           updateSessionUI();
         } else if (message.type === 'match_found') {
@@ -638,7 +694,8 @@ export function createMenus(hud) {
           st.multiplayerMatch = message;
           ctx.events.emit('network:session', { ...message, playerId: st.multiplayerPlayerId });
           const names = message.roster.map((member) => member.name).join(', ');
-          multiplayerStatusText.textContent = `Room ${message.matchId.slice(0, 8)} ready · ${message.roster.length} players: ${names}. Deploy to see teammates move in real time.`;
+          multiplayerStatusText.textContent = `Match ready · ${message.roster.length} players: ${names}. Deploying into the match…`;
+          notifyInGame('Match found · deploying into Team Deathmatch', 5);
           updateSessionUI();
         } else if (message.type === 'match_left') {
           st.multiplayerMatch = null;
@@ -649,6 +706,7 @@ export function createMenus(hud) {
           multiplayerStatusText.textContent = 'A player left the reserved room.';
         } else if (message.type === 'error') {
           multiplayerStatusText.textContent = message.message || 'Matchmaking service error.';
+          notifyInGame(multiplayerStatusText.textContent, 8);
         }
       });
       socket.addEventListener('error', () => {
@@ -664,15 +722,16 @@ export function createMenus(hud) {
         ctx.events.emit('network:clear');
         if (st.sessionType === 'multiplayer') {
           multiplayerStatusText.textContent = 'Disconnected from matchmaking. Quick Join to reconnect.';
+          notifyInGame(multiplayerStatusText.textContent, 8);
           updateSessionUI();
         }
       });
     });
   }
 
-  multiplayerServerSave.addEventListener('click', saveMultiplayerServer);
+  multiplayerServerSave.addEventListener('click', () => { void saveMultiplayerServer(); });
   multiplayerServerInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') { saveMultiplayerServer(); event.preventDefault(); }
+    if (event.key === 'Enter') { void saveMultiplayerServer(); event.preventDefault(); }
   });
   const onNetworkSend = (message) => {
     const socket = st.multiplayerSocket;
@@ -687,10 +746,15 @@ export function createMenus(hud) {
     updateSessionUI();
   });
 
+  function notifyInGame(text, duration = 5) {
+    try { ctx.services.hud.notify(text, { kind: 'objective', duration }); } catch { /* HUD may not be ready yet */ }
+  }
+
   function startSingleplayer() {
     if (st.multiplayerMatch && st.multiplayerSocket?.readyState === WebSocket.OPEN) st.multiplayerSocket.send(JSON.stringify({ type: 'leave_match' }));
     ctx.events.emit('network:clear');
     st.sessionType = 'singleplayer';
+    ctx.events.emit('gamemode:online-queue', { active: false });
     st.waitingForPlayers = false;
     st.multiplayerMatch = null;
     open('main');
@@ -699,34 +763,54 @@ export function createMenus(hud) {
     st.sessionType = 'multiplayer';
     st.waitingForPlayers = false;
     st.multiplayerMatch = null;
-    multiplayerStatusText.textContent = 'Save your Railway server URL, then Quick Join.';
+    multiplayerStatusText.textContent = 'Team Deathmatch · Up to 12 players · First to 50.';
     if (modes[modeIndex]?.[0] === 'protection') modeIndex = 0;
     ctx.services.gamemode.setMode?.(modes[modeIndex][0]);
     open('main');
   }
-  async function toggleMultiplayerReady() {
-    if (st.sessionType !== 'multiplayer') return play();
-    if (st.multiplayerMatch) {
-      play();
-      return;
-    }
-    if (st.waitingForPlayers) {
-      st.multiplayerSocket?.send(JSON.stringify({ type: 'cancel_queue' }));
-      st.waitingForPlayers = false;
-      multiplayerStatusText.textContent = 'Cancelling matchmaking request…';
-      updateSessionUI();
-      return;
-    }
+  async function joinMultiplayerQueue() {
+    if (st.sessionType !== 'multiplayer' || st.multiplayerMatch || st.queueJoinPending) return;
+    st.queueJoinPending = true;
     try {
       const socket = await connectMatchmaking();
       if (socket.readyState !== WebSocket.OPEN) throw new Error('Matchmaking connection closed before joining.');
       socket.send(JSON.stringify({ type: 'join_queue', mode: 'tdm', name: getPlayerName() }));
       st.waitingForPlayers = true;
-      multiplayerStatusText.textContent = 'Joining Team Deathmatch queue…';
+      multiplayerStatusText.textContent = 'Searching for Team Deathmatch players…';
+      ctx.events.emit('gamemode:queue-status', { queued: 1, minimum: 6, maximum: 12 });
+      notifyInGame('Matchmaking · searching for players', 6);
     } catch (error) {
+      st.waitingForPlayers = false;
       multiplayerStatusText.textContent = error.message || 'Unable to join matchmaking.';
+      showServerConfiguration();
+      notifyInGame(multiplayerStatusText.textContent, 8);
+    } finally {
+      st.queueJoinPending = false;
+      updateSessionUI();
     }
+  }
+  async function toggleMultiplayerReady() {
+    if (st.sessionType !== 'multiplayer') return play();
+    if (st.multiplayerMatch) return;
+    if (st.waitingForPlayers) {
+      st.multiplayerSocket?.send(JSON.stringify({ type: 'cancel_queue' }));
+      st.waitingForPlayers = false;
+      ctx.events.emit('gamemode:online-queue', { active: false });
+      multiplayerStatusText.textContent = 'Cancelling matchmaking request…';
+      updateSessionUI();
+      return;
+    }
+    try { normalizeMatchmakingUrl(multiplayerServerInput.value); }
+    catch (error) {
+      multiplayerStatusText.textContent = error.message || 'Configure the matchmaking connection before queueing.';
+      showServerConfiguration();
+      return;
+    }
+    st.waitingForPlayers = true;
+    multiplayerStatusText.textContent = 'Deploying solo; matchmaking will begin in the game.';
+    ctx.events.emit('gamemode:online-queue', { active: true });
     updateSessionUI();
+    play();
   }
 
   function item(parent, label, sub, onClick, tag) {
@@ -1045,7 +1129,7 @@ export function createMenus(hud) {
     const s = hud.matchSnapshot();
     const gm = ctx.services.gamemode.state || {};
     if (gm.matchType === 'tdm') {
-      pStats.innerHTML = `<div class="ttl">Team Deathmatch · first to 30</div>` +
+      pStats.innerHTML = `<div class="ttl">Team Deathmatch · first to 50</div>` +
         [['Blue team', gm.score?.blue || 0], ['Red team', gm.score?.red || 0], ['Your eliminations', s.kills], ['Headshots', s.headshots], ['Accuracy', s.accuracy], ['Time in match', `${Math.floor((gm.matchTime || 0) / 60)}:${String(Math.floor(gm.matchTime || 0) % 60).padStart(2, '0')}`]]
           .map(([k, v]) => `<div class="row"><span class="k">${k}</span><span class="v">${escapeHtml(String(v))}</span></div>`).join('');
       return;
@@ -1481,6 +1565,7 @@ export function createMenus(hud) {
     openSettings,
     openLoading,
     setLoadingMessage,
+    onEnteredGame: joinMultiplayerQueue,
     prewarmMenuScene,
     refreshDeath,
     refreshPauseStats,

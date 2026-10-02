@@ -250,6 +250,7 @@ export default function createSystem(ctx) {
       const gm = ctx.services.gamemode;
       if (gm.state?.phase === 'ended') gm.start?.();
     }
+    menus.onEnteredGame?.();
   }
   hud.requestResume = () => {
     gesture();
@@ -651,7 +652,13 @@ export default function createSystem(ctx) {
     },
     async prepareStartup() {
       try {
+        await waitForMatchAssets();
+        if (!minimap.map.ready) minimap.bake();
         await menus.prewarmMenuScene();
+        await waitForMatchAssets();
+        if (!minimap.map.ready) throw new Error('The deployment map minimap did not finish baking.');
+        await new Promise(requestAnimationFrame);
+        await new Promise(requestAnimationFrame);
       } catch (error) {
         ctx.reportError('hud', 'startup-render-warmup', error);
       }
@@ -713,7 +720,7 @@ export default function createSystem(ctx) {
       matchHudEl.style.display = activeMatch && ['match-live', 'match-dead', 'ended'].includes(match.stage) ? '' : 'none';
       if (activeMatch) {
         const score = match.score || {};
-        matchHudEl.textContent = `TEAM DEATHMATCH  ·  BLUE ${score.blue || 0} — RED ${score.red || 0}  ·  FIRST TO ${match.scoreLimit || 30}`;
+        matchHudEl.textContent = `TEAM DEATHMATCH  ·  BLUE ${score.blue || 0} — RED ${score.red || 0}  ·  FIRST TO ${match.scoreLimit || 50}`;
       }
     }
 
