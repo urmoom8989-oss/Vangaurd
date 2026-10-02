@@ -283,7 +283,8 @@ export const CSS = /* css */ `
 .od-mp-server-label { display: flex; flex-direction: column; gap: calc(var(--u) * 5); margin-top: calc(var(--u) * 10); color: var(--fg3); font-size: calc(var(--u) * 10); font-weight: 700; letter-spacing: .16em; }
 .od-mp-server-input { box-sizing: border-box; width: 100%; padding: calc(var(--u) * 8) calc(var(--u) * 10); border: 1px solid rgba(236,240,234,.25); outline: none; background: rgba(0,0,0,.38); color: var(--fg); font: inherit; font-size: calc(var(--u) * 12); letter-spacing: .04em; text-transform: none; }
 .od-mp-server-input:focus { border-color: var(--accent); }
-.od-mp-status > .od-btn { margin-top: calc(var(--u) * 8); }
+.od-mp-actions { display: flex; gap: calc(var(--u) * 8); flex-wrap: wrap; margin-top: calc(var(--u) * 8); }
+.od-mp-actions .od-btn { margin-top: 0; }
 .od-item { position: relative; display: block; width: 100%; text-align: left; border: 0; margin: 0 0 calc(var(--u) * 6); padding: calc(var(--u) * 13) calc(var(--u) * 22) calc(var(--u) * 13) calc(var(--u) * 26);
   font: inherit; color: var(--fg2); background: transparent; cursor: pointer; outline: none;
   font-size: calc(var(--u) * 30); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; font-stretch: 85%; font-variation-settings: 'wdth' 85;

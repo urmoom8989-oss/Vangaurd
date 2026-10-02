@@ -1,6 +1,6 @@
 # Railway matchmaking service
 
-This service supplies an ephemeral Team Deathmatch queue and reserves a room when enough players are queued. It is a matchmaking/lobby service only; the game client does not yet replicate player movement, shots, health, respawns, or score, so a reserved room is not yet a playable online match.
+This service supplies an ephemeral Team Deathmatch queue, room reservation, and the prototype's real-time room relay. Deployed clients exchange player poses, fire cues, hit reports, health/death/respawn updates, and team scores. The server enforces room membership, opposing teams, basic fire-rate limits, bounded damage, and respawn delay. Important: hit detection still runs on clients, and the server trusts reported hits, so this is a playable prototype—not cheat-resistant or production-authoritative netcode.
 
 ## Deploy on Railway
 

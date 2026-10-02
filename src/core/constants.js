@@ -19,7 +19,7 @@ export const SURFACES = Object.freeze([
 /** Fixed system folder names in dependency (init/update) order. */
 export const SYSTEM_ORDER = Object.freeze([
   'materials', 'lighting', 'world', 'postfx', 'player', 'weapons',
-  'combat', 'vfx', 'ai', 'audio', 'hud', 'gamemode',
+  'combat', 'vfx', 'ai', 'network', 'audio', 'hud', 'gamemode',
 ]);
 
 /** Units: 1 world unit = 1 meter. +Y up. Player forward at yaw 0 is -Z. Angles in radians at runtime. */

@@ -183,9 +183,14 @@ export function createMenus(hud) {
   multiplayerServerInput.type = 'url';
   multiplayerServerInput.placeholder = 'https://your-service.up.railway.app';
   multiplayerServerInput.autocomplete = 'url';
-  const multiplayerServerSave = el('button', 'od-btn', multiplayerStatus);
+  const multiplayerActions = el('div', 'od-mp-actions', multiplayerStatus);
+  const multiplayerServerSave = el('button', 'od-btn', multiplayerActions);
   multiplayerServerSave.type = 'button';
   multiplayerServerSave.textContent = 'Save server';
+  const multiplayerLeave = el('button', 'od-btn', multiplayerActions);
+  multiplayerLeave.type = 'button';
+  multiplayerLeave.textContent = 'Leave room';
+  multiplayerLeave.hidden = true;
   const modePopup = el('div', 'od-mode-popup', main);
   modePopup.setAttribute('aria-hidden', 'true');
   const modeBackdrop = el('button', 'od-mode-backdrop', modePopup);
@@ -447,6 +452,7 @@ export function createMenus(hud) {
     armoryWeaponId: 'rifle',
     multiplayerSocket: null,
     multiplayerMatch: null,
+    multiplayerPlayerId: null,
     rows: [], // settings rows [{def, el, ...}]
     listening: null, // keybind capture {action, row}
     deathAge: 0,
@@ -547,13 +553,14 @@ export function createMenus(hud) {
       modeIndex = 0;
       ctx.services.gamemode.setMode?.('tdm');
     }
-    mainItems[1].firstChild.nodeValue = st.waitingForPlayers ? 'Cancel Queue' : st.multiplayerMatch ? 'Leave Matchmaking' : multiplayer ? 'Quick Join' : 'Start Game';
+    mainItems[1].firstChild.nodeValue = st.waitingForPlayers ? 'Cancel Queue' : st.multiplayerMatch ? 'Deploy Online Match' : multiplayer ? 'Quick Join' : 'Start Game';
     mainItems[1].querySelector('.d').textContent = st.waitingForPlayers
       ? 'Cancel your current matchmaking request'
-      : st.multiplayerMatch ? 'Leave the assigned matchmaking room' 
+      : st.multiplayerMatch ? 'Deploy into the reserved online TDM room'
       : multiplayer ? 'Ready up to join the player queue' : 'Start immediately against AI';
     modeCards.forEach(({ key, button }) => { button.hidden = multiplayer && key === 'protection'; });
     multiplayerStatus.hidden = !multiplayer;
+    multiplayerLeave.hidden = !st.multiplayerMatch;
     if (multiplayer && !multiplayerStatusText.textContent) {
       multiplayerStatusText.textContent = st.waitingForPlayers ? 'Connecting to the matchmaking queue…' : 'Save your Railway server URL, then Quick Join.';
     }
@@ -615,7 +622,10 @@ export function createMenus(hud) {
       socket.addEventListener('message', (event) => {
         let message;
         try { message = JSON.parse(event.data); } catch { return; }
-        if (message.type === 'queue_status') {
+        ctx.events.emit('network:message', message);
+        if (message.type === 'connected') {
+          st.multiplayerPlayerId = message.playerId;
+        } else if (message.type === 'queue_status') {
           st.waitingForPlayers = true;
           multiplayerStatusText.textContent = `Searching Team Deathmatch · ${message.queued}/${message.required} players queued.`;
           updateSessionUI();
@@ -626,11 +636,13 @@ export function createMenus(hud) {
         } else if (message.type === 'match_found') {
           st.waitingForPlayers = false;
           st.multiplayerMatch = message;
+          ctx.events.emit('network:session', { ...message, playerId: st.multiplayerPlayerId });
           const names = message.roster.map((member) => member.name).join(', ');
-          multiplayerStatusText.textContent = `Room ${message.matchId.slice(0, 8)} reserved (${message.roster.length} players): ${names}. Live game synchronization is not implemented yet.`;
+          multiplayerStatusText.textContent = `Room ${message.matchId.slice(0, 8)} ready · ${message.roster.length} players: ${names}. Deploy to see teammates move in real time.`;
           updateSessionUI();
         } else if (message.type === 'match_left') {
           st.multiplayerMatch = null;
+          ctx.events.emit('network:clear');
           multiplayerStatusText.textContent = 'Left matchmaking room.';
           updateSessionUI();
         } else if (message.type === 'player_left') {
@@ -648,6 +660,8 @@ export function createMenus(hud) {
         clearTimeout(timeout);
         st.waitingForPlayers = false;
         st.multiplayerMatch = null;
+        st.multiplayerPlayerId = null;
+        ctx.events.emit('network:clear');
         if (st.sessionType === 'multiplayer') {
           multiplayerStatusText.textContent = 'Disconnected from matchmaking. Quick Join to reconnect.';
           updateSessionUI();
@@ -660,8 +674,22 @@ export function createMenus(hud) {
   multiplayerServerInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') { saveMultiplayerServer(); event.preventDefault(); }
   });
+  const onNetworkSend = (message) => {
+    const socket = st.multiplayerSocket;
+    if (socket?.readyState === WebSocket.OPEN && st.multiplayerMatch) socket.send(JSON.stringify(message));
+  };
+  ctx.events.on('network:send', onNetworkSend);
+  multiplayerLeave.addEventListener('click', () => {
+    if (st.multiplayerSocket?.readyState === WebSocket.OPEN) st.multiplayerSocket.send(JSON.stringify({ type: 'leave_match' }));
+    st.multiplayerMatch = null;
+    ctx.events.emit('network:clear');
+    multiplayerStatusText.textContent = 'Leaving matchmaking room…';
+    updateSessionUI();
+  });
 
   function startSingleplayer() {
+    if (st.multiplayerMatch && st.multiplayerSocket?.readyState === WebSocket.OPEN) st.multiplayerSocket.send(JSON.stringify({ type: 'leave_match' }));
+    ctx.events.emit('network:clear');
     st.sessionType = 'singleplayer';
     st.waitingForPlayers = false;
     st.multiplayerMatch = null;
@@ -679,10 +707,7 @@ export function createMenus(hud) {
   async function toggleMultiplayerReady() {
     if (st.sessionType !== 'multiplayer') return play();
     if (st.multiplayerMatch) {
-      st.multiplayerSocket?.send(JSON.stringify({ type: 'leave_match' }));
-      st.multiplayerMatch = null;
-      multiplayerStatusText.textContent = 'Leaving matchmaking room…';
-      updateSessionUI();
+      play();
       return;
     }
     if (st.waitingForPlayers) {
@@ -1437,6 +1462,8 @@ export function createMenus(hud) {
 
   function dispose() {
     ctx.events.off('gamemode:mode', onGameMode);
+    ctx.events.off('network:send', onNetworkSend);
+    st.multiplayerSocket?.close();
     for (const [name, fn] of profileListeners) ctx.events.off(name, fn);
     window.removeEventListener('keydown', onKey, true);
     window.removeEventListener('mousedown', onMouse, true);

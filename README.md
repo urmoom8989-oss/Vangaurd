@@ -42,7 +42,7 @@ the GPU supports WebGL 2. The app writes startup details to `%APPDATA%\Vangaurd\
 On startup, the desktop app prepares the world and warms map shaders from wide and street-level
 views before showing the deployment menu; this can make the initial splash take longer, but avoids
 compilation spikes while browsing the menu. Choose Singleplayer and the game loads the match and
-captures the mouse automatically. Railway matchmaking deployment is described in [server/README.md](server/README.md). The service currently reserves TDM rooms only; real-time player movement, shooting, damage, and score replication are not implemented yet, so rooms are not yet playable online.
+captures the mouse automatically. Railway multiplayer setup is described in [server/README.md](server/README.md). Online TDM synchronizes player poses, remote hitboxes, hit/health/death/respawn events, and team scores through the Railway room relay. This is a prototype: hit tests run on clients and are not cheat-resistant or production-authoritative.
 
 `dist/` loads its assets from absolute `/assets/...` paths, so host it at the root of a domain, not in a
 sub-folder.

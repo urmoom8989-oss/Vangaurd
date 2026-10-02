@@ -155,6 +155,7 @@ export default function createSystem(ctx) {
   const matchFactions = [];
   const matchBotRespawns = [];
   const matchSpawnRng = rng.fork('match-spawns');
+  let onlineMatch = null;
 
   const objective = new THREE.Vector3();
   const tmpV = new THREE.Vector3();
@@ -504,7 +505,7 @@ export default function createSystem(ctx) {
   function matchSpawnForPlayer(agents = S().ai.agents || []) {
     const groups = matchEdgeSpawns();
     const candidates = state.matchType === 'tdm'
-      ? groups.south
+      ? (state.playerTeam === 'red' ? groups.north : groups.south)
       : groups.all;
     if (!candidates.length) return S().world.spawnPoints?.player?.[0] || null;
     let best = candidates[0], bestScore = -Infinity;
@@ -578,7 +579,10 @@ export default function createSystem(ctx) {
   }
 
   function beginMatch() {
-    state.playerTeam = state.matchType === 'tdm' ? 'blue' : 'player';
+    const assignedPlayer = onlineMatch?.roster?.find((member) => member.id === onlineMatch.playerId);
+    state.playerTeam = state.matchType === 'tdm'
+      ? assignedPlayer?.team === 'bravo' ? 'red' : 'blue'
+      : 'player';
     state.scoreLimit = 30;
     state.score.blue = 0; state.score.red = 0; state.score.player = 0;
     state.matchTime = 0;
@@ -589,7 +593,7 @@ export default function createSystem(ctx) {
     if (spawn) respawnPlayer(spawn);
     resupply('match start');
     try { S().player.setInvulnerable?.(true); spawnProtect = SPAWN_PROTECT; } catch { /* optional */ }
-    try { S().ai.setEnabled(true); } catch { /* optional */ }
+    try { S().ai.setEnabled(!onlineMatch); } catch { /* optional */ }
     setInputEnabled(true);
     hudVisible(true);
     state.wave = 1; state.round = 1; state.lives = 0;
@@ -602,8 +606,8 @@ export default function createSystem(ctx) {
     G.paused = false;
     G.countdown = 0;
     setStage('match-live');
-    spawnMatchRoster(spawn || { position: objective.clone(), yaw: 0 });
-    notify(`Team Deathmatch · first to ${state.scoreLimit}`, { kind: 'banner', duration: 3.5 });
+    if (!onlineMatch) spawnMatchRoster(spawn || { position: objective.clone(), yaw: 0 });
+    notify(onlineMatch ? `Online Team Deathmatch · ${state.playerTeam.toUpperCase()} team` : `Team Deathmatch · first to ${state.scoreLimit}`, { kind: 'banner', duration: 3.5 });
     events.emit('gamemode:start', { mode: state.matchType, difficulty: G.diffKey });
   }
 
@@ -628,7 +632,7 @@ export default function createSystem(ctx) {
   }
 
   function awardMatchKill(e) {
-    if (!(G.stage === 'match-live' || G.stage === 'match-dead') || !e?.target) return;
+    if (onlineMatch || !(G.stage === 'match-live' || G.stage === 'match-dead') || !e?.target) return;
     const targetTeam = e.target.team || (e.target.isPlayer ? 'player' : '');
     const source = e.source;
     const isHuman = isPlayerSource(source);
@@ -1280,6 +1284,17 @@ export default function createSystem(ctx) {
   function on(name, fn) { events.on(name, fn); off.push([name, fn]); }
 
   function wireEvents() {
+    on('network:session', (match) => { onlineMatch = match?.matchId ? match : null; });
+    on('network:clear', () => { onlineMatch = null; });
+    on('network:score', (message) => {
+      if (!onlineMatch || message.matchId !== onlineMatch.matchId) return;
+      state.score.blue = message.score?.alpha || 0;
+      state.score.red = message.score?.bravo || 0;
+      state.score.friendly = state.score[state.playerTeam] || 0;
+      state.score.enemy = state.playerTeam === 'blue' ? state.score.red : state.score.blue;
+      if (state.score.blue >= state.scoreLimit) finishMatch('blue', 'BLUE TEAM');
+      else if (state.score.red >= state.scoreLimit) finishMatch('red', 'RED TEAM');
+    });
     on('combat:kill', (e) => {
       if (state.matchType === 'tdm') { awardMatchKill(e); return; }
       if (!isPlayerSource(e?.source)) return;

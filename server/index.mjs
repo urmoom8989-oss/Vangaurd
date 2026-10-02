@@ -54,7 +54,12 @@ function startMatch() {
       if (!player) return null;
       player.queued = false;
       player.matchId = matchId;
-      return { id, name: player.name, team: index < MATCH_SIZE / 2 ? 'alpha' : 'bravo' };
+      player.team = index < MATCH_SIZE / 2 ? 'alpha' : 'bravo';
+      player.health = 100;
+      player.deadAt = 0;
+      player.spawnProtectedUntil = Date.now() + 2500;
+      player.alive = true;
+      return { id, name: player.name, team: player.team };
     }).filter(Boolean);
     if (roster.length < MATCH_SIZE) {
       for (const member of roster) {
@@ -63,7 +68,8 @@ function startMatch() {
       }
       break;
     }
-    rooms.set(matchId, new Set(roster.map((player) => player.id)));
+    const members = new Set(roster.map((player) => player.id));
+    rooms.set(matchId, { members, score: { alpha: 0, bravo: 0 } });
     for (const member of roster) {
       const player = clients.get(member.id);
       if (player) send(player.socket, { type: 'match_found', matchId, mode: 'tdm', roster });
@@ -86,18 +92,130 @@ function joinQueue(player, message) {
   startMatch();
 }
 
+function roomBroadcast(player, payload) {
+  const room = rooms.get(player.matchId);
+  if (!room) return false;
+  for (const id of room.members) {
+    if (id === player.id) continue;
+    const peer = clients.get(id);
+    if (peer) send(peer.socket, payload);
+  }
+  return true;
+}
+
+function validNumber(value, min, max) {
+  return Number.isFinite(value) && value >= min && value <= max;
+}
+
+function receivePlayerState(player, message) {
+  if (!player.matchId || !rooms.has(player.matchId)) return;
+  const now = Date.now();
+  if (now - player.lastStateAt < 70) return;
+  const state = message.state;
+  if (!state || !state.position || !['x', 'y', 'z'].every((axis) => validNumber(state.position[axis], -500, 500))) return;
+  if (!validNumber(state.yaw, -Math.PI * 100, Math.PI * 100) || !validNumber(state.pitch, -Math.PI, Math.PI)) return;
+  const pose = {
+    x: state.position.x, y: state.position.y, z: state.position.z,
+    yaw: state.yaw, pitch: state.pitch,
+    stance: ['stand', 'crouch', 'prone'].includes(state.stance) ? state.stance : 'stand',
+    moving: !!state.moving,
+    sprinting: !!state.sprinting,
+    weaponId: state.weaponId === 'pistol' ? 'pistol' : 'rifle',
+    alive: player.health > 0 && state.alive !== false,
+  };
+  player.lastStateAt = now;
+  player.latestState = pose;
+  roomBroadcast(player, { type: 'player_state', matchId: player.matchId, playerId: player.id, state: pose });
+}
+
+function receiveWeaponCue(player, message) {
+  if (!player.matchId || !rooms.has(player.matchId)) return;
+  const now = Date.now();
+  if (now - player.lastShotAt < 80) return;
+  const weaponId = message.weaponId === 'pistol' ? 'pistol' : 'rifle';
+  player.lastShotAt = now;
+  roomBroadcast(player, { type: 'weapon_fired', matchId: player.matchId, playerId: player.id, weaponId, at: now });
+}
+
+function receivePlayerHit(player, message) {
+  if (!player.matchId || !rooms.has(player.matchId) || player.health <= 0) return;
+  const target = clients.get(message.targetId);
+  if (!target || target.matchId !== player.matchId || target.id === player.id || target.health <= 0 || target.team === player.team) return;
+  const now = Date.now();
+  if (now < target.spawnProtectedUntil) return;
+  if (now - player.lastHitAt < 80) return;
+  const claimed = Number(message.amount);
+  if (!Number.isFinite(claimed) || claimed <= 0) return;
+  const amount = Math.min(55, claimed);
+  player.lastHitAt = now;
+  target.health = Math.max(0, target.health - amount);
+  const killed = target.health === 0;
+  if (killed) {
+    target.deadAt = now;
+    const room = rooms.get(player.matchId);
+    room.score[player.team] = (room.score[player.team] || 0) + 1;
+  }
+  const update = {
+    type: 'player_damaged',
+    matchId: player.matchId,
+    targetId: target.id,
+    attackerId: player.id,
+    amount,
+    health: target.health,
+    zone: ['head', 'torso', 'limb'].includes(message.zone) ? message.zone : 'torso',
+    killed,
+  };
+  const room = rooms.get(player.matchId);
+  for (const id of room.members) {
+    const member = clients.get(id);
+    if (member) send(member.socket, update);
+  }
+  if (killed) {
+    const score = { ...room.score };
+    for (const id of room.members) {
+      const member = clients.get(id);
+      if (member) send(member.socket, { type: 'match_score', matchId: player.matchId, score, scoreLimit: 30 });
+    }
+  }
+}
+
+function receivePlayerReady(player) {
+  if (!player.matchId || !rooms.has(player.matchId)) return;
+  player.health = 100;
+  player.deadAt = 0;
+  player.spawnProtectedUntil = Date.now() + 3000;
+  roomBroadcast(player, { type: 'player_ready', matchId: player.matchId, playerId: player.id });
+}
+
+function receivePlayerRespawn(player, message) {
+  if (!player.matchId || !rooms.has(player.matchId) || player.health > 0 || !player.deadAt || Date.now() - player.deadAt < 2000 || !message.position) return;
+  const { x, y, z } = message.position;
+  if (![x, y, z].every((value) => validNumber(value, -500, 500))) return;
+  player.health = 100;
+  player.deadAt = 0;
+  player.spawnProtectedUntil = Date.now() + 2500;
+  player.alive = true;
+  const state = player.latestState || {};
+  player.latestState = { ...state, x, y, z, alive: true };
+  roomBroadcast(player, { type: 'player_respawned', matchId: player.matchId, playerId: player.id, state: player.latestState });
+}
+
 function leaveMatch(player) {
   if (!player.matchId) return;
   const matchId = player.matchId;
-  const members = rooms.get(matchId);
+  const room = rooms.get(matchId);
   player.matchId = null;
-  if (!members) return;
-  members.delete(player.id);
-  for (const id of members) {
+  player.latestState = null;
+  player.health = 100;
+  player.deadAt = 0;
+  player.team = null;
+  if (!room) return;
+  room.members.delete(player.id);
+  for (const id of room.members) {
     const peer = clients.get(id);
     if (peer) send(peer.socket, { type: 'player_left', matchId, playerId: player.id });
   }
-  if (!members.size) rooms.delete(matchId);
+  if (!room.members.size) rooms.delete(matchId);
 }
 
 function handleMessage(player, raw) {
@@ -117,6 +235,16 @@ function handleMessage(player, raw) {
   } else if (message.type === 'leave_match') {
     leaveMatch(player);
     send(player.socket, { type: 'match_left' });
+  } else if (message.type === 'player_state') {
+    receivePlayerState(player, message);
+  } else if (message.type === 'weapon_fired') {
+    receiveWeaponCue(player, message);
+  } else if (message.type === 'player_hit') {
+    receivePlayerHit(player, message);
+  } else if (message.type === 'player_ready') {
+    receivePlayerReady(player);
+  } else if (message.type === 'player_respawn') {
+    receivePlayerRespawn(player, message);
   } else if (message.type === 'ping') {
     send(player.socket, { type: 'pong', at: Date.now() });
   } else {
@@ -137,7 +265,7 @@ server.on('upgrade', (request, socket, head) => {
 
 wss.on('connection', (socket) => {
   const id = randomUUID();
-  const player = { id, name: '', socket, queued: false, matchId: null, alive: true };
+  const player = { id, name: '', socket, queued: false, matchId: null, team: null, health: 100, deadAt: 0, spawnProtectedUntil: 0, alive: true, lastStateAt: 0, lastShotAt: 0, lastHitAt: 0, latestState: null };
   clients.set(id, player);
   send(socket, { type: 'connected', playerId: id, matchSize: MATCH_SIZE });
   socket.on('pong', () => { player.alive = true; });
