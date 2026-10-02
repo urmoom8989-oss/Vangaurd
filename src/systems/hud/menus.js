@@ -454,6 +454,7 @@ export function createMenus(hud) {
     stack: [],
     sel: { entry: 0, main: 0, pause: 0, settings: 0 },
     sessionType: null,
+    serverConfigurationOpen: false,
     waitingForPlayers: false,
     queueJoinPending: false,
     tab: 'graphics',
@@ -569,7 +570,7 @@ export function createMenus(hud) {
       : st.multiplayerMatch ? 'You are already deployed in the online match'
       : multiplayer ? 'Up to 12 players · First to 50' : 'Start immediately against AI';
     modeCards.forEach(({ key, button }) => { button.hidden = multiplayer && key === 'protection'; });
-    multiplayerStatus.hidden = !multiplayer;
+    multiplayerStatus.hidden = !multiplayer || !st.serverConfigurationOpen;
     multiplayerServerConfigure.hidden = !multiplayer || hasServerUrl;
     multiplayerLeave.hidden = !st.multiplayerMatch;
     if (multiplayer && !multiplayerStatusText.textContent) {
@@ -617,7 +618,9 @@ export function createMenus(hud) {
   }
 
   function showServerConfiguration() {
+    st.serverConfigurationOpen = true;
     multiplayerServerConfigure.hidden = true;
+    multiplayerStatus.hidden = false;
     multiplayerActions.hidden = false;
     multiplayerServerLabel.hidden = false;
     multiplayerServerInput.hidden = false;
@@ -634,6 +637,8 @@ export function createMenus(hud) {
       multiplayerServerSave.hidden = true;
       multiplayerActions.hidden = true;
       multiplayerServerConfigure.hidden = true;
+      st.serverConfigurationOpen = false;
+      multiplayerStatus.hidden = true;
       return wsUrl;
     } catch (error) {
       showServerConfiguration();
@@ -761,6 +766,7 @@ export function createMenus(hud) {
     if (st.multiplayerMatch && st.multiplayerSocket?.readyState === WebSocket.OPEN) st.multiplayerSocket.send(JSON.stringify({ type: 'leave_match' }));
     ctx.events.emit('network:clear');
     st.sessionType = 'singleplayer';
+    st.serverConfigurationOpen = false;
     ctx.events.emit('gamemode:online-queue', { active: false });
     st.waitingForPlayers = false;
     st.multiplayerMatch = null;
@@ -768,6 +774,7 @@ export function createMenus(hud) {
   }
   function startMultiplayer() {
     st.sessionType = 'multiplayer';
+    st.serverConfigurationOpen = false;
     st.waitingForPlayers = false;
     st.multiplayerMatch = null;
     multiplayerStatusText.textContent = 'Team Deathmatch · Up to 12 players · First to 50.';

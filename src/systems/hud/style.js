@@ -278,7 +278,7 @@ export const CSS = /* css */ `
 .od-menu.pause { top: calc(var(--u) * 300); }
 .od-entry-menu { top: calc(var(--u) * 455); }
 .od-entry .od-title .sub { margin-top: calc(var(--u) * 24); }
-.od-mp-status { position: absolute; left: calc(var(--u) * 120); top: calc(var(--u) * 700); width: calc(var(--u) * 520); padding: calc(var(--u) * 14) calc(var(--u) * 18);
+.od-mp-status { position: absolute; left: calc(var(--u) * 120); top: auto; bottom: calc(var(--u) * 100); width: calc(var(--u) * 520); padding: calc(var(--u) * 14) calc(var(--u) * 18);
   border-left: calc(var(--u) * 3) solid var(--accent); background: rgba(8,10,12,.82); color: var(--fg2); font-size: calc(var(--u) * 13); line-height: 1.5; letter-spacing: .08em; text-transform: uppercase; }
 .od-mp-server-label { display: flex; flex-direction: column; gap: calc(var(--u) * 5); margin-top: calc(var(--u) * 10); color: var(--fg3); font-size: calc(var(--u) * 10); font-weight: 700; letter-spacing: .16em; }
 .od-mp-server-input { box-sizing: border-box; width: 100%; padding: calc(var(--u) * 8) calc(var(--u) * 10); border: 1px solid rgba(236,240,234,.25); outline: none; background: rgba(0,0,0,.38); color: var(--fg); font: inherit; font-size: calc(var(--u) * 12); letter-spacing: .04em; text-transform: none; }

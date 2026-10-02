@@ -267,7 +267,7 @@ export default function createSystem(ctx) {
   const onNetworkSession = (match) => setSession(match);
   const onNetworkClear = () => clearSession();
 
-  return {
+  const api = {
     name: 'network',
     init() {
       events.on('network:message', onNetworkMessage);
@@ -276,6 +276,7 @@ export default function createSystem(ctx) {
       events.on('weapon:fired', onWeaponFired);
       events.on('player:respawn', onPlayerRespawn);
       events.on('gamemode:start', onGamemodeStart);
+      ctx.services.provide('network', api);
     },
     update(dt) {
       if (!session) return;
@@ -300,7 +301,10 @@ export default function createSystem(ctx) {
       ctx.services.hud.setNetworkPlayers?.([...remotes.values()]
         .filter((remote) => remote.hasState && remote.alive)
         .map((remote) => ({
+          id: remote.id,
+          name: remote.name,
           x: remote.group.position.x,
+          y: remote.group.position.y,
           z: remote.group.position.z,
           team: remote.team === session.localTeam ? 'friendly' : 'enemy',
         })));
@@ -331,4 +335,5 @@ export default function createSystem(ctx) {
       };
     },
   };
+  return api;
 }

@@ -78,6 +78,9 @@ export default function createSystem(ctx) {
   let styleEl = null;
   let fpsEl = null;
   let matchHudEl = null;
+  let networkOverlay = null;
+  const networkMarkers = new Map();
+  const networkProject = new THREE.Vector3();
   let fpsElapsed = 0;
   let fpsFrames = 0;
   let lastReal = -1;
@@ -446,6 +449,66 @@ export default function createSystem(ctx) {
     if (!position) return;
     if (pings.length > 24) pings.shift();
     pings.push({ x: position.x, z: position.z, until: hud.uiTime + duration, kind, born: hud.uiTime });
+  }
+  function updateNetworkOverlay() {
+    if (!networkOverlay || !hud.networkPlayers.length) {
+      if (networkOverlay) networkOverlay.replaceChildren();
+      networkMarkers.clear();
+      return;
+    }
+    const liveIds = new Set();
+    const camera = ctx.camera;
+    const playerPosition = ctx.services.player.state.position;
+    for (const remote of hud.networkPlayers) {
+      liveIds.add(remote.id);
+      let marker = networkMarkers.get(remote.id);
+      if (!marker) {
+        marker = document.createElement('div');
+        marker.className = `od-net-player ${remote.team === 'friendly' ? 'friend' : 'enemy'}`;
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        const label = document.createElement('span');
+        label.className = 'label';
+        marker.append(arrow, label);
+        networkOverlay.appendChild(marker);
+        networkMarkers.set(remote.id, marker);
+      }
+      marker.className = `od-net-player ${remote.team === 'friendly' ? 'friend' : 'enemy'}`;
+      const label = marker.querySelector('.label');
+      const name = String(remote.name || 'PLAYER').slice(0, 18).toUpperCase();
+      const distance = Math.round(Math.hypot(remote.x - playerPosition.x, remote.y - playerPosition.y, remote.z - playerPosition.z));
+      label.textContent = `${name} · ${distance}M`;
+      networkProject.set(remote.x, remote.y + 2.15, remote.z).project(camera);
+      let x = (networkProject.x * 0.5 + 0.5) * hud.viewW;
+      let y = (-networkProject.y * 0.5 + 0.5) * hud.viewH;
+      let dx = x - hud.viewW * 0.5;
+      let dy = y - hud.viewH * 0.5;
+      const behind = networkProject.z > 1;
+      if (behind) { dx *= -1; dy *= -1; }
+      const margin = 52 * hud.u;
+      const clampedX = Math.max(margin, Math.min(hud.viewW - margin, x));
+      const clampedY = Math.max(margin, Math.min(hud.viewH - margin, y));
+      const outside = behind || networkProject.z < -1 || clampedX !== x || clampedY !== y;
+      if (outside) {
+        const angle = Math.atan2(dy, dx);
+        const edgeX = hud.viewW * 0.5 + Math.cos(angle) * (hud.viewW * 0.5 - margin);
+        const edgeY = hud.viewH * 0.5 + Math.sin(angle) * (hud.viewH * 0.5 - margin);
+        x = Math.max(margin, Math.min(hud.viewW - margin, edgeX));
+        y = Math.max(margin, Math.min(hud.viewH - margin, edgeY));
+      } else {
+        x = clampedX;
+        y = clampedY;
+      }
+      marker.classList.toggle('edge', outside);
+      marker.querySelector('.arrow').textContent = outside ? '▲' : '●';
+      marker.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) translate(-50%,-50%)`;
+      marker.style.setProperty('--bearing', `${Math.atan2(dy, dx)}rad`);
+    }
+    for (const [id, marker] of networkMarkers) {
+      if (liveIds.has(id)) continue;
+      marker.remove();
+      networkMarkers.delete(id);
+    }
   }
   function revealEnemy(agentOrId, seconds = 3) {
     const a = typeof agentOrId === 'object' ? agentOrId : findAgent(agentOrId);
@@ -906,6 +969,7 @@ export default function createSystem(ctx) {
       }
       minimap.draw(mapP, blips, nb, hud.uiTime);
     }
+    updateNetworkOverlay();
 
     menus.update(udt);
   }
@@ -984,9 +1048,10 @@ export default function createSystem(ctx) {
 
       styleEl = document.createElement('style');
       styleEl.textContent = CSS;
-      styleEl.textContent += '\n.od-fps-counter{position:fixed;right:28px;top:26px;z-index:80;padding:7px 10px;background:rgba(8,12,11,.62);border:1px solid rgba(255,255,255,.18);color:#f0eee6;font:700 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;pointer-events:none}.od-match-score{position:fixed;left:50%;top:calc(82px + 4.8*var(--u,1px));transform:translateX(-50%);z-index:70;padding:8px 13px;background:rgba(8,12,11,.58);border:1px solid rgba(255,255,255,.14);color:#f0eee6;font:700 10px/1.2 system-ui,sans-serif;letter-spacing:.12em;white-space:nowrap;pointer-events:none}@media(max-width:600px){.od-fps-counter{right:12px;top:12px}.od-match-score{top:94px;font-size:8px;letter-spacing:.06em}}';
+      styleEl.textContent += '\n.od-fps-counter{position:fixed;right:28px;top:26px;z-index:80;padding:7px 10px;background:rgba(8,12,11,.62);border:1px solid rgba(255,255,255,.18);color:#f0eee6;font:700 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;pointer-events:none}.od-match-score{position:fixed;left:50%;top:calc(82px + 4.8*var(--u,1px));transform:translateX(-50%);z-index:70;padding:8px 13px;background:rgba(8,12,11,.58);border:1px solid rgba(255,255,255,.14);color:#f0eee6;font:700 10px/1.2 system-ui,sans-serif;letter-spacing:.12em;white-space:nowrap;pointer-events:none}.od-net-overlay{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:65}.od-net-player{position:absolute;display:flex;align-items:center;gap:6px;white-space:nowrap;font:800 12px/1 system-ui,sans-serif;letter-spacing:.1em;color:#ff7068;text-shadow:0 2px 4px #000,0 0 10px #000;pointer-events:none}.od-net-player .arrow{font-size:16px}.od-net-player.friend{color:#8bd8ff}.od-net-player.edge{padding:5px 7px;background:rgba(4,8,11,.58);border-radius:2px}.od-net-player.edge .arrow{transform:rotate(var(--bearing))}@media(max-width:600px){.od-fps-counter{right:12px;top:12px}.od-match-score{top:94px;font-size:8px;letter-spacing:.06em}.od-net-player{font-size:10px}}';
       ctx.ui.hudRoot.appendChild(styleEl);
       hud.layer = el('div', 'od-layer od-hud', ctx.ui.hudRoot);
+      networkOverlay = el('div', 'od-net-overlay', hud.layer);
       hud.uiLayer = el('div', 'od-layer od-ui', ctx.ui.uiRoot);
       fpsEl = el('div', 'od-fps-counter', ctx.ui.hudRoot);
       fpsEl.setAttribute('aria-live', 'off');

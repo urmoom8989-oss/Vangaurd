@@ -129,6 +129,15 @@ export function createDefaultServices(ctx) {
       setEnabled() {},
     },
 
+    // --------------------------------------------------------------------------- network
+    network: {
+      state: { active: false, matchId: null, players: 0, remotePlayers: [], receivedStateCount: 0, lastReceivedStateAt: 0 },
+      send() {},
+      leaveMatch() {},
+      joinQueue() {},
+      clearSession() {},
+    },
+
     // --------------------------------------------------------------------------- audio
     audio: {
       context: null,
