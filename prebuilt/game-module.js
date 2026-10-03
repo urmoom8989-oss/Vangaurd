@@ -45684,7 +45684,7 @@ function T9(A) {
     });
   }
   function rA(O = {}) {
-    wmVoteAbort(), c.paused && ft(), mA(), GA("menu"), c.menuT = 0, c.fade = 0, r.timeLeft = 1 / 0, FA(!1), pe(!1);
+    ggOff(), wmVoteAbort(), c.paused && ft(), mA(), GA("menu"), c.menuT = 0, c.fade = 0, r.timeLeft = 1 / 0, FA(!1), pe(!1);
     try {
       Z().player.setMovementEnabled(!1);
     } catch {
@@ -45821,11 +45821,11 @@ function T9(A) {
     });
   }
   function re() {
-    tA && (tA.mode === "kc" ? (r.kc = !0, r.matchType = "tdm") : tA.mode === "tdm" && (r.kc = !1)), kcS.clear();
+    tA && (r.kc = !1, r.gg = !1, r.matchType = "tdm"), kcS.clear();
     const netSt = Z().network?.state, O = tA?.roster?.find((KA) => KA && netSt?.selfId != null && String(KA.id) === String(netSt.selfId)) || tA?.roster?.find((KA) => KA && tA.playerId != null && String(KA.id) === String(tA.playerId)), fA = O ? /^(bravo|red)$/i.test(String(O.team)) ? "red" : "blue" : netSt?.localTeam ? netSt.localTeam === "bravo" ? "red" : "blue" : null;
-    r.ffa = !!r.kc;
+    r.ffa = !!(r.kc || r.gg), c.ggLevel = -1;
     for (const KA of Object.keys(r.score)) (/^ffa/.test(KA) || /^net:/.test(KA)) && delete r.score[KA];
-    r.playerTeam = r.ffa ? "ffa0" : r.matchType === "tdm" || r.matchType === "domination" ? fA || (Math.random() < 0.5 ? "blue" : "red") : "player", r.scoreLimit = r.matchType === "domination" ? 600 : r.kc ? tA && Number.isFinite(tA.scoreLimit) ? tA.scoreLimit : ffaLimit : 50, r.ffaBoard = r.ffa ? [{ key: r.playerTeam, name: "You", score: 0, you: !0 }] : null, c.ffaNames = { [r.playerTeam]: "You" }, r.score[r.playerTeam] = 0, r.score.blue = 0, r.score.red = 0, r.score.player = 0, r.matchTime = 0, Y.length = 0, W.length = 0, q();
+    r.playerTeam = r.ffa ? "ffa0" : r.matchType === "tdm" || r.matchType === "domination" ? fA || (Math.random() < 0.5 ? "blue" : "red") : "player", r.scoreLimit = r.matchType === "domination" ? 600 : r.gg ? ggLadder.length : r.kc ? tA && Number.isFinite(tA.scoreLimit) ? tA.scoreLimit : ffaLimit : 50, r.ffaBoard = r.ffa ? [{ key: r.playerTeam, name: "You", score: 0, you: !0 }] : null, c.ffaNames = { [r.playerTeam]: "You" }, r.score[r.playerTeam] = 0, r.score.blue = 0, r.score.red = 0, r.score.player = 0, r.matchTime = 0, Y.length = 0, W.length = 0, q();
     const DA = MA();
     c.dominationFlags = DA.map((KA, he) => ({
       name: [
@@ -45856,7 +45856,8 @@ function T9(A) {
       position: K.clone(),
       yaw: 0
     }));
-    const $A = r.ffa ? `Kill Confirmed · Free-for-all · first to ${r.scoreLimit} confirmed kills` : r.matchType === "domination" ? `Domination · capture flags A, B, and C to ${r.scoreLimit}` : `Team Deathmatch · first to ${r.scoreLimit}`;
+    r.gg ? ggSync(!1) : ggOff();
+    const $A = r.gg ? `Gun Game · Free-for-all · every kill upgrades your gun · ${r.scoreLimit} guns to win` : r.ffa ? `Kill Confirmed · Free-for-all · first to ${r.scoreLimit} confirmed kills` : r.matchType === "domination" ? `Domination · capture flags A, B, and C to ${r.scoreLimit}` : `Team Deathmatch · first to ${r.scoreLimit}`;
     qA(tA ? r.ffa ? `Online ${$A}` : `Online Team Deathmatch · ${r.playerTeam.toUpperCase()} team` : $A, {
       kind: "banner",
       duration: 3.5
@@ -45890,7 +45891,7 @@ function T9(A) {
     }
   }
   let wmV = null;
-  const ffaLimit = 20, ffaCalls = ["Viper", "Ghost", "Havoc", "Reaper", "Nomad", "Saber", "Wolf"];
+  const ggLadder = ["smg9", "ar7", "br4", "lmg60", "sg12", "dmr14", "sr50", "mp20", "hc50", "p3b", "p9"], ffaLimit = 20, ffaCalls = ["Viper", "Ghost", "Havoc", "Reaper", "Nomad", "Saber", "Wolf"];
   function wmIntro() {
     const m = Z().world?.map;
     return !m || m.id === "plaza" ? C3 : [`Hold ${m.name}`, "Day 3 — 17:42 local", "S/Sgt. Tomas Rehn", "Task Force Iron Vigil", `${m.name} · ${wmMap(m.id).tag || "Sector"}`];
@@ -45924,7 +45925,7 @@ function T9(A) {
     }
     if (!opts.length || !net && opts.length < 2) return !1;
     wmVoteAbort(), c.paused && ft(), mA(), pA.stop();
-    const bots = net ? 0 : r.kc ? ffaCalls.length : r.matchType === "domination" ? 11 : r.matchType === "tdm" ? 9 : 0;
+    const bots = net ? 0 : r.kc || r.gg ? ffaCalls.length : r.matchType === "domination" ? 11 : r.matchType === "tdm" ? 9 : 0;
     wmV = { O, online: !!net, opts, tallies: opts.map(() => 0), mine: -1, total: net ? Math.max(1, Number(net.total) || 10) : 10, t: net ? Math.max(0, Number(net.endsIn) || 0) : 10, bots: [], done: !1, wait: 0 };
     for (let i2 = 0; i2 < bots; i2++) wmV.bots.push({ at: 0.8 + Math.random() * 7.6, pick: Math.floor(Math.random() * opts.length), cast: !1 });
     net && wmApplyTallies(net.tallies, net.mine), GA("vote"), FA(!1), pe(!1), c.fade = 0;
@@ -46036,6 +46037,10 @@ function T9(A) {
   }
   function ffaLine() {
     const B2 = r.ffaBoard || [], me2 = B2.find((x) => x.you), mine = me2 ? me2.score : 0, top = B2[0], rank = Math.max(1, B2.indexOf(me2) + 1);
+    if (r.gg) {
+      const L2 = r.scoreLimit, gun = (n) => `${Math.min(L2, n + 1)}/${L2}`;
+      return top && !top.you && top.score > mine ? `GUN GAME · YOU ON GUN ${gun(mine)} · #${rank} OF ${B2.length} · LEADER ${top.name.toUpperCase()} ON GUN ${gun(top.score)}` : `GUN GAME · YOU ON GUN ${gun(mine)} · #${rank} OF ${B2.length} · ${mine > 0 ? "YOU LEAD" : "A KILL WITH EVERY GUN WINS"}`;
+    }
     return top && !top.you && top.score > mine ? `FREE-FOR-ALL · YOU ${mine} · #${rank} OF ${B2.length} · LEADER ${top.name.toUpperCase()} ${top.score}` : `FREE-FOR-ALL · YOU ${mine} · #${rank} OF ${B2.length} · ${mine > 0 ? "YOU LEAD" : "FIRST TO " + r.scoreLimit + " TAGS"}`;
   }
   function ffaCollected(O, fA, DA) {
@@ -46091,6 +46096,46 @@ function T9(A) {
       byPlayer: !!DA
     }), UA && r.score[fA] >= r.scoreLimit && we(fA, fA === "blue" ? "BLUE TEAM" : "RED TEAM");
   }
+  function ggOff() {
+    c.ggLevel = -1;
+    try {
+      Z().weapons.ggEquip?.(null);
+    } catch {
+    }
+  }
+  function ggSync(up) {
+    const lv = Math.max(0, Math.min(ggLadder.length - 1, r.score[r.playerTeam] || 0));
+    if (c.ggLevel === lv) return;
+    c.ggLevel = lv;
+    try {
+      Z().weapons.ggEquip?.(ggLadder[lv]);
+    } catch (O) {
+      A.reportError("gamemode", "gun-game", O);
+    }
+    if (!up) return;
+    const nm = lwById(lv >= 7 ? "pistol" : "rifle", ggLadder[lv])?.name || ggLadder[lv];
+    try {
+      Z().hud.scorePopup?.(100, "Weapon upgraded");
+    } catch {
+    }
+    qA(`GUN ${lv + 1} OF ${ggLadder.length} · ${nm}`, { kind: "banner", duration: 1.8 });
+    try {
+      Z().audio.play("ui_score", { bus: "ui" });
+    } catch {
+    }
+  }
+  function ggKill(O) {
+    const fA = O.target, DA = !!fA.isPlayer, UA = DA ? r.playerTeam : fA.team;
+    if (!kcTeamOk(UA)) return;
+    const $A = nA(O.source), KA = $A ? null : (Z().ai.agents || []).find((se) => se.key === O.source), he = $A ? r.playerTeam : KA?.team;
+    if (!he || he === UA) return;
+    $A && (r.kills++, r.streak++, r.bestStreak = Math.max(r.bestStreak, r.streak)), r.score[he] = (r.score[he] || 0) + 1, ffaBoardSync();
+    if (r.score[he] >= r.scoreLimit) {
+      we(he, ffaName(he));
+      return;
+    }
+    he === r.playerTeam && ggSync(!0);
+  }
   function kcKill(O) {
     const fA = O.target, DA = !!fA.isPlayer, UA = DA ? r.playerTeam : fA.team;
     if (!kcTeamOk(UA)) return;
@@ -46113,6 +46158,10 @@ function T9(A) {
   }
   function me(O) {
     if (tA || !(c.stage === "match-live" || c.stage === "match-dead") || !O?.target) return;
+    if (r.gg) {
+      ggKill(O);
+      return;
+    }
     if (r.kc) {
       kcKill(O);
       return;
@@ -46405,10 +46454,11 @@ function T9(A) {
       "protection",
       "tdm",
       "domination",
-      "kc"
+      "kc",
+      "gg"
     ].includes(O) || !(c.stage === "menu" || c.stage === "ended")) return !1;
     const fA = O;
-    return r.kc = O === "kc", r.kc && (O = "tdm"), r.matchType = O, r.mode = O === "protection" ? E2 : fA, r.playerTeam = O === "tdm" || O === "domination" ? "blue" : "player", e.emit("gamemode:mode", { mode: fA }), !0;
+    return r.kc = O === "kc", r.gg = O === "gg", (r.kc || r.gg) && (O = "tdm"), r.matchType = O, r.mode = O === "protection" ? E2 : fA, r.playerTeam = O === "tdm" || O === "domination" ? "blue" : "player", e.emit("gamemode:mode", { mode: fA }), !0;
   }
   function Tt(O, fA) {
     A.settings.set(O, fA);
@@ -46612,7 +46662,7 @@ function T9(A) {
     c.stage === "match-dead" && (UA += `:RESPAWN:${Math.ceil(R)}`);
     const KA = c.stage === "matchmaking" ? `${N.queued}/${N.maximum}/${N.startsIn}/${N.minimum}/${r.kc}` : fA ? r.wave : -1;
     if (!(c.stage === AA && DA === CA && L === KA && F === UA)) {
-      AA = c.stage, CA = DA, L = KA, F = UA, c.stage === "matchmaking" ? (gt.wave = null, gt.hostiles = null, gt.timer = N.startsIn === null ? N.minimum && N.queued < N.minimum ? `WAITING FOR ${N.minimum - N.queued} MORE` : `SEARCHING · ${N.queued}/${N.maximum}` : N.startsIn > 0 ? `STARTING IN ${N.startsIn}` : "STARTING MATCH", gt.objective = `${r.kc ? "KILL CONFIRMED · FFA" : "TEAM DEATHMATCH"} · SEARCHING FOR PLAYERS`) : r.ffa ? (gt.wave = "KC", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : `FIRST TO ${r.scoreLimit}`, gt.objective = ffaLine()) : r.matchType === "tdm" || r.matchType === "domination" ? (gt.wave = r.matchType === "domination" ? "DOM" : r.kc ? "KC" : "TDM", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : `FIRST TO ${r.scoreLimit}`, gt.objective = r.matchType === "domination" ? `BLUE ${r.score.blue} — RED ${r.score.red}  ·  ${$A}` : `BLUE ${r.score.blue} — RED ${r.score.red}`) : c.stage === "warmup" ? (gt.wave = null, gt.hostiles = null, gt.timer = `Assault in ${cF(DA)}`, gt.objective = kA()) : c.stage === "intermission" ? (gt.wave = r.wave, gt.hostiles = null, gt.timer = c.lastWaveFinal ? "Relief column inbound" : `Next wave in ${cF(DA)}`, gt.objective = kA()) : (gt.wave = void 0, gt.hostiles = void 0, gt.timer = void 0, gt.objective = kA());
+      AA = c.stage, CA = DA, L = KA, F = UA, c.stage === "matchmaking" ? (gt.wave = null, gt.hostiles = null, gt.timer = N.startsIn === null ? N.minimum && N.queued < N.minimum ? `WAITING FOR ${N.minimum - N.queued} MORE` : `SEARCHING · ${N.queued}/${N.maximum}` : N.startsIn > 0 ? `STARTING IN ${N.startsIn}` : "STARTING MATCH", gt.objective = `${r.kc ? "KILL CONFIRMED · FFA" : "TEAM DEATHMATCH"} · SEARCHING FOR PLAYERS`) : r.ffa ? (gt.wave = r.gg ? "GG" : "KC", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : r.gg ? `GUN ${Math.min(r.scoreLimit, (r.score[r.playerTeam] || 0) + 1)} OF ${r.scoreLimit}` : `FIRST TO ${r.scoreLimit}`, gt.objective = ffaLine()) : r.matchType === "tdm" || r.matchType === "domination" ? (gt.wave = r.matchType === "domination" ? "DOM" : r.kc ? "KC" : "TDM", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : `FIRST TO ${r.scoreLimit}`, gt.objective = r.matchType === "domination" ? `BLUE ${r.score.blue} — RED ${r.score.red}  ·  ${$A}` : `BLUE ${r.score.blue} — RED ${r.score.red}`) : c.stage === "warmup" ? (gt.wave = null, gt.hostiles = null, gt.timer = `Assault in ${cF(DA)}`, gt.objective = kA()) : c.stage === "intermission" ? (gt.wave = r.wave, gt.hostiles = null, gt.timer = c.lastWaveFinal ? "Relief column inbound" : `Next wave in ${cF(DA)}`, gt.objective = kA()) : (gt.wave = void 0, gt.hostiles = void 0, gt.timer = void 0, gt.objective = kA());
       try {
         O.setMatchInfo(gt);
       } catch (he) {
@@ -48479,7 +48529,9 @@ function iJ(A, e = !1) {
 function aJ() {
   Za.deaths++, om();
 }
+var ggOn = null;
 function kc(A, e = pgActive()) {
+  if (ggOn) return pgBlankAtt();
   const t = A === "pistol" || A === "secondary" ? "secondary" : "primary", i = pgSlots()[e], a = {};
   for (const s of Object.keys(_c)) {
     const n = i?.att?.[t]?.[s] || "none";
@@ -50879,12 +50931,17 @@ function cJ(A) {
       "Free-for-all · Collect dog tags · First to 20"
     ],
     [
+      "gg",
+      "Gun Game",
+      "Free-for-all party mode · Every kill upgrades your gun"
+    ],
+    [
       "protection",
       "Protection",
       "Hold the line · Wave survival"
     ]
   ];
-  const gmKey = () => e.services.gamemode.state?.kc ? "kc" : e.services.gamemode.state?.matchType, gmName = () => e.services.gamemode.state?.kc ? "Kill Confirmed" : "Team Deathmatch", gmLimit = () => e.services.gamemode.state?.kc ? 20 : 50;
+  const gmKey = () => e.services.gamemode.state?.gg ? "gg" : e.services.gamemode.state?.kc ? "kc" : e.services.gamemode.state?.matchType, gmName = () => e.services.gamemode.state?.gg ? "Gun Game" : e.services.gamemode.state?.kc ? "Kill Confirmed" : "Team Deathmatch", gmLimit = () => e.services.gamemode.state?.kc ? 20 : 50;
   let p = Math.max(0, f.findIndex(([yA]) => yA === gmKey()));
   const E = [
     de(d, "Game mode", "Select an operation", () => oA()),
@@ -50925,7 +50982,7 @@ function cJ(A) {
     const ge = NA("button", "od-mode-option", eA);
     ge.type = "button", ge.dataset.mode = yA, ge.setAttribute("aria-pressed", "false");
     const Se = NA("span", "od-mode-thumb", ge), Ue = NA("canvas", "", Se), lt = NA("span", "od-mode-mark", Se);
-    lt.textContent = yA === "tdm" ? "05 / 05" : yA === "domination" ? "A · B · C" : yA === "kc" ? "FFA · 20 TAGS" : "HOLD THE LINE";
+    lt.textContent = yA === "tdm" ? "05 / 05" : yA === "domination" ? "A · B · C" : yA === "kc" ? "FFA · 20 TAGS" : yA === "gg" ? "FFA · 11 GUNS" : "HOLD THE LINE";
     const $e = NA("span", "od-mode-info", ge);
     return NA("span", "od-mode-name", $e).textContent = VA, NA("span", "od-mode-desc", $e).textContent = le, ge.addEventListener("click", () => {
       const it = f.findIndex(([ot]) => ot === yA);
@@ -51166,10 +51223,10 @@ function cJ(A) {
     const VA = f.findIndex(([Ue]) => Ue === yA);
     VA >= 0 && (p = VA);
     const [le, ge, Se] = f[p];
-    E[1].querySelector(".d").textContent = F.sessionType === "multiplayer" ? `${le === "kc" ? "Kill Confirmed" : "Team Deathmatch"} · Up to 12 players` : "Start immediately against AI", X.forEach(({ key: Ue, button: lt }) => {
+    E[1].querySelector(".d").textContent = F.sessionType === "multiplayer" ? "Team Deathmatch · Up to 12 players" : "Start immediately against AI", X.forEach(({ key: Ue, button: lt }) => {
       const $e = Ue === le;
       lt.classList.toggle("sel", $e), lt.setAttribute("aria-pressed", String($e));
-    }), le === "protection" ? (w.textContent = "Mission · Protection", m.textContent = "Hold the line · Wave survival", D.textContent = "Crimson Vanguard contractors are pushing in. Vote on the battleground, then hold it against escalating waves until the relief column arrives.") : le === "kc" ? (w.textContent = "Match · Kill Confirmed · Free-for-all", m.textContent = "Every player for themselves · First to 20", D.textContent = "No teams: everyone spawns in a different part of the map. Every elimination drops a dog tag. Grab anyone else's tag to score, grab your own to deny it. First to 20 confirmed kills wins.") : le === "domination" ? (w.textContent = "Match · Domination", m.textContent = "Three flags · First team to 600", D.textContent = "Capture each flag for 200 points. Each team can score once from A, B, and C; first to 600 wins.") : (w.textContent = `Match · ${ge}`, m.textContent = "Up to 12 players · First to 50", D.textContent = "Join the Team Deathmatch queue. The match starts automatically when players are ready, with up to 12 players per game. First side to 50 wins."), Or();
+    }), le === "protection" ? (w.textContent = "Mission · Protection", m.textContent = "Hold the line · Wave survival", D.textContent = "Crimson Vanguard contractors are pushing in. Vote on the battleground, then hold it against escalating waves until the relief column arrives.") : le === "kc" ? (w.textContent = "Match · Kill Confirmed · Free-for-all", m.textContent = "Every player for themselves · First to 20", D.textContent = "No teams: everyone spawns in a different part of the map. Every elimination drops a dog tag. Grab anyone else's tag to score, grab your own to deny it. First to 20 confirmed kills wins.") : le === "gg" ? (w.textContent = "Match · Gun Game · Free-for-all", m.textContent = "Every kill upgrades your gun · 11 guns", D.textContent = "A free-for-all party mode against bots. Everyone starts with the same SMG, and every kill swaps you to the next gun: rifles, a machine gun, a shotgun, marksman and sniper rifles, then four pistols. The first to get a kill with all 11 guns wins.") : le === "domination" ? (w.textContent = "Match · Domination", m.textContent = "Three flags · First team to 600", D.textContent = "Capture each flag for 200 points. Each team can score once from A, B, and C; first to 600 wins.") : (w.textContent = `Match · ${ge}`, m.textContent = "Up to 12 players · First to 50", D.textContent = "Join the Team Deathmatch queue. The match starts automatically when players are ready, with up to 12 players per game. First side to 50 wins."), Or();
   }
   function vA() {
     const yA = Math.round(460 * A.u * A.dpr), VA = Math.round(150 * A.u * A.dpr), le = e.services.world.spawnPoints?.player?.[0]?.position, ge = e.services.world.bounds, Se = ge ? (ge.min.x + ge.max.x) / 2 : le?.x || 0, Ue = ge ? (ge.min.z + ge.max.z) / 2 : le?.z || 0, lt = ge ? Math.max(ge.max.x - ge.min.x, (ge.max.z - ge.min.z) * (yA / VA)) * 1.05 : 120, $e = {
@@ -51192,6 +51249,11 @@ function cJ(A) {
         0.26,
         0.17,
         0.04
+      ],
+      gg: [
+        0.2,
+        0.07,
+        0.18
       ]
     };
     for (const { key: it, canvas: ot } of X) {
@@ -51213,7 +51275,7 @@ function cJ(A) {
     if (F.screen !== "main") return;
     Y.classList.add("on"), Y.setAttribute("aria-hidden", "false"), E[0].setAttribute("aria-expanded", "true");
     const yA = f.findIndex(([VA]) => VA === gmKey());
-    p = yA >= 0 ? yA : p, F.sessionType === "multiplayer" && ["protection", "domination"].includes(f[p]?.[0]) && (p = 0), vA(), X[p]?.button.focus();
+    p = yA >= 0 ? yA : p, F.sessionType === "multiplayer" && f[p]?.[0] !== "tdm" && (p = 0), vA(), X[p]?.button.focus();
   }
   function EA() {
     Y.classList.contains("on") && (Y.classList.remove("on"), Y.setAttribute("aria-hidden", "true"), E[0].setAttribute("aria-expanded", "false"), E[0].focus());
@@ -51227,8 +51289,8 @@ function cJ(A) {
   e.events.on("gamemode:mode", _A), lA(f[p][0]);
   function JA() {
     const yA = F.sessionType === "multiplayer", VA = !!v.value.trim(), le = f[p]?.[0];
-    yA && (le === "protection" || le === "domination") && (p = 0, e.services.gamemode.setMode?.("tdm")), E[1].firstChild.nodeValue = F.waitingForPlayers ? "Cancel Queue" : F.multiplayerMatch ? "Online Match" : yA ? "Queue for Match" : "Start Game", E[1].querySelector(".d").textContent = F.waitingForPlayers ? `${gmName()} · matchmaking in progress` : F.multiplayerMatch ? "You are already deployed in the online match" : yA ? `${gmName()} · Up to 12 players · First to ${gmLimit()}` : "Start immediately against AI", X.forEach(({ key: ge, button: Se }) => {
-      Se.hidden = yA && (ge === "protection" || ge === "domination");
+    yA && le !== "tdm" && (p = 0, e.services.gamemode.setMode?.("tdm")), E[1].firstChild.nodeValue = F.waitingForPlayers ? "Cancel Queue" : F.multiplayerMatch ? "Online Match" : yA ? "Queue for Match" : "Start Game", E[1].querySelector(".d").textContent = F.waitingForPlayers ? `${gmName()} · matchmaking in progress` : F.multiplayerMatch ? "You are already deployed in the online match" : yA ? `${gmName()} · Up to 12 players · First to ${gmLimit()}` : "Start immediately against AI", X.forEach(({ key: ge, button: Se }) => {
+      Se.hidden = yA && ge !== "tdm";
     }), U.hidden = !yA || !F.serverConfigurationOpen, P.hidden = !yA || VA, N.hidden = !F.multiplayerMatch, yA && !G.textContent && (G.textContent = `${gmName()} · Up to 12 players · First to ${gmLimit()}.`), lA(f[p][0]);
   }
   const Ae = "vangaurd.multiplayer.url.v2";
@@ -51364,7 +51426,7 @@ function cJ(A) {
     F.multiplayerMatch && F.multiplayerSocket?.readyState === WebSocket.OPEN && F.multiplayerSocket.send(JSON.stringify({ type: "leave_match" })), e.events.emit("network:clear"), F.sessionType = "singleplayer", F.serverConfigurationOpen = !1, e.events.emit("gamemode:online-queue", { active: !1 }), F.waitingForPlayers = !1, F.multiplayerMatch = null, tt("main");
   }
   function Qe() {
-    F.sessionType = "multiplayer", F.serverConfigurationOpen = !1, F.waitingForPlayers = !1, F.multiplayerMatch = null, G.textContent = `${gmName()} · Up to 12 players · First to ${gmLimit()}.`, ["protection", "domination"].includes(f[p]?.[0]) && (p = 0), e.services.gamemode.setMode?.(f[p][0]), tt("main");
+    F.sessionType = "multiplayer", F.serverConfigurationOpen = !1, F.waitingForPlayers = !1, F.multiplayerMatch = null, G.textContent = `${gmName()} · Up to 12 players · First to ${gmLimit()}.`, f[p]?.[0] !== "tdm" && (p = 0), e.services.gamemode.setMode?.(f[p][0]), tt("main");
   }
   async function te() {
     if (!(F.sessionType !== "multiplayer" || F.multiplayerMatch || F.queueJoinPending)) {
@@ -51374,7 +51436,7 @@ function cJ(A) {
         if (yA.readyState !== WebSocket.OPEN) throw new Error("Matchmaking connection closed before joining.");
         yA.send(JSON.stringify({
           type: "join_queue",
-          mode: e.services.gamemode.state?.kc ? "kc" : "tdm",
+          mode: "tdm",
           name: Uc()
         })), F.waitingForPlayers = !0, G.textContent = `Searching for ${gmName()} players…`, e.events.emit("gamemode:queue-status", {
           queued: 1,
@@ -57465,7 +57527,7 @@ function jJ(A) {
       transparent: !0,
       opacity: 0
     }), Y = new Le(new Kn(0.09, 8, 6), N);
-    Y.position.set(0, 1.25, -0.82), x.add(Y), x.add(l(nm, tk, friendly)), x.traverse(($) => {
+    Y.position.set(0, 1.25, -0.82), x.add(Y), friendly && x.add(l(nm, tk, friendly)), x.traverse(($) => {
       $.layers.set(A.layers.WORLD), $.frustumCulled = !1;
     }), t.add(x);
     const W = B({ id, team: tk });
@@ -57529,8 +57591,8 @@ function jJ(A) {
       depthWrite: !1
     }), Y = new Le(new Kn(0.07, 8, 6), N);
     Y.layers.set(A.layers.WORLD), Y.frustumCulled = !1, sol.body.muzzle.add(Y);
-    const tag = l(nm, tk, friendly);
-    tag.layers.set(A.layers.WORLD), x.add(tag), t.add(x);
+    const tag = friendly ? l(nm, tk, friendly) : null;
+    tag && (tag.layers.set(A.layers.WORLD), x.add(tag)), t.add(x);
     const W = B({ id, team: tk }), V = {
       id,
       rawId: M.id,
@@ -57608,7 +57670,7 @@ function jJ(A) {
   }
   function h(M) {
     if (M.soldier) {
-      M.damageable?.unregister?.(), t.remove(M.group), M.soldier.dispose(), M.muzzle.geometry.dispose(), M.muzzle.material.dispose(), M.tag.material.map?.dispose(), M.tag.material.dispose(), i.delete(M.id);
+      M.damageable?.unregister?.(), t.remove(M.group), M.soldier.dispose(), M.muzzle.geometry.dispose(), M.muzzle.material.dispose(), M.tag?.material.map?.dispose(), M.tag?.material.dispose(), i.delete(M.id);
       return;
     }
     M.damageable?.unregister?.(), t.remove(M.group), M.group.traverse((x) => {
@@ -57731,7 +57793,16 @@ function jJ(A) {
       S && h(S);
     } else if (x === "weapon_fired" && (!a || inMatch(M))) {
       const S = i.get(sid(M.playerId));
-      S && (S.fireFlash = 0.12);
+      if (S && (S.fireFlash = 0.12, S.alive && (a?.ffa || S.team !== a?.localTeam))) {
+        const P2 = performance.now();
+        if (!(P2 - (S.pingAt || 0) < 700)) {
+          S.pingAt = P2;
+          try {
+            A.services.hud.ping?.({ x: posOf(S).x, z: posOf(S).z }, { duration: 2, kind: "enemy" });
+          } catch {
+          }
+        }
+      }
     } else if (x === "tag_spawned" && inMatch(M) && M.tag) e.emit("kc:tag", {
       action: "spawn",
       tag: M.tag
@@ -57819,7 +57890,7 @@ function jJ(A) {
         if (U.soldier) {
           U.prev.copy(U.pos), U.pos.lerp(U.target, S);
           const G = Math.atan2(Math.sin(U.targetYaw - U.yaw), Math.cos(U.targetYaw - U.yaw)), k2 = Math.min(1, M * 10), dx = M > 1e-4 ? (U.pos.x - U.prev.x) / M : 0, dz = M > 1e-4 ? (U.pos.z - U.prev.z) / M : 0;
-          U.vel.x += (dx - U.vel.x) * k2, U.vel.z += (dz - U.vel.z) * k2, U.yaw += G * S, U.pitch += (U.targetPitch - U.pitch) * S, cam && U.soldier.lod(cam.distanceTo(U.pos)), U.soldier.update({ dt: M, pos: U.pos, vel: U.vel, yaw: U.yaw, pitch: U.pitch, crouch: U.crouch, sprint: U.sprint && Math.hypot(U.vel.x, U.vel.z) > 4 }), U.soldier.dead && A.time.t - U.soldier.deadT > 6 && (U.group.visible = !1), U.fireFlash = Math.max(0, U.fireFlash - M), U.muzzle.material.opacity = U.fireFlash > 0 && !U.soldier.dead ? Math.min(0.95, U.fireFlash * 9) : 0, U.tag.visible = !U.soldier.dead;
+          U.vel.x += (dx - U.vel.x) * k2, U.vel.z += (dz - U.vel.z) * k2, U.yaw += G * S, U.pitch += (U.targetPitch - U.pitch) * S, cam && U.soldier.lod(cam.distanceTo(U.pos)), U.soldier.update({ dt: M, pos: U.pos, vel: U.vel, yaw: U.yaw, pitch: U.pitch, crouch: U.crouch, sprint: U.sprint && Math.hypot(U.vel.x, U.vel.z) > 4 }), U.soldier.dead && A.time.t - U.soldier.deadT > 6 && (U.group.visible = !1), U.fireFlash = Math.max(0, U.fireFlash - M), U.muzzle.material.opacity = U.fireFlash > 0 && !U.soldier.dead ? Math.min(0.95, U.fireFlash * 9) : 0, U.tag && (U.tag.visible = !U.soldier.dead);
           continue;
         }
         U.group.position.lerp(U.target, S);
@@ -57828,7 +57899,7 @@ function jJ(A) {
       }
       act.length = 0;
       for (const U of i.values()) U.hasState && U.alive && act.push(posOf(U));
-      A.services.hud.setNetworkPlayers?.([...i.values()].filter((U) => U.hasState && U.alive).map((U) => ({
+      A.services.hud.setNetworkPlayers?.([...i.values()].filter((U) => U.hasState && U.alive && !a.ffa && !!a.localTeam && U.team === a.localTeam).map((U) => ({
         id: U.id,
         name: U.name,
         x: posOf(U).x,
@@ -71953,7 +72024,7 @@ function b6(A) {
         const HA = kc(u.id).barrel === "precision";
         E.ammo = u.cfg.magSize, E.reserve = Math.max(E.reserve || 0, Math.round((u.cfg.reserve || 0) * (HA ? 1.2 : 1))), $ = !1;
       }
-      Number.isFinite(E.lethal) && E.lethal < Ic.count && (E.lethal = Ic.count);
+      ggOn ? (E.lethal = 0, u && u.id !== ggOn && Ae(ggOn)) : Number.isFinite(E.lethal) && E.lethal < Ic.count && (E.lethal = Ic.count);
     } catch (HA) {
       A.reportError("weapons", "refillLoadout", HA);
     }
@@ -72086,7 +72157,7 @@ function b6(A) {
     const xe = !!OA.sprinting && !E.reloading;
     if (OA.sprinting || (_ = !1), E.sprinting = !!OA.sprinting, E.tacSprint = xe && _, OA.sprinting && E.reloading && !v?.data.pastSeat && AA(), xe ? G = 0.14 : G = Math.max(0, G - HA), Y >= 0 ? (Y += HA, Y >= oe.holsterTime && (Y = -1, bt(Q), Q = null, N = u.cfg.equipTime, H.weaponId = E.id, i.emit("weapon:equip", H), A.services.audio.play(`${u.cfg.kind}_equip`, { bus: "sfx" }))) : N > 0 && (N -= HA, N <= 0 && (N = 0, E.action = "idle")), Xe() || E.reloading || v?.name === "inspect") {
       const ar = E.id === "rifle" ? "pistol" : "rifle";
-      t.pressed("swapWeapon") || t.pressed("weaponNext") || t.pressed("weaponPrev") ? Ae(ar) : t.pressed("weapon1") && E.id !== "rifle" ? Ae("rifle") : t.pressed("weapon2") && E.id !== "pistol" && Ae("pistol");
+      ggOn ? E.id !== ggOn && Q !== ggOn && Ae(ggOn) : t.pressed("swapWeapon") || t.pressed("weaponNext") || t.pressed("weaponPrev") ? Ae(ar) : t.pressed("weapon1") && E.id !== "rifle" ? Ae("rifle") : t.pressed("weapon2") && E.id !== "pistol" && Ae("pistol");
     }
     let Mt = A.settings.data.controls.toggleAds ? t.pressed("ads") ? !(w > 0.5) : w > 0.5 && E.ads > 0 : t.isDown("ads");
     if ((xe || G > 0.07 || v && !v.data.allowAds || Y >= 0 || N > u.cfg.equipTime * 0.5) && (Mt = !1), w = Math.min(1, Math.max(0, w + (Mt ? 1 : -1) * HA / oe.adsTime)), E.ads = Ed(w), t.isDown("inspect") ? (K += HA, K > 0.32 && Xe() && !xe && (E.action = "inspect", E.inspecting = !0, Je("inspect", () => {
@@ -72281,6 +72352,15 @@ function b6(A) {
     state: E,
     viewmodel: l,
     applyLoadout: () => lwApply(),
+    ggEquip(HA) {
+      if (!HA) {
+        if (!ggOn) return;
+        ggOn = null, lwForce.rifle = null, lwForce.pistol = null, lwApply(), Number.isFinite(E.lethal) && E.lethal < Ic.count && (E.lethal = Ic.count), u && u.id !== "rifle" && (Q = null, bt("rifle"));
+        return;
+      }
+      const OA = lwById("pistol", HA) ? "pistol" : "rifle";
+      ggOn = OA, lwForce.rifle = OA === "rifle" ? HA : null, lwForce.pistol = OA === "pistol" ? HA : null, lwApply(), E.lethal = 0, u && u.id !== OA && Ae(OA);
+    },
     _wvProbe(HA) {
       const OA = wvSpecs[HA], oe = [], xe = {
         n: 0,
