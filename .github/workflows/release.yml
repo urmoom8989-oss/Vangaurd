@@ -1,0 +1,106 @@
+name: Build Vangaurd (Mac, Windows, standalone HTML)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'prebuilt/**'
+      - 'public/assets/**'
+      - 'desktop/**'
+      - 'tools/build-release.mjs'
+      - 'package.json'
+      - '.github/workflows/release.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+env:
+  BUILD_LABEL: "0.8"
+
+jobs:
+  standalone:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the standalone HTML
+        run: node tools/build-release.mjs --standalone "Vangaurd-${BUILD_LABEL}.html"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: standalone
+          path: Vangaurd-*.html
+          if-no-files-found: error
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - name: Prepare game files
+        run: node tools/build-release.mjs --dist dist
+      - name: Build Mac app (Apple Silicon + Intel)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --mac dmg zip --arm64 --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: |
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - name: Prepare game files
+        run: node tools/build-release.mjs --dist dist
+      - name: Build Windows app
+        run: npx electron-builder --win nsis zip --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            release/*.exe
+            release/*.zip
+          if-no-files-found: error
+
+  release:
+    needs: [standalone, mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - run: ls -la out
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="build-${BUILD_LABEL}"
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          cat > notes.md <<NOTES
+          Vangaurd Build ${BUILD_LABEL} (commit ${GITHUB_SHA::7}).
+
+          - **Mac**: \`Vangaurd-*-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-*-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
+          - **Windows**: \`Vangaurd-Setup-*.exe\` installs the game; the \`-win.zip\` runs without installing. If SmartScreen appears, choose **More info → Run anyway**.
+          - **Standalone**: \`Vangaurd-${BUILD_LABEL}.html\` is the whole game in one file. Open it in Chrome or Edge.
+          NOTES
+          gh release create "$TAG" out/* --target "$GITHUB_SHA" --title "Vangaurd Build ${BUILD_LABEL}" --notes-file notes.md
