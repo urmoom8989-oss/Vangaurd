@@ -44501,7 +44501,7 @@ function R9(A, e) {
         <dt>Personal best</dt><dd class="acc num" data-r="mBest">—</dd>
       </dl>
     </div>
-    <div class="footer"><div class="keys"><span><span class="kbd">↑</span><span class="kbd">↓</span>Navigate</span><span><span class="kbd">←</span><span class="kbd">→</span>Adjust</span><span><span class="kbd">Enter</span>Select</span></div><div>Vangaurd · Original content · Build 0.8</div></div>
+    <div class="footer"><div class="keys"><span><span class="kbd">↑</span><span class="kbd">↓</span>Navigate</span><span><span class="kbd">←</span><span class="kbd">→</span>Adjust</span><span><span class="kbd">Enter</span>Select</span></div><div>Vangaurd · Original content · Multiplayer Test 1.0</div></div>
   </div>
 
   <div class="layer pause interactive hide" data-r="pause">
@@ -50849,7 +50849,7 @@ function cJ(A) {
   const o = NA("div", "od-title", n);
   NA("div", "emb", o, R2), NA("div", "op", o).textContent = "Vangaurd", NA("h1", "", o, "<span>VANGAURD</span>"), NA("div", "sub", o).textContent = "Choose your deployment";
   const r = NA("div", "od-menu od-entry-menu", n), c = [de(r, "Singleplayer", "Play immediately against AI", se), de(r, "Multiplayer", "Open the deployment menu, then queue for a match", Qe)], l = NA("div", "od-foot", n);
-  l.innerHTML = '<span class="hint"><span class="od-key">↑↓</span>Navigate</span><span class="hint"><span class="od-key">ENTER</span>Select</span><span class="sp"></span><span class="ver">Vangaurd · Build 0.8</span>';
+  l.innerHTML = '<span class="hint"><span class="od-key">↑↓</span>Navigate</span><span class="hint"><span class="od-key">ENTER</span>Select</span><span class="sp"></span><span class="ver">Vangaurd · Multiplayer Test 1.0</span>';
   const g = s("loading", "od-loading");
   NA("div", "od-scrim dark", g);
   const B = NA("section", "od-loading-card", g);
@@ -50938,7 +50938,7 @@ function cJ(A) {
   });
   E[0].setAttribute("aria-haspopup", "dialog"), E[0].setAttribute("aria-expanded", "false"), W.addEventListener("click", EA), K.addEventListener("click", EA), V.addEventListener("click", (yA) => yA.stopPropagation());
   const IA = NA("div", "od-foot", u);
-  IA.innerHTML = '<span class="hint"><span class="od-key">↑↓</span>Navigate</span><span class="hint"><span class="od-key">ENTER</span>Select</span><span class="sp"></span><span class="ver">Vangaurd · Build 0.8</span>';
+  IA.innerHTML = '<span class="hint"><span class="od-key">↑↓</span>Navigate</span><span class="hint"><span class="od-key">ENTER</span>Select</span><span class="sp"></span><span class="ver">Vangaurd · Multiplayer Test 1.0</span>';
   const pA = s("armory", "od-main");
   NA("div", "od-scrim dark", pA);
   const BA = NA("div", "od-hdr", pA);

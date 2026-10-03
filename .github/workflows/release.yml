@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUILD_LABEL: "0.8"
+  BUILD_LABEL: "1.0"
 
 jobs:
   standalone:
@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: 22
       - name: Build the standalone HTML
-        run: node tools/build-release.mjs --standalone "Vangaurd-${BUILD_LABEL}.html"
+        run: node tools/build-release.mjs --standalone "Vangaurd-MP-Test-${BUILD_LABEL}.html"
       - uses: actions/upload-artifact@v4
         with:
           name: standalone
@@ -94,13 +94,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          TAG="build-${BUILD_LABEL}"
+          TAG="mp-test-${BUILD_LABEL}"
           gh release delete "$TAG" --yes --cleanup-tag || true
           cat > notes.md <<NOTES
-          Vangaurd Build ${BUILD_LABEL} (commit ${GITHUB_SHA::7}).
+          Vangaurd Multiplayer Test ${BUILD_LABEL} (commit ${GITHUB_SHA::7}).
 
           - **Mac**: \`Vangaurd-*-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-*-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
           - **Windows**: \`Vangaurd-Setup-*.exe\` installs the game; the \`-win.zip\` runs without installing. If SmartScreen appears, choose **More info → Run anyway**.
-          - **Standalone**: \`Vangaurd-${BUILD_LABEL}.html\` is the whole game in one file. Open it in Chrome or Edge.
+          - **Standalone**: \`Vangaurd-MP-Test-${BUILD_LABEL}.html\` is the whole game in one file. Open it in Chrome or Edge.
           NOTES
-          gh release create "$TAG" out/* --target "$GITHUB_SHA" --title "Vangaurd Build ${BUILD_LABEL}" --notes-file notes.md
+          gh release create "$TAG" out/* --target "$GITHUB_SHA" --title "Vangaurd Multiplayer Test ${BUILD_LABEL}" --notes-file notes.md

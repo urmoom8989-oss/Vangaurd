@@ -1,7 +1,7 @@
 {
   "name": "vangaurd",
   "private": true,
-  "version": "0.8.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "desktop/main.cjs",
   "author": "Vangaurd",
@@ -17,7 +17,7 @@
     "shot": "node tools/shot.mjs",
     "perf": "node tools/perf.mjs",
     "audio": "node tools/audio.mjs",
-    "build:release": "node tools/build-release.mjs --standalone Vangaurd-0.8.html --dist dist"
+    "build:release": "node tools/build-release.mjs --standalone Vangaurd-MP-Test-1.0.html --dist dist"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.20.0",

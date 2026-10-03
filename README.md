@@ -4,20 +4,20 @@ An original first-person shooter built with Three.js and Vite. You hold a city p
 enemy soldiers. It runs in a desktop browser with WebGL2 (Chrome or Edge recommended) and needs a mouse
 and keyboard.
 
-## Build 0.8 downloads
+## Multiplayer Test 1.0 downloads
 
-The current game (Build 0.8: loadouts and levels, six maps with a map vote, Kill Confirmed, online play) is kept
+The current game (Multiplayer Test 1.0: loadouts and levels, six maps with a map vote, Kill Confirmed, online play) is kept
 ready-built in `prebuilt/`, and GitHub Actions turns it into downloads on every push to `main` (or when you run
-the **Build Vangaurd** workflow by hand). The finished files are attached to the **Vangaurd Build 0.8** release
+the **Build Vangaurd** workflow by hand). The finished files are attached to the **Vangaurd Multiplayer Test 1.0** release
 on the repository's Releases page:
 
 | File | What it is |
 | --- | --- |
-| `Vangaurd-0.8.0-arm64.dmg` / `Vangaurd-0.8.0-x64.dmg` | Mac app for Apple Silicon / Intel Macs |
-| `Vangaurd-Setup-0.8.0.exe` / `Vangaurd-0.8.0-win.zip` | Windows installer / portable Windows app |
-| `Vangaurd-0.8.html` | The whole game in one HTML file (open in Chrome or Edge) |
+| `Vangaurd-1.0.0-arm64.dmg` / `Vangaurd-1.0.0-x64.dmg` | Mac app for Apple Silicon / Intel Macs |
+| `Vangaurd-Setup-1.0.0.exe` / `Vangaurd-1.0.0-win.zip` | Windows installer / portable Windows app |
+| `Vangaurd-MP-Test-1.0.html` | The whole game in one HTML file (open in Chrome or Edge) |
 
-To build the same files locally: `node tools/build-release.mjs --standalone Vangaurd-0.8.html` for the HTML
+To build the same files locally: `node tools/build-release.mjs --standalone Vangaurd-MP-Test-1.0.html` for the HTML
 (no dependencies needed), and `npm install && npm run desktop:mac` or `npm run desktop:win` for the apps.
 
 The Vite sources under `src/` are an older version of the game; `prebuilt/game-module.js` is the current one.
