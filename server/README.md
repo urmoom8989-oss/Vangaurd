@@ -1,25 +1,49 @@
-# Railway matchmaking service
+# Vangaurd matchmaking server 2.1
 
-This service supplies an ephemeral Team Deathmatch queue, room reservation, and the prototype's real-time room relay. Deployed clients exchange player poses, fire cues, hit reports, health/death/respawn updates, and team scores. The server enforces room membership, opposing teams, basic fire-rate limits, bounded damage, and respawn delay. Important: hit detection still runs on clients, and the server trusts reported hits, so this is a playable prototype—not cheat-resistant or production-authoritative netcode.
+This is the online server for Vangaurd Build 0.8. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
+
+What it does:
+
+- **Map vote.** Every new match opens with a 10-second vote on 3 maps picked at random from the 6 in the game. The map with the most votes wins; ties and no-votes are settled at random. Everyone in the match gets the same choice, and players who join later are sent straight to the chosen map.
+- **Kill Confirmed is free-for-all.** No teams: every player scores on their own. Grabbing anyone else's dog tag scores for you, grabbing your own denies it. First to 20 wins.
+- **Team Deathmatch** is unchanged: two teams, server-side health and kills, first to 50.
+- Matches start with 2 players, and late joiners drop into a running match.
+
+This build of the game needs this server for online play. An older server still runs matches, but there is no map vote and Kill Confirmed stays team-based.
 
 ## Deploy on Railway
 
-1. Push this repository to GitHub and create a Railway project using **Deploy from GitHub repo**.
-2. Open the service's **Settings** and set **Root Directory** to `/server`. The included `server/railway.json` provides the start command, health check, and restart policy.
-3. Deploy the service. In **Settings → Networking**, generate a public domain. It should be an HTTPS URL such as `https://your-service.up.railway.app`.
-4. Copy `.env.production.example` to `.env.production.local` in the repository root and replace the example domain with the public domain from Railway. The ignored local file is read by Vite during web, standalone, macOS, and Windows production builds.
-5. Rebuild and publish the game packages. They will connect to the same hosted queue automatically. If no build URL is configured, players can still use **Set up online connection** in the Multiplayer menu.
-6. Open the game's Multiplayer entry and join the queue. Once six players are queued, matchmaking waits 30 seconds to let more players join (up to 12), then starts the match automatically.
+The Railway service `opus-of-duty` (project Vangaurd) deploys this folder automatically: its **Root Directory** is `/server` and it follows the `main` branch, so pushing a change here redeploys the server. `railway.json` supplies the start command (`npm start`), the `/health` check and the restart policy. Railway provides `PORT`; route the public domain to port `8080`.
 
-The macOS/Windows packages contain the game client, not a public matchmaking host. The matchmaking service must remain deployed on a reachable server (such as Railway) so different players can meet in the same queue; running a server process only on each player's computer would create separate queues.
+The game points at `https://opus-of-duty-production-f963.up.railway.app` by default.
 
-Railway's current Infrastructure as Code workflow is CLI-managed; for this isolated service, the Dashboard settings above are the shortest setup. Do not add a Railway bucket for matchmaking.
+## Check that it worked
 
-Environment variables:
+Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.1.0"`, `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
 
-- `MATCH_MIN_SIZE` — minimum players needed before the 30-second fill window begins; defaults to 6 and cannot be lower than 6.
-- `MATCH_MAX_SIZE` — maximum players in a room before the match starts; defaults to 12.
-- `ALLOWED_ORIGINS` — optional comma-separated WebSocket Origin allowlist. Leave unset for the desktop/standalone prototype; configure the exact hosted web origins before public production use.
-- `PORT` — provided by Railway automatically; defaults to `8080` for local runs. In Railway Networking, route the public domain to internal port `8080`.
+## Optional settings
 
-The queue and rooms are in memory. Keep one Railway replica for this prototype; restarts clear active queues. No storage bucket or database is needed for live matchmaking. Add Redis for shared queues across replicas and a database only when persistent accounts, match results, or stats are required.
+Set these as Railway service variables if you want to change the defaults.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `MATCH_MIN_SIZE` | `2` | Players needed before a new match starts |
+| `MATCH_MAX_SIZE` | `12` | Most players in one match |
+| `MATCH_COUNTDOWN` | `5` | Seconds of countdown once enough players are queued |
+| `MAP_VOTE_SECONDS` | `10` | Length of the map vote (`0` skips the vote and picks a random map) |
+| `KC_SCORE_LIMIT` | `20` | Confirmed kills needed to win Kill Confirmed |
+| `TDM_SCORE_LIMIT` | `50` | Kills needed to win Team Deathmatch |
+| `ALLOWED_ORIGINS` | unset | Optional comma-separated WebSocket Origin allowlist. Leave unset for the standalone and desktop builds |
+
+## Using a different address
+
+If you deploy this as a new service with a new address, open the game, choose **Multiplayer**, then **Set up online connection**, paste the new address and choose **Save server**. The game remembers it on that device.
+
+## Run it on your own computer
+
+```
+npm install
+npm start
+```
+
+It listens on port 8080 unless `PORT` is set. `node test-protocol.mjs` checks a running server (start it with `PORT=8099 MATCH_COUNTDOWN=2 MAP_VOTE_SECONDS=2 KC_SCORE_LIMIT=3` first).

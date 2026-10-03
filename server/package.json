@@ -1,16 +1,18 @@
 {
   "name": "vangaurd-matchmaking",
   "private": true,
-  "version": "0.1.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "start": "node index.mjs",
-    "dev": "node --watch index.mjs"
+    "dev": "node --watch index.mjs",
+    "test": "node test-protocol.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "ws": "^8.18.3"
-  }
+  },
+  "description": "Matchmaking and match relay server for Vangaurd (Team Deathmatch and free-for-all Kill Confirmed, with map voting)."
 }
