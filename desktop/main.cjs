@@ -6,21 +6,10 @@ const { pathToFileURL } = require('node:url');
 
 const GAME_ROOT = path.join(process.resourcesPath, 'game');
 
-// Performance: by default frames are not tied to the monitor's refresh rate (the in-game Frame rate
-// limit can still cap them), and the dedicated graphics card is always used on laptops with two GPUs.
-// VSync is off unless the player turns on the optional in-game "VSYNC" frame rate setting;
-// that choice is saved here and applies the next time the app starts.
-const PREFS_FILE = (() => { try { return path.join(app.getPath('userData'), 'desktop-prefs.json'); } catch { return null; } })();
-let desktopPrefs = {};
-try { if (PREFS_FILE) desktopPrefs = JSON.parse(fs.readFileSync(PREFS_FILE, 'utf8')) || {}; } catch { desktopPrefs = {}; }
-if (!desktopPrefs.vsync) {
-  app.commandLine.appendSwitch('disable-frame-rate-limit');
-  app.commandLine.appendSwitch('disable-gpu-vsync');
-}
+// Always use the dedicated graphics card on laptops with two GPUs. (Chromium's frame-limit/VSync
+// switches are deliberately not used: they made the GPU redraw nonstop and stalled loading.
+// The game's own frame loop runs uncapped.)
 app.commandLine.appendSwitch('force_high_performance_gpu');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
 const PREFERRED_PORT = 8080;
 const CSP = [
   "default-src 'self'",
@@ -63,14 +52,6 @@ let gameWindow;
 
 // Display mode requested by the game: windowed, borderless (fills the screen at desktop
 // resolution) or fullscreen (fills the screen; the game picks its own render resolution).
-ipcMain.handle('vangaurd:vsync', (_event, on) => {
-  const vsync = !!on;
-  if (!!desktopPrefs.vsync === vsync) return false;
-  desktopPrefs = { ...desktopPrefs, vsync };
-  try { if (PREFS_FILE) { fs.mkdirSync(path.dirname(PREFS_FILE), { recursive: true }); fs.writeFileSync(PREFS_FILE, JSON.stringify(desktopPrefs)); } } catch (error) { log(`Could not save desktop prefs: ${error}`); }
-  return true;
-});
-
 ipcMain.handle('vangaurd:display-mode', (event, mode) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win || win.isDestroyed()) return false;
@@ -198,6 +179,9 @@ function createWindow() {
   gameWindow = window;
 
   window.setMenu(null);
+  // Show the window as soon as it has something to draw (the loading screen) instead of keeping it
+  // hidden until the game is ready: a hidden window does not draw frames, which stalls loading.
+  window.once('ready-to-show', () => { if (!window.isDestroyed() && !window.isVisible()) window.show(); });
   window.webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
     if (isMainFrame) showLaunchError(`Could not load the packaged game (${code}): ${description}\n${url}`);
   });

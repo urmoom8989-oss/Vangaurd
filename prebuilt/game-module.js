@@ -27922,8 +27922,13 @@ function fpRafStart() {
   };
   requestAnimationFrame(A);
 }
+function fpRafAlive() {
+  return fpRafStart(), performance.now() - fpLastRaf < 120;
+}
 function fpStarved() {
-  return fpRafStart(), performance.now() - fpLastRaf > 10;
+  fpRafStart();
+  const A = performance.now() - fpLastRaf;
+  return A > 10 && A < 120;
 }
 function fpPost(A) {
   if (!fpCh) {
@@ -27978,27 +27983,33 @@ var iY = class {
       tok.to = setTimeout(go, 33);
       return;
     }
-    // Desktop app: Chromium's frame limit and VSync are switched off there, so requestAnimationFrame
-    // runs uncapped and every frame reaches the screen. VSync setting: requestAnimationFrame everywhere.
-    if ((A < 0 || typeof window < "u" && window.vangaurdDesktop) && !this.paused) {
+    // While the game is still loading, run a gentle ~60 fps loop so loading work gets the CPU.
+    if (typeof window < "u" && !window.__APP_STARTUP_READY__) {
+      tok.to = setTimeout(go, 16);
+      return;
+    }
+    // Optional VSync setting: one frame per screen refresh via requestAnimationFrame.
+    if (A < 0 && !this.paused && fpRafAlive()) {
       if (A > 0 && this._lastTickStart >= 0 && performance.now() - this._lastTickStart < 1e3 / A - 0.3) {
-        tok.raf = requestAnimationFrame(() => {
+        const re = () => {
           this._timer === tok && (this._timer = null, this._schedule());
-        });
+        };
+        tok.raf = requestAnimationFrame(re), tok.to = setTimeout(re, 100);
         return;
       }
-      tok.raf = requestAnimationFrame(go);
+      tok.raf = requestAnimationFrame(go), tok.to = setTimeout(go, 100);
       return;
     }
     const e = A > 0 ? 1e3 / A : 0, t = this._lastTickStart < 0 ? e : performance.now() - this._lastTickStart, i = Math.max(0, e - t);
     // Frames run back to back, but if the browser has not had a chance to put a frame on screen
-    // for 10 ms the next one waits for it, so the picture never stalls.
+    // for 10 ms the next one waits for it, so the picture never stalls. When the window is not
+    // drawing at all (hidden while loading) frames never wait for the screen.
     if (i <= 0.2) {
-      fpStarved() ? tok.raf = requestAnimationFrame(go) : fpPost(go);
+      fpStarved() ? (tok.raf = requestAnimationFrame(go), tok.to = setTimeout(go, 100)) : fpPost(go);
       return;
     }
     const due = performance.now() + i, spin = () => {
-      this._timer === tok && (performance.now() >= due - 0.05 ? go() : fpStarved() ? tok.raf = requestAnimationFrame(spin) : fpPost(spin));
+      this._timer === tok && (performance.now() >= due - 0.05 ? go() : fpStarved() ? (tok.raf = requestAnimationFrame(spin), tok.to = setTimeout(spin, 100)) : fpPost(spin));
     };
     i > 2.5 ? tok.to = setTimeout(spin, i - 2) : fpPost(spin);
   }
@@ -50688,7 +50699,7 @@ function rJ(A) {
           [240, "240"],
           [360, "360"]
         ],
-        desc: "Unlimited (default) renders as fast as your PC can, not tied to your monitor. VSync locks the frame rate to your monitor's refresh rate to stop tearing (in the desktop app it takes effect after you restart it). A number caps the frame rate."
+        desc: "Unlimited (default) renders as fast as your PC can, not tied to your monitor. VSync locks the frame rate to your monitor's refresh rate. A number caps the frame rate."
       },
       { sec: "Post processing" },
       {
