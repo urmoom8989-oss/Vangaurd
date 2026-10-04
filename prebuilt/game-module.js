@@ -45775,7 +45775,7 @@ function T9(A) {
     });
   }
   function rA(O = {}) {
-    ggOff(), wmVoteAbort(), c.paused && ft(), mA(), GA("menu"), c.menuT = 0, c.fade = 0, r.timeLeft = 1 / 0, FA(!1), pe(!1);
+    ggOff(), amS.clear(), wmVoteAbort(), c.paused && ft(), mA(), GA("menu"), c.menuT = 0, c.fade = 0, r.timeLeft = 1 / 0, FA(!1), pe(!1);
     try {
       Z().player.setMovementEnabled(!1);
     } catch {
@@ -45822,7 +45822,13 @@ function T9(A) {
     };
     const DA = O.bounds, UA = O.map?.center?.[0] ?? (DA ? (DA.min.x + DA.max.x) * 0.5 : 0), $A = O.map?.center?.[1] ?? (DA ? (DA.min.z + DA.max.z) * 0.5 : 0), KA = Math.max(1, ...fA.map((Ne) => Math.hypot(Ne.position.x - UA, Ne.position.z - $A))), he = KA * 0.68, se = fA.filter((Ne) => Math.hypot(Ne.position.x - UA, Ne.position.z - $A) >= he), Qe = se.length ? se : fA, te = Math.max(6, KA * 0.3);
     let ye = Qe.filter((Ne) => Ne.position.z < $A - te).sort((Ne, ke) => Ne.position.z - ke.position.z), de = Qe.filter((Ne) => Ne.position.z > $A + te).sort((Ne, ke) => ke.position.z - Ne.position.z);
-    return ye.length < 2 && (ye = Qe.slice().sort((Ne, ke) => Ne.position.z - ke.position.z).slice(0, Math.max(2, Math.ceil(Qe.length / 3)))), de.length < 2 && (de = Qe.slice().sort((Ne, ke) => ke.position.z - Ne.position.z).slice(0, Math.max(2, Math.ceil(Qe.length / 3)))), {
+    if (ye.length < 2 || de.length < 2) {
+      // Not enough spawns at both far ends (long maps like the Freighter, or an off-centre map): split all
+      // spawn points by position into two separate ends, so the two teams never share a spawn area.
+      const srt = fA.slice().sort((Ne, ke) => Ne.position.z - ke.position.z), n = srt.length, k = Math.max(1, Math.min(Math.floor(n / 2), Math.max(2, Math.ceil(n / 3))));
+      ye = srt.slice(0, k), de = srt.slice(n - k).reverse();
+    }
+    return {
       all: Qe,
       north: ye,
       south: de
@@ -45912,7 +45918,7 @@ function T9(A) {
     });
   }
   function re() {
-    tA && (r.kc = !1, r.gg = !1, r.matchType = "tdm"), kcS.clear();
+    tA && (r.kc = !1, r.gg = !1, r.matchType = "tdm"), kcS.clear(), amS.clear();
     const netSt = Z().network?.state, O = tA?.roster?.find((KA) => KA && netSt?.selfId != null && String(KA.id) === String(netSt.selfId)) || tA?.roster?.find((KA) => KA && tA.playerId != null && String(KA.id) === String(tA.playerId)), fA = O ? /^(bravo|red)$/i.test(String(O.team)) ? "red" : "blue" : netSt?.localTeam ? netSt.localTeam === "bravo" ? "red" : "blue" : null;
     r.ffa = !!(r.kc || r.gg), c.ggLevel = -1;
     for (const KA of Object.keys(r.score)) (/^ffa/.test(KA) || /^net:/.test(KA)) && delete r.score[KA];
@@ -46162,6 +46168,7 @@ function T9(A) {
     }));
   }
   let kcSeq = 0;
+  const amS = ammoSystem(A);
   const kcS = kcSystem(A, {
     state: () => r,
     online: () => !!tA,
@@ -46732,7 +46739,7 @@ function T9(A) {
             r.respawnIn = 0, GA("match-live"), FA(!0);
           }
       }
-      r.kc && !c.paused && (c.stage === "match-live" || c.stage === "match-dead") ? kcS.update(O) : kcS.size() && c.stage !== "match-live" && c.stage !== "match-dead" && kcS.clear(), lA(), BA && BA.update(c, fA);
+      r.kc && !c.paused && (c.stage === "match-live" || c.stage === "match-dead") ? kcS.update(O) : kcS.size() && c.stage !== "match-live" && c.stage !== "match-dead" && kcS.clear(), c.stage === "menu" || c.stage === "boot" || c.stage === "matchmaking" || c.stage === "vote" ? amS.size() && amS.clear() : c.paused || amS.update(O), lA(), BA && BA.update(c, fA);
     }
   }
   const gt = {
@@ -46773,7 +46780,7 @@ function T9(A) {
       tA = O?.matchId ? O : null, tA && k && c.stage === "matchmaking" && wmOnlineSession(O);
     }), EA("network:clear", () => {
       const O = wmV?.online && !wmV.done;
-      tA = null, kcS.clear(), O && rA();
+      tA = null, kcS.clear(), amS.clear(), O && rA();
     }), EA("network:message", (O) => wmNetMessage(O)), EA("kc:tag", (O = {}) => {
       if (O.action === "spawn" && O.tag) {
         const fA = O.tag;
@@ -46816,8 +46823,11 @@ function T9(A) {
         }
         !(c.stage in Jo) || E || (w++, J(O));
       }
+    }), EA("network:player-died", (O) => {
+      tA && O?.position && amS.spawn(O.position);
     }), EA("ai:death", (O) => {
       if (E) return;
+      O?.agent?.position && amS.spawn(O.agent.position);
       (r.matchType === "tdm" || r.matchType === "domination") && (c.stage === "match-live" || c.stage === "match-dead") && O?.agent?.matchRoster && W.push({
         roster: O.agent.matchRoster,
         remaining: 2.4
@@ -49184,6 +49194,100 @@ function atStats(A, e) {
 }
 function kcTeamOk(t) {
   return t === "blue" || t === "red" || typeof t == "string" && t.startsWith("ffa");
+}
+/* Ammo drops: every eliminated soldier (bots offline, other players online) leaves an ammo box.
+   Walk over it to top up every gun you carry by one magazine. Boxes last 40 s. */
+function ammoSystem(A) {
+  const packs = [];
+  let res = null, seq = 0;
+  function kit() {
+    if (res) return res;
+    return res = {
+      body: new wi(0.3, 0.13, 0.17),
+      lid: new wi(0.31, 0.035, 0.18),
+      handle: new wi(0.11, 0.018, 0.024),
+      stripe: new wi(0.302, 0.03, 0.172),
+      ring: new ql(0.36, 0.014, 6, 40),
+      bodyMat: new Vt({ color: 5133344, metalness: 0.35, roughness: 0.62, emissive: 2697498, emissiveIntensity: 0.35 }),
+      lidMat: new Vt({ color: 3822873, metalness: 0.5, roughness: 0.5 }),
+      stripeMat: new Vt({ color: 15775744, metalness: 0.2, roughness: 0.45, emissive: 15775744, emissiveIntensity: 0.55 }),
+      ringMat: new ha({ color: 16765773, transparent: !0, opacity: 0.4, depthWrite: !1, blending: 2, toneMapped: !1 })
+    };
+  }
+  function remove(p) {
+    const i = packs.indexOf(p);
+    i >= 0 && packs.splice(i, 1), A.scene.remove(p.root);
+  }
+  function spawn(pos) {
+    if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.z)) return null;
+    const k = kit(), root = new yt();
+    root.name = `ammo-drop:${++seq}`;
+    const hold = new yt();
+    hold.position.y = 0.12, root.add(hold);
+    const body = new Le(k.body, k.bodyMat);
+    hold.add(body);
+    const lid = new Le(k.lid, k.lidMat);
+    lid.position.y = 0.075, hold.add(lid);
+    const handle = new Le(k.handle, k.lidMat);
+    handle.position.y = 0.1, hold.add(handle);
+    const stripe = new Le(k.stripe, k.stripeMat);
+    stripe.position.y = 0.015, hold.add(stripe);
+    const ring = new Le(k.ring, k.ringMat);
+    ring.rotation.x = -Math.PI / 2, ring.position.y = 0.03, root.add(ring), root.traverse((o) => {
+      o.layers.set(A.layers.WORLD), o.frustumCulled = !1, o.castShadow = !1;
+    });
+    let y = Number(pos.y) || 0;
+    try {
+      const g = A.services.world.groundHeight(pos.x, pos.z, y + 1.5);
+      Number.isFinite(g) && Math.abs(g - y) < 3 && (y = g);
+    } catch {
+    }
+    root.position.set(pos.x, y, pos.z), hold.rotation.y = seq * 1.7, A.scene.add(root);
+    const p = { root, hold, ring, born: A.time.t };
+    for (packs.push(p); packs.length > 24; ) remove(packs[0]);
+    return p;
+  }
+  function update(dt) {
+    if (!packs.length) return;
+    const t = A.time.t;
+    for (const p of [...packs]) {
+      const age = t - p.born;
+      if (age > 40) {
+        remove(p);
+        continue;
+      }
+      p.hold.rotation.y += dt * 1.4, p.hold.position.y = 0.12 + Math.sin(age * 3) * 0.025;
+      const sc = 1 + Math.sin(t * 5 + p.born) * 0.06;
+      p.ring.scale.set(sc, sc, sc), p.root.visible = age < 35 || Math.sin(age * 18) > -0.3;
+    }
+    const pl = A.services.player?.state;
+    if (!pl || pl.alive === !1 || !pl.position) return;
+    for (const p of [...packs]) {
+      const dx = pl.position.x - p.root.position.x, dz = pl.position.z - p.root.position.z;
+      if (dx * dx + dz * dz > 2.25 || Math.abs(pl.position.y - p.root.position.y) > 2) continue;
+      let got = 0;
+      try {
+        got = A.services.weapons?.scavenge?.(1) || 0;
+      } catch (e) {
+        A.reportError?.("gamemode", "ammo-pickup", e);
+      }
+      if (!(got > 0)) continue;
+      remove(p);
+      try {
+        A.services.audio?.play?.("gear_rattle", { bus: "sfx" }), A.services.audio?.play?.("ui_notify", { bus: "ui", volume: 0.5 });
+      } catch {
+      }
+      try {
+        A.services.hud?.notify?.(`+${got} AMMO`, { kind: "info", duration: 1.2 });
+      } catch {
+      }
+      A.events.emit("gamemode:ammo-pickup", { rounds: got });
+    }
+  }
+  function clear() {
+    for (const p of [...packs]) remove(p);
+  }
+  return { spawn, update, clear, size: () => packs.length, packs };
 }
 function kcSystem(A, H) {
   const e = /* @__PURE__ */ new Map();
@@ -57776,6 +57880,7 @@ function jJ(A) {
     return M.pos || M.group.position;
   }
   function setAlive(M, x, S) {
+    !x && M.lifeOn && e.emit("network:player-died", { id: M.id, position: posOf(M).clone() }), M.lifeOn = !!x;
     M.soldier ? x ? (M.soldier.revive(), M.group.visible = !0) : M.soldier.dead || M.soldier.kill(S || {}) : M.group.visible = x;
   }
   function snap(M) {
@@ -72536,6 +72641,18 @@ function b6(A) {
     reload: () => qe(),
     addAmmo(HA) {
       E.reserve = Math.min(u.cfg.reserveMax, E.reserve + HA);
+    },
+    scavenge(HA = 1) {
+      if (!u) return 0;
+      C[u.id] && (C[u.id].reserve = E.reserve);
+      let OA = 0;
+      for (const oe in C) {
+        const xe = I[oe]?.cfg;
+        if (!xe || !C[oe] || !(xe.magSize > 0)) continue;
+        const Mt = C[oe].reserve || 0, ai = Math.max(xe.reserveMax || 0, Mt), Qi = Math.min(ai, Mt + Math.max(1, Math.round(xe.magSize * HA)));
+        C[oe].reserve = Qi, OA += Qi - Mt;
+      }
+      return C[u.id] && (E.reserve = C[u.id].reserve), OA;
     },
     addGrenades(HA = 1) {
       E.lethal = Math.min(4, E.lethal + HA);
