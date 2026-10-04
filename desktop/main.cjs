@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, shell, ipcMain, session } = require('electron');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
@@ -136,7 +136,8 @@ function startGameServer() {
         'Content-Length': stat.size,
         'Content-Security-Policy': CSP,
         'X-Content-Type-Options': 'nosniff',
-        'Cache-Control': path.basename(filename) === 'index.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+        // Never cache: the files are on the local disk anyway, and a cached copy would survive an update.
+        'Cache-Control': 'no-store',
       });
       if (request.method === 'HEAD') response.end();
       else fs.createReadStream(filename).pipe(response);
@@ -247,6 +248,14 @@ app.whenReady().then(async () => {
   try {
     await fs.promises.access(path.join(GAME_ROOT, 'index.html'), fs.constants.R_OK);
     await startGameServer();
+    // Older builds told the browser to keep game.js forever, so an updated app kept running the old
+    // game. Empty the browser cache on every launch (saved settings and progress are not touched).
+    try {
+      await session.defaultSession.clearCache();
+      log('Cleared the browser cache.');
+    } catch (error) {
+      log(`Could not clear the browser cache: ${error?.message || error}`);
+    }
     createWindow();
   } catch (error) {
     showLaunchError(`Could not prepare the packaged game files at ${GAME_ROOT}:\n${error?.stack || error}`);

@@ -1,9 +1,10 @@
 // Builds the current game (prebuilt/game-module.js) into:
 //   --standalone <file>  one self-contained HTML file (all assets embedded, runs from file://)
-//   --dist <dir>         a regular web build (index.html + game.js + assets/) used by the desktop apps
+//   --dist <dir>         a regular web build (index.html + game-<hash>.js + assets/) used by the desktop apps
 // No npm dependencies are needed; only Node 18+.
 import { readFile, writeFile, mkdir, readdir, copyFile, rm, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -77,13 +78,18 @@ if (distOut) {
     await writeFile(file, Buffer.from(encoded, 'base64'));
     workerMap[url] = url;
   }
-  await writeFile(path.join(dist, 'boot.js'), `window.__STANDALONE_WORKERS__=${JSON.stringify(workerMap)};\n`);
-  await writeFile(path.join(dist, 'index.html'), `${head.slice(0, bodyEnd)}<script src="/boot.js"></script><script type="module" src="/game.js"></script></body></html>\n`);
+  // Script names carry a hash of their contents, so an update can never pick up an older cached copy.
+  const hashed = (name, text) => `${name}-${createHash('sha256').update(text).digest('hex').slice(0, 12)}.js`;
+  const bootCode = `window.__STANDALONE_WORKERS__=${JSON.stringify(workerMap)};\n`;
   // Game code without the embedded-asset loader: assets are plain files next to it.
   const start = moduleCode.indexOf('await standaloneAssetsReady;');
   let game = moduleCode.slice(moduleCode.indexOf('\n', start) + 1);
   game = game.replace(/<\/script><\/body><\/html>\s*$/, '');
-  await writeFile(path.join(dist, 'game.js'), `document.getElementById('standalone-status-text').textContent='Loading Vangaurd…';\n${game}\n`);
+  const gameCode = `document.getElementById('standalone-status-text').textContent='Loading Vangaurd…';\n${game}\n`;
+  const bootName = hashed('boot', bootCode), gameName = hashed('game', gameCode);
+  await writeFile(path.join(dist, bootName), bootCode);
+  await writeFile(path.join(dist, gameName), gameCode);
+  await writeFile(path.join(dist, 'index.html'), `${head.slice(0, bodyEnd)}<script src="/${bootName}"></script><script type="module" src="/${gameName}"></script></body></html>\n`);
   for (const file of assetFiles) {
     const target = path.join(dist, 'assets', file.path);
     await mkdir(path.dirname(target), { recursive: true });
