@@ -1,10 +1,26 @@
-const { app, BrowserWindow, dialog, shell } = require('electron');
+const { app, BrowserWindow, dialog, shell, ipcMain } = require('electron');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const GAME_ROOT = path.join(process.resourcesPath, 'game');
+
+// Performance: by default frames are not tied to the monitor's refresh rate (the in-game Frame rate
+// limit can still cap them), and the dedicated graphics card is always used on laptops with two GPUs.
+// VSync is off unless the player turns on the optional in-game "VSYNC" frame rate setting;
+// that choice is saved here and applies the next time the app starts.
+const PREFS_FILE = (() => { try { return path.join(app.getPath('userData'), 'desktop-prefs.json'); } catch { return null; } })();
+let desktopPrefs = {};
+try { if (PREFS_FILE) desktopPrefs = JSON.parse(fs.readFileSync(PREFS_FILE, 'utf8')) || {}; } catch { desktopPrefs = {}; }
+if (!desktopPrefs.vsync) {
+  app.commandLine.appendSwitch('disable-frame-rate-limit');
+  app.commandLine.appendSwitch('disable-gpu-vsync');
+}
+app.commandLine.appendSwitch('force_high_performance_gpu');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
 const PREFERRED_PORT = 8080;
 const CSP = [
   "default-src 'self'",
@@ -43,6 +59,34 @@ const MIME = {
 let logFile;
 let gameServer;
 let gameOrigin;
+let gameWindow;
+
+// Display mode requested by the game: windowed, borderless (fills the screen at desktop
+// resolution) or fullscreen (fills the screen; the game picks its own render resolution).
+ipcMain.handle('vangaurd:vsync', (_event, on) => {
+  const vsync = !!on;
+  if (!!desktopPrefs.vsync === vsync) return false;
+  desktopPrefs = { ...desktopPrefs, vsync };
+  try { if (PREFS_FILE) { fs.mkdirSync(path.dirname(PREFS_FILE), { recursive: true }); fs.writeFileSync(PREFS_FILE, JSON.stringify(desktopPrefs)); } } catch (error) { log(`Could not save desktop prefs: ${error}`); }
+  return true;
+});
+
+ipcMain.handle('vangaurd:display-mode', (event, mode) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) return false;
+  const full = mode === 'borderless' || mode === 'fullscreen';
+  if (process.platform === 'darwin') {
+    // macOS: borderless uses the classic full-screen (no separate Space), fullscreen the native one.
+    const simple = mode === 'borderless';
+    if (win.isSimpleFullScreen() !== simple) win.setSimpleFullScreen(simple);
+    if (win.isFullScreen() !== (mode === 'fullscreen')) win.setFullScreen(mode === 'fullscreen');
+  } else if (win.isFullScreen() !== full) {
+    win.setFullScreen(full);
+  }
+  if (!full && win.isMaximized() === false && win.getBounds().width < 960) win.setSize(1440, 900);
+  log(`Display mode: ${mode}`);
+  return true;
+});
 
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
@@ -148,8 +192,10 @@ function createWindow() {
       sandbox: true,
       spellcheck: false,
       backgroundThrottling: false,
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
+  gameWindow = window;
 
   window.setMenu(null);
   window.webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {

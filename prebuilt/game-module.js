@@ -23275,7 +23275,9 @@ var QP = {
     motionBlur: !1,
     filmGrain: !1,
     showFps: !1,
-    fpsCap: 0
+    fpsCap: 0,
+    displayMode: "windowed",
+    resolution: "native"
   },
   controls: {
     sensitivity: 3,
@@ -27878,8 +27880,9 @@ var wS = {
     this.camera = new ca(n, 16 / 9, 0.03, 1500), this.camera.name = "PlayerCamera", this.camera.position.set(0, 1.64, 0), this.camera.layers.enable(Pr.WORLD), this.camera.layers.enable(Pr.VIEWMODEL), this.camera.layers.enable(Pr.FX), this.scene.add(this.camera), this.width = 1, this.height = 1, this.pixelRatio = 1, this.resizeListeners = [], this.rendererString = tY(s), this._onResize = () => this.resize(), window.addEventListener("resize", this._onResize), this.resize();
   }
   resize() {
-    const A = this.fixedSize ? this.fixedSize.width : window.innerWidth, e = this.fixedSize ? this.fixedSize.height : window.innerHeight, t = this.shotMode ? 1 : Math.min(window.devicePixelRatio || 1, this.settings.get("graphics.maxPixelRatio", 1.5)), i = this.settings.get("graphics.renderScale", 1);
-    this.width = A, this.height = e, this.pixelRatio = t * i, this.renderer.setPixelRatio(this.pixelRatio), this.renderer.setSize(A, e, !0), this.camera.aspect = A / e, this.camera.updateProjectionMatrix();
+    let A = this.fixedSize ? this.fixedSize.width : window.innerWidth, e = this.fixedSize ? this.fixedSize.height : window.innerHeight, t = this.shotMode ? 1 : Math.min(window.devicePixelRatio || 1, this.settings.get("graphics.maxPixelRatio", 1.5));
+    const i = this.settings.get("graphics.renderScale", 1), dm = !this.shotMode && !this.fixedSize && this.settings.get("graphics.displayMode", "windowed") === "fullscreen" ? /^(\d+)x(\d+)$/.exec(String(this.settings.get("graphics.resolution", "native"))) : null;
+    dm && (A = +dm[1], e = +dm[2], t = 1), this.width = A, this.height = e, this.pixelRatio = t * i, this.renderer.setPixelRatio(this.pixelRatio), this.renderer.setSize(A, e, !dm), dm && (this.renderer.domElement.style.width = "100%", this.renderer.domElement.style.height = "100%"), this.camera.aspect = A / e, this.camera.updateProjectionMatrix();
     for (const a of this.resizeListeners) try {
       a(A, e, this.pixelRatio);
     } catch (s) {
@@ -27910,6 +27913,33 @@ function tY(A) {
     };
   }
 }
+var fpQ = [], fpCh = null, fpLastRaf = 0, fpRafOn = !1;
+function fpRafStart() {
+  if (fpRafOn || typeof requestAnimationFrame != "function") return;
+  fpRafOn = !0;
+  const A = () => {
+    fpLastRaf = performance.now(), requestAnimationFrame(A);
+  };
+  requestAnimationFrame(A);
+}
+function fpStarved() {
+  return fpRafStart(), performance.now() - fpLastRaf > 10;
+}
+function fpPost(A) {
+  if (!fpCh) {
+    try {
+      fpCh = new MessageChannel(), fpCh.port1.onmessage = () => {
+        const e = fpQ;
+        fpQ = [];
+        for (const t of e) t();
+      };
+    } catch {
+      fpCh = !1;
+    }
+  }
+  if (!fpCh) return void setTimeout(A, 0);
+  fpQ.push(A), fpQ.length === 1 && fpCh.port2.postMessage(0);
+}
 var iY = class {
   constructor({ ctx: A, runner: e, perf: t, reportError: i, hooks: a = {} }) {
     this.ctx = A, this.runner = e, this.perf = t, this.reportError = i, this.hooks = a, this.running = !1, this.paused = !1, this._budget = 0, this._budgetWaiters = [], this._acc = 0, this._last = -1, this._timer = null, this._lastTickStart = -1, this._t0 = 0, this._detFrames = 0, this._renderFailed = !1, this._tick = this._tick.bind(this);
@@ -27918,7 +27948,9 @@ var iY = class {
     this.running || (this.running = !0, this._schedule());
   }
   stop() {
-    this.running = !1, this._timer !== null && clearTimeout(this._timer), this._timer = null;
+    this.running = !1;
+    const A = this._timer;
+    A && (A.raf && cancelAnimationFrame(A.raf), A.to && clearTimeout(A.to)), this._timer = null;
   }
   setDeterministicStart(A) {
     this._t0 = A, this._detFrames = 0, this.ctx.time.t = A;
@@ -27937,10 +27969,38 @@ var iY = class {
   }
   _schedule() {
     if (!this.running || this._timer !== null || this.paused && this._budget <= 0) return;
-    const A = this.paused ? 0 : Math.max(0, Number(this.ctx.settings.get("graphics.fpsCap", 0)) || 0), e = A > 0 ? 1e3 / A : 0, t = this._lastTickStart < 0 ? e : performance.now() - this._lastTickStart, i = Math.max(0, e - t);
-    this._timer = setTimeout(() => {
-      this._timer = null, this._tick(performance.now());
-    }, i);
+    // Frame pacing. setTimeout chains are clamped to >= 4 ms by the browser, which capped the game at ~140 fps;
+    // uncapped and short waits use a MessageChannel instead. Only the optional VSync setting uses requestAnimationFrame.
+    const A = this.paused ? 0 : Number(this.ctx.settings.get("graphics.fpsCap", 0)) || 0, tok = {}, go = () => {
+      this._timer === tok && (this._timer = null, this._tick(performance.now()));
+    };
+    if (this._timer = tok, typeof document < "u" && document.hidden) {
+      tok.to = setTimeout(go, 33);
+      return;
+    }
+    // Desktop app: Chromium's frame limit and VSync are switched off there, so requestAnimationFrame
+    // runs uncapped and every frame reaches the screen. VSync setting: requestAnimationFrame everywhere.
+    if ((A < 0 || typeof window < "u" && window.vangaurdDesktop) && !this.paused) {
+      if (A > 0 && this._lastTickStart >= 0 && performance.now() - this._lastTickStart < 1e3 / A - 0.3) {
+        tok.raf = requestAnimationFrame(() => {
+          this._timer === tok && (this._timer = null, this._schedule());
+        });
+        return;
+      }
+      tok.raf = requestAnimationFrame(go);
+      return;
+    }
+    const e = A > 0 ? 1e3 / A : 0, t = this._lastTickStart < 0 ? e : performance.now() - this._lastTickStart, i = Math.max(0, e - t);
+    // Frames run back to back, but if the browser has not had a chance to put a frame on screen
+    // for 10 ms the next one waits for it, so the picture never stalls.
+    if (i <= 0.2) {
+      fpStarved() ? tok.raf = requestAnimationFrame(go) : fpPost(go);
+      return;
+    }
+    const due = performance.now() + i, spin = () => {
+      this._timer === tok && (performance.now() >= due - 0.05 ? go() : fpStarved() ? tok.raf = requestAnimationFrame(spin) : fpPost(spin));
+    };
+    i > 2.5 ? tok.to = setTimeout(spin, i - 2) : fpPost(spin);
   }
   _tick(A) {
     if (this.running) {
@@ -32974,8 +33034,8 @@ varying vec3 vCamoN;`).replace("base *= 1.0 + ( sWr.b - 0.5 ) * 1.6 * sMatC.y;",
     if (!v?.origin) return;
     const R = A.time.t;
     I.playerFiredT = R;
-    const k = /suppress|silenc/i.test(String(v.weaponId || ""));
-    for (const N of s) N.alive && N.hear(v.origin, R, k ? 0.25 : 1);
+    const k = !!v.suppressed || /suppress|silenc/i.test(String(v.weaponId || ""));
+    for (const N of s) N.alive && N.hear(v.origin, R, k ? 0.12 : 1);
   }
   const m = new b();
   function D(v) {
@@ -39073,7 +39133,7 @@ var Z_, X_, BE, Gg, WH, ka, $S, B2, q_ = YA((() => {
       this.muffled = !!A, this._auto(this.sfxFilter.frequency, this._restFilter(), this.ac.currentTime, A ? 0.25 : 0.8);
     }
     playerShot({ weaponId: A = "rifle", suppressed: e = !1, ammoFrac: t = 1, surface: i = "concrete", feet: a = null, at: s } = {}) {
-      const n = Qc(A), o = e && Xi[`${n}_fire_suppressed`] ? `${n}_fire_suppressed` : `${n}_fire`, r = this.play(o, { at: s });
+      const n = Qc(A), o = e && Xi[`${n}_fire_suppressed`] ? `${n}_fire_suppressed` : `${n}_fire`, r = this.play(o, e ? { at: s, volume: 0.6 } : { at: s });
       if (t <= 0.2 && t > 0 && this.play("low_ammo_tick", {
         at: s,
         volume: 0.5 + (0.2 - t) * 2.5
@@ -47308,6 +47368,9 @@ var Jo, x2, C3, jh, m3, w3, bp, y3, b3, D3, v2, M3, Y9 = YA((() => {
 .od-mode-close:hover, .od-mode-close:focus-visible { color: #111; background: var(--accent); outline: none; }
 .od-mode-dialog-sub { margin-top: calc(var(--u) * 5); color: var(--fg2); font-size: calc(var(--u) * 13); letter-spacing: .16em; text-transform: uppercase; }
 .od-mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--u) * 14); margin-top: calc(var(--u) * 24); }
+.od-mode-group { grid-column: 1 / -1; display: flex; align-items: center; gap: calc(var(--u) * 12); margin: calc(var(--u) * 6) 0 calc(var(--u) * -2); color: var(--accent, #f0c048); font-size: calc(var(--u) * 12); font-weight: 700; letter-spacing: .3em; text-transform: uppercase; }
+.od-mode-group::after { content: ""; flex: 1; height: 1px; background: rgba(236,240,234,.16); }
+.od-mode-group[hidden] { display: none; }
 .od-mode-option { min-width: 0; padding: 0; overflow: hidden; text-align: left; border: 1px solid rgba(236,240,234,.16); background: rgba(236,240,234,.045); color: var(--fg); font: inherit; cursor: pointer; transition: border-color .15s, background .15s, transform .15s, box-shadow .15s; }
 .od-mode-option:hover, .od-mode-option:focus-visible { transform: translateY(calc(var(--u) * -3)); border-color: rgba(240,192,72,.72); outline: none; }
 .od-mode-option.sel { border-color: var(--accent); background: rgba(240,192,72,.09); box-shadow: 0 0 0 1px rgba(240,192,72,.25), 0 calc(var(--u) * 8) calc(var(--u) * 24) rgba(0,0,0,.25); }
@@ -49864,6 +49927,8 @@ function wmPreview(canvas, id) {
   vg.addColorStop(0, "rgba(0,0,0,0)"), vg.addColorStop(1, "rgba(0,0,0,.45)"), g.fillStyle = vg, g.fillRect(0, 0, W, H);
 }
 var loCss = `
+.od-row.dis { opacity: .38; }
+.od-row.dis .od-cyc .a { visibility: hidden; }
 .od-lo-content { position: absolute; left: calc(var(--u) * 120); top: calc(var(--u) * 205); right: calc(var(--u) * 120); bottom: calc(var(--u) * 100); overflow: auto; color: var(--fg2); font-size: calc(var(--u) * 14); line-height: 1.45; padding-right: calc(var(--u) * 8); }
 .od-main > .od-armory-content { top: calc(var(--u) * 252); }
 .od-pg-h { margin: calc(var(--u) * 18) 0 calc(var(--u) * 10); color: var(--fg); font-size: calc(var(--u) * 16); letter-spacing: .2em; text-transform: uppercase; }
@@ -50544,11 +50609,38 @@ function oJ(A) {
 var HM, L2, e5 = YA((() => {
   HM = "vangaurd.account.username.v1", L2 = "Vigil-1";
 }));
+function dmResList() {
+  let A = 1920, e = 1080;
+  try {
+    const i = window.devicePixelRatio || 1;
+    A = Math.round(screen.width * i), e = Math.round(screen.height * i);
+  } catch {
+  }
+  const t = [["native", `NATIVE · ${A}×${e}`]];
+  for (const [i, a] of [[3840, 2160], [3440, 1440], [2560, 1440], [2560, 1080], [1920, 1200], [1920, 1080], [1680, 1050], [1600, 900], [1440, 900], [1366, 768], [1280, 800], [1280, 720], [1024, 576], [960, 540]])
+    (i < A || a < e) && i <= A && a <= e && t.push([`${i}x${a}`, `${i}×${a}`]);
+  return t;
+}
 function rJ(A) {
   const e = (t) => A.ctx.settings.get(t);
   return {
     graphics: [
       { sec: "Display" },
+      {
+        path: "graphics.displayMode",
+        label: "Display mode",
+        type: "cycle",
+        options: [["windowed", "WINDOWED"], ["borderless", "BORDERLESS"], ["fullscreen", "FULLSCREEN"]],
+        desc: "Windowed: a normal window. Borderless: fills the screen at your desktop resolution. Fullscreen: fills the screen and lets you pick the resolution the game renders at."
+      },
+      {
+        path: "graphics.resolution",
+        label: "Resolution",
+        type: "cycle",
+        options: dmResList(),
+        enabled: () => e("graphics.displayMode") === "fullscreen",
+        desc: "Resolution the game renders at in Fullscreen, scaled to fill your screen. Lower resolutions give more frames per second. Switch Display mode to Fullscreen to change it."
+      },
       {
         path: "graphics.quality",
         label: "Quality preset",
@@ -50588,12 +50680,15 @@ function rJ(A) {
         type: "cycle",
         options: [
           [0, "UNLIMITED"],
+          [-1, "VSYNC"],
           [60, "60"],
           [120, "120"],
           [144, "144"],
-          [240, "240"]
+          [165, "165"],
+          [240, "240"],
+          [360, "360"]
         ],
-        desc: "Caps frame production in software. Unlimited mode is not synchronized to monitor refresh."
+        desc: "Unlimited (default) renders as fast as your PC can, not tied to your monitor. VSync locks the frame rate to your monitor's refresh rate to stop tearing (in the desktop app it takes effect after you restart it). A number caps the frame rate."
       },
       { sec: "Post processing" },
       {
@@ -50921,14 +51016,14 @@ function cJ(A) {
       "6-12 player · First team to 50"
     ],
     [
-      "domination",
-      "Domination",
-      "3 flags · First team to 600"
-    ],
-    [
       "kc",
       "Kill Confirmed",
       "Free-for-all · Collect dog tags · First to 20"
+    ],
+    [
+      "domination",
+      "Domination",
+      "3 flags · First team to 600"
     ],
     [
       "gg",
@@ -50978,7 +51073,9 @@ function cJ(A) {
   tA.id = "od-mode-title", tA.textContent = "Choose operation";
   const K = NA("button", "od-mode-close", $);
   K.type = "button", K.textContent = "×", K.setAttribute("aria-label", "Close game mode selector"), NA("div", "od-mode-dialog-sub", V).textContent = "Select a game mode to deploy";
-  const eA = NA("div", "od-mode-grid", V), X = f.map(([yA, VA, le]) => {
+  let mgF = null, mgO = null;
+  const eA = NA("div", "od-mode-grid", V), X = f.map(([yA, VA, le], mgI) => {
+    mgI === 0 && (mgF = NA("div", "od-mode-group", eA), mgF.textContent = "Featured"), mgI === 2 && (mgO = NA("div", "od-mode-group", eA), mgO.textContent = "Other");
     const ge = NA("button", "od-mode-option", eA);
     ge.type = "button", ge.dataset.mode = yA, ge.setAttribute("aria-pressed", "false");
     const Se = NA("span", "od-mode-thumb", ge), Ue = NA("canvas", "", Se), lt = NA("span", "od-mode-mark", Se);
@@ -51290,7 +51387,7 @@ function cJ(A) {
   function JA() {
     const yA = F.sessionType === "multiplayer", VA = !!v.value.trim(), le = f[p]?.[0];
     yA && le !== "tdm" && (p = 0, e.services.gamemode.setMode?.("tdm")), E[1].firstChild.nodeValue = F.waitingForPlayers ? "Cancel Queue" : F.multiplayerMatch ? "Online Match" : yA ? "Queue for Match" : "Start Game", E[1].querySelector(".d").textContent = F.waitingForPlayers ? `${gmName()} · matchmaking in progress` : F.multiplayerMatch ? "You are already deployed in the online match" : yA ? `${gmName()} · Up to 12 players · First to ${gmLimit()}` : "Start immediately against AI", X.forEach(({ key: ge, button: Se }) => {
-      Se.hidden = yA && ge !== "tdm";
+      Se.hidden = yA && ge !== "tdm", mgO && (mgO.hidden = yA);
     }), U.hidden = !yA || !F.serverConfigurationOpen, P.hidden = !yA || VA, N.hidden = !F.multiplayerMatch, yA && !G.textContent && (G.textContent = `${gmName()} · Up to 12 players · First to ${gmLimit()}.`), lA(f[p][0]);
   }
   const Ae = "vangaurd.multiplayer.url.v2";
@@ -51552,7 +51649,7 @@ function cJ(A) {
     } catch (le) {
       e.reportError("hud", "settings", le);
     }
-    hi(F.rows.find((le) => le.def === yA));
+    yA.path === "graphics.displayMode" ? F.rows.forEach(hi) : hi(F.rows.find((le) => le.def === yA));
   }
   function Mt() {
     ie.innerHTML = "", F.rows = [];
@@ -51637,7 +51734,7 @@ function cJ(A) {
       xe(le, oe(le) + VA * le.step * (le.max - le.min > 5, 1));
       return;
     }
-    if (le.type === "bind") return;
+    if (le.type === "bind" || le.enabled && !le.enabled()) return;
     const ge = ai(le), Se = oe(le);
     let Ue = ge.findIndex((lt) => lt[0] === Se);
     Ue = (Ue + VA + ge.length) % ge.length, xe(le, ge[Ue][0]);
@@ -51651,7 +51748,7 @@ function cJ(A) {
       return;
     }
     const le = oe(VA);
-    if (VA.type === "slider") {
+    if (Ka(yA.el, "dis", !!(VA.enabled && !VA.enabled())), VA.type === "slider") {
       const ge = Ut((le - VA.min) / (VA.max - VA.min));
       yA.fill.style.width = `${(ge * 100).toFixed(2)}%`, yA.knob.style.left = `${(ge * 100).toFixed(2)}%`, yA.val.textContent = VA.fmt ? VA.fmt(le) : String(le);
     } else {
@@ -57792,8 +57889,13 @@ function jJ(A) {
       const S = i.get(sid(M.playerId ?? M.id));
       S && h(S);
     } else if (x === "weapon_fired" && (!a || inMatch(M))) {
-      const S = i.get(sid(M.playerId));
-      if (S && (S.fireFlash = 0.12, S.alive && (a?.ffa || S.team !== a?.localTeam))) {
+      const S = i.get(sid(M.playerId)), sup = /suppress/i.test(String(M.weaponId || ""));
+      if (S) try {
+        const P2 = posOf(S);
+        A.services.audio?.gunshot?.({ origin: new b(P2.x, P2.y + 1.45, P2.z), weaponId: String(M.weaponId || "rifle").replace(/_suppressed$/, ""), suppressed: sup, source: "remote" });
+      } catch {
+      }
+      if (S && (S.fireFlash = sup ? 0 : 0.12, !sup && S.alive && (a?.ffa || S.team !== a?.localTeam))) {
         const P2 = performance.now();
         if (!(P2 - (S.pingAt || 0) < 700)) {
           S.pingAt = P2;
@@ -57826,7 +57928,7 @@ function jJ(A) {
   const f = (M) => {
     a && c({
       type: "weapon_fired",
-      weaponId: M?.weaponId
+      weaponId: `${M?.weaponId || "rifle"}${M?.suppressed ? "_suppressed" : ""}`
     });
   }, p = (M) => {
     if (!a) return;
@@ -71905,10 +72007,8 @@ function b6(A) {
     let OA = document.getElementById("lw-scope");
     if (!OA && HA) {
       const oe = document.createElement("style");
-      oe.textContent = "#lw-scope{position:fixed;inset:0;z-index:9;pointer-events:none;display:none;--r:min(44vh,44vw);background:radial-gradient(circle at 50% 50%,rgba(0,0,0,0) 0,rgba(0,0,0,0) calc(var(--r) - 3px),rgba(0,0,0,.9) var(--r),#000 calc(var(--r) + 2px))}#lw-scope.on{display:block}#lw-scope::before{content:'';position:absolute;left:50%;top:50%;width:calc(var(--r)*2);height:calc(var(--r)*2);transform:translate(-50%,-50%);border-radius:50%;box-shadow:inset 0 0 calc(var(--r)*.35) rgba(0,0,0,.55),inset 0 0 0 2px rgba(0,0,0,.9)}#lw-scope i{position:absolute;background:#050505;display:block}#lw-scope .h{left:calc(50% - var(--r));width:calc(var(--r)*2);top:50%;height:1px;margin-top:-.5px}#lw-scope .v{top:calc(50% - var(--r));height:calc(var(--r)*2);left:50%;width:1px;margin-left:-.5px}#lw-scope .pl,#lw-scope .pr{top:50%;height:5px;margin-top:-2.5px;width:calc(var(--r)*.6)}#lw-scope .pl{left:calc(50% - var(--r))}#lw-scope .pr{right:calc(50% - var(--r))}#lw-scope .pb{left:50%;width:5px;margin-left:-2.5px;top:calc(50% + var(--r)*.4);height:calc(var(--r)*.6)}#lw-scope .dot{left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:#ff3b2a;box-shadow:0 0 6px rgba(255,59,42,.8)}#lw-scope .md{width:4px;height:4px;border-radius:50%;margin:-2px 0 0 -2px}#lw-scope[data-kind=dmr] .md,#lw-scope[data-kind=sniper] .dot,#lw-scope[data-kind=night] .md{display:none}#lw-scope[data-kind=night]::after{content:'';position:absolute;left:50%;top:50%;width:calc(var(--r)*2);height:calc(var(--r)*2);transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(70,255,120,.16) 0,rgba(40,210,90,.24) 70%,rgba(20,120,50,.38) 100%);mix-blend-mode:screen}#lw-scope[data-kind=night] i{background:#0b2a12}#lw-scope[data-kind=night] .dot{background:#7dff9b;box-shadow:0 0 8px rgba(125,255,155,.9)}", document.head.appendChild(oe), OA = document.createElement("div"), OA.id = "lw-scope";
-      let xe = '<i class="h"></i><i class="v"></i><i class="pl"></i><i class="pr"></i><i class="pb"></i><i class="dot"></i>';
-      for (let Mt = 1; Mt <= 4; Mt++) for (const [ai, Qi] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) xe += `<i class="md" style="left:calc(50% + var(--r)*${(ai * Mt * 0.085).toFixed(3)});top:calc(50% + var(--r)*${(Qi * Mt * 0.085).toFixed(3)})"></i>`;
-      OA.innerHTML = xe, (document.getElementById("app") || document.body).appendChild(OA);
+      oe.textContent = "#lw-scope{position:fixed;inset:0;z-index:9;pointer-events:none;display:none;--r:min(44vh,44vw);background:radial-gradient(circle at 50% 50%,rgba(0,0,0,0) 0,rgba(0,0,0,0) calc(var(--r) - 3px),rgba(0,0,0,.9) var(--r),#000 calc(var(--r) + 2px))}#lw-scope.on{display:block}#lw-scope::before{content:'';position:absolute;left:50%;top:50%;width:calc(var(--r)*2);height:calc(var(--r)*2);transform:translate(-50%,-50%);border-radius:50%;box-shadow:inset 0 0 calc(var(--r)*.35) rgba(0,0,0,.55),inset 0 0 0 2px rgba(0,0,0,.9)}#lw-scope i{position:absolute;background:#050505;display:block}#lw-scope .h{left:calc(50% - var(--r));width:calc(var(--r)*2);top:50%;height:1px;margin-top:-.5px}#lw-scope .v{top:calc(50% - var(--r));height:calc(var(--r)*2);left:50%;width:1px;margin-left:-.5px}#lw-scope .pl,#lw-scope .pr{top:50%;height:5px;margin-top:-2.5px;width:calc(var(--r)*.6)}#lw-scope .pl{left:calc(50% - var(--r))}#lw-scope .pr{right:calc(50% - var(--r))}#lw-scope .pb{left:50%;width:5px;margin-left:-2.5px;top:calc(50% + var(--r)*.4);height:calc(var(--r)*.6)}#lw-scope .dot{left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:#ff3b2a;box-shadow:0 0 6px rgba(255,59,42,.8)}#lw-scope .md{width:4px;height:4px;border-radius:50%;margin:-2px 0 0 -2px}#lw-scope .md,#lw-scope .pl,#lw-scope .pr,#lw-scope .pb{display:none}#lw-scope[data-kind=night]::after{content:'';position:absolute;left:50%;top:50%;width:calc(var(--r)*2);height:calc(var(--r)*2);transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(70,255,120,.16) 0,rgba(40,210,90,.24) 70%,rgba(20,120,50,.38) 100%);mix-blend-mode:screen}#lw-scope[data-kind=night] i{background:#0b2a12}#lw-scope[data-kind=night] .dot{background:#7dff9b;box-shadow:0 0 8px rgba(125,255,155,.9)}", document.head.appendChild(oe), OA = document.createElement("div"), OA.id = "lw-scope";
+      OA.innerHTML = '<i class="h"></i><i class="v"></i><i class="dot"></i>', (document.getElementById("app") || document.body).appendChild(OA);
     }
     OA && (OA.classList.toggle("on", !!HA), HA && OA.dataset.kind !== HA && (OA.dataset.kind = HA)), l.visible = !HA;
   }
@@ -72144,7 +72244,7 @@ function b6(A) {
     const Qi = HA.pattern[(m - 1) % HA.pattern.length], hi = 1 - E.ads * (1 - HA.camAdsMul), Oi = oe ? 0.82 : 1, Or = HA.camPitch * Qi[0] * hi * Oi * Nt * (1 + (n.next() - 0.5) * 0.15), wo = HA.camYaw * Qi[1] * hi * Oi * Nt + (n.next() - 0.5) * HA.camYaw * Oi * 0.4 * Nt;
     A.services.player.applyRecoil(Or, wo);
     const us = HA.kick, As = 1 - E.ads * (1 - us.adsMul);
-    z.impulse(0, us.back * As * (0.9 + n.next() * 0.2)), z.impulse(1, us.up * As), z.impulse(2, us.pitch * As * (0.85 + n.next() * 0.3)), z.impulse(3, us.yaw * As * (n.next() - 0.5) * 2), z.impulse(4, us.roll * As * ((n.next() - 0.5) * 2 * 0.7 + Qi[1] * 0.3)), z.impulse(5, (n.next() - 0.5) * 0.06 * As), cA.impulse(0, 0.12 * As), cA.impulse(1, Qi[1] * 0.04 * As), cA.impulse(2, 0.03 * As), M = Math.min(HA.bloomMax, M + HA.bloomPerShot), V = 1, tA = 0, gA.weaponId = E.id, gA.time = a.t, i.emit("weapon:fired", gA), E.ammo === 0 && ($ = !0, vBurstQ = 0), E.fireMode === "burst" && vBurstQ > 0 && (vBurstQ--, vBurstQ <= 0 && (y += HA.burstDelay || 0.2));
+    z.impulse(0, us.back * As * (0.9 + n.next() * 0.2)), z.impulse(1, us.up * As), z.impulse(2, us.pitch * As * (0.85 + n.next() * 0.3)), z.impulse(3, us.yaw * As * (n.next() - 0.5) * 2), z.impulse(4, us.roll * As * ((n.next() - 0.5) * 2 * 0.7 + Qi[1] * 0.3)), z.impulse(5, (n.next() - 0.5) * 0.06 * As), cA.impulse(0, 0.12 * As), cA.impulse(1, Qi[1] * 0.04 * As), cA.impulse(2, 0.03 * As), M = Math.min(HA.bloomMax, M + HA.bloomPerShot), V = 1, tA = 0, gA.weaponId = E.id, gA.time = a.t, gA.suppressed = !!E.suppressed, i.emit("weapon:fired", gA), E.ammo === 0 && ($ = !0, vBurstQ = 0), E.fireMode === "burst" && vBurstQ > 0 && (vBurstQ--, vBurstQ <= 0 && (y += HA.burstDelay || 0.2));
   }
   function fA(HA) {
     if (!u) return;
@@ -72216,7 +72316,7 @@ function b6(A) {
   }
   function te(HA) {
     if (!u) return;
-    const atO = u.cfg.attachments?.optic, lwSc = atO === "night" ? "night" : atO && atO !== "none" ? null : wvSpecs[u.cfg.variantId]?.frame === E.id ? wvSpecs[u.cfg.variantId].scope : null;
+    const atO = u.cfg.attachments?.optic, lwSc = atO === "night" ? "night" : atO === "scope" ? "scope" : atO && atO !== "none" ? null : wvSpecs[u.cfg.variantId]?.frame === E.id ? wvSpecs[u.cfg.variantId].scope : null;
     lwScope(lwSc && E.ads > 0.86 && !E.reloading && Y < 0 ? lwSc : null);
     const OA = u.cfg, oe = A.services.player.state, xe = a.t, Mt = yr.fovHip + (yr.fovAds - yr.fovHip) * E.ads, ai = Gu(Mt), Qi = A.services.postfx, hi = d || ve.orbit ? 1 : yr.scale;
     if (d || ve.orbit)
@@ -89970,8 +90070,37 @@ async function Pz() {
     height: P,
     pixelRatio: _
   })), r.on("settings:changed", ({ path: G }) => {
-    (G === "graphics.renderScale" || G === "graphics.maxPixelRatio") && g.resize();
+    (G === "graphics.renderScale" || G === "graphics.maxPixelRatio" || G === "graphics.resolution") && g.resize(), G === "graphics.displayMode" && (dmApply(), g.resize()), G === "graphics.fpsCap" && dmVsync();
   });
+  const dmVsync = () => {
+    try {
+      window.vangaurdDesktop?.setVsync?.(Number(c.get("graphics.fpsCap", 0)) === -1)?.catch?.(() => {
+      });
+    } catch {
+    }
+  };
+  // Display mode: the desktop app switches its window; in a browser this uses the Fullscreen API.
+  const dmApply = () => {
+    if (i) return;
+    const G = c.get("graphics.displayMode", "windowed"), P = window.vangaurdDesktop;
+    if (P?.setDisplayMode) {
+      try {
+        P.setDisplayMode(G);
+      } catch {
+      }
+      return;
+    }
+    try {
+      const _ = !!document.fullscreenElement;
+      G === "windowed" ? _ && document.exitFullscreen?.().catch(() => {
+      }) : _ || document.documentElement.requestFullscreen?.({ navigationUI: "hide" })?.catch?.(() => {
+      });
+    } catch {
+    }
+  };
+  i || dmVsync(), i || (window.vangaurdDesktop?.setDisplayMode ? dmApply() : (window.addEventListener("pointerdown", () => c.get("graphics.displayMode", "windowed") !== "windowed" && dmApply(), { once: !0, capture: !0 }), document.addEventListener("fullscreenchange", () => {
+    !document.fullscreenElement && c.get("graphics.displayMode", "windowed") !== "windowed" && c.set("graphics.displayMode", "windowed"), g.resize();
+  })));
   const B = new IP(), h = new fM(Of("seed") ?? e?.seed ?? 1337), I = new CP({
     element: g.renderer.domElement,
     events: r,
