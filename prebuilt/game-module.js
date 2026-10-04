@@ -27913,12 +27913,13 @@ function tY(A) {
     };
   }
 }
-var fpQ = [], fpCh = null, fpLastRaf = 0, fpRafOn = !1;
+var fpQ = [], fpCh = null, fpLastRaf = 0, fpRafOn = !1, fpRafDt = 16.7;
 function fpRafStart() {
   if (fpRafOn || typeof requestAnimationFrame != "function") return;
   fpRafOn = !0;
   const A = () => {
-    fpLastRaf = performance.now(), requestAnimationFrame(A);
+    const e = performance.now();
+    fpLastRaf > 0 && e - fpLastRaf < 200 && (fpRafDt += (e - fpLastRaf - fpRafDt) * 0.1), fpLastRaf = e, requestAnimationFrame(A);
   };
   requestAnimationFrame(A);
 }
@@ -27926,9 +27927,8 @@ function fpRafAlive() {
   return fpRafStart(), performance.now() - fpLastRaf < 120;
 }
 function fpStarved() {
-  fpRafStart();
-  const A = performance.now() - fpLastRaf;
-  return A > 10 && A < 120;
+  // The screen refresh is late (no frame shown for 1.5 refresh intervals): let the browser draw before the next tick.
+  return fpRafStart(), performance.now() - fpLastRaf > Math.max(10, fpRafDt * 1.5 + 2);
 }
 function fpPost(A) {
   if (!fpCh) {
@@ -27990,26 +27990,19 @@ var iY = class {
     }
     // Optional VSync setting: one frame per screen refresh via requestAnimationFrame.
     if (A < 0 && !this.paused && fpRafAlive()) {
-      if (A > 0 && this._lastTickStart >= 0 && performance.now() - this._lastTickStart < 1e3 / A - 0.3) {
-        const re = () => {
-          this._timer === tok && (this._timer = null, this._schedule());
-        };
-        tok.raf = requestAnimationFrame(re), tok.to = setTimeout(re, 100);
-        return;
-      }
-      tok.raf = requestAnimationFrame(go), tok.to = setTimeout(go, 100);
+      tok.raf = requestAnimationFrame(go), tok.to = setTimeout(go, 1e3);
       return;
     }
     const e = A > 0 ? 1e3 / A : 0, t = this._lastTickStart < 0 ? e : performance.now() - this._lastTickStart, i = Math.max(0, e - t);
-    // Frames run back to back, but if the browser has not had a chance to put a frame on screen
-    // for 10 ms the next one waits for it, so the picture never stalls. When the window is not
-    // drawing at all (hidden while loading) frames never wait for the screen.
+    // Uncapped: frames run back to back, not tied to the screen refresh. Only if the browser is late putting a
+    // frame on screen does the next tick wait for it, so the picture never freezes (a 1 s safety net keeps the
+    // game running if the window stops drawing).
     if (i <= 0.2) {
-      fpStarved() ? (tok.raf = requestAnimationFrame(go), tok.to = setTimeout(go, 100)) : fpPost(go);
+      fpStarved() ? (tok.raf = requestAnimationFrame(go), tok.to = setTimeout(go, 1e3)) : fpPost(go);
       return;
     }
     const due = performance.now() + i, spin = () => {
-      this._timer === tok && (performance.now() >= due - 0.05 ? go() : fpStarved() ? (tok.raf = requestAnimationFrame(spin), tok.to = setTimeout(spin, 100)) : fpPost(spin));
+      this._timer === tok && (performance.now() >= due - 0.05 ? go() : fpStarved() ? (tok.raf = requestAnimationFrame(spin), tok.to = setTimeout(spin, 1e3)) : fpPost(spin));
     };
     i > 2.5 ? tok.to = setTimeout(spin, i - 2) : fpPost(spin);
   }
@@ -44183,6 +44176,11 @@ var B3, w2, h3, y2, d3, M9 = YA((() => {
 .gmx .row input[type=range]::-webkit-slider-runnable-track { height: 3px; background: linear-gradient(90deg, var(--accent) var(--p, 50%), rgba(236,238,232,0.22) var(--p, 50%)); }
 .gmx .row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 18px; margin-top: -7.5px; background: #fff; border: 0; border-radius: 1px; box-shadow: 0 0 0 3px rgba(0,0,0,0.35); }
 .gmx .seg { display: flex; gap: 2px; }
+.gmx .vsel { height: 32px; min-width: 190px; padding: 0 10px; border: 0; background: rgba(236,238,232,0.08); color: #fff; font: inherit; font-size: 13px; letter-spacing: .04em; }
+.gmx .vsel option { background: #15191a; color: #fff; }
+.gmx .vsel:disabled { opacity: .45; }
+.gmx .row.dis > span:first-child { opacity: .55; }
+.gmx .row .hint { font-style: normal; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-3); margin-left: 8px; }
 .gmx .seg button { height: 32px; padding: 0 12px; border: 0; background: rgba(236,238,232,0.08); color: var(--fg-3);
   font-family: var(--font); font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; }
 .gmx .seg button:hover { color: #fff; }
@@ -44765,7 +44763,10 @@ function R9(A, e) {
       if (nA.type === "range") {
         const aA = (Number(j) - nA.min) / (nA.max - nA.min) * 100;
         Z.push(`<label class="row"><span>${nA.label}</span><span class="ctl"><input type="range" data-p="${nA.path}" min="${nA.min}" max="${nA.max}" step="${nA.step}" value="${j}" style="--p:${aA}%"><output>${nA.fmt(Number(j))}</output></span></label>`);
-      } else nA.type === "toggle" ? Z.push(`<div class="row"><span>${nA.label}</span><span class="ctl"><span class="seg" data-p="${nA.path}" data-t="toggle"><button class="${j ? "" : "on"}" data-v="false">Off</button><button class="${j ? "on" : ""}" data-v="true">On</button></span></span></div>`) : nA.type === "seg" && Z.push(`<div class="row"><span>${nA.label}</span><span class="ctl"><span class="seg" data-p="${nA.path}">${nA.options.map((aA) => `<button class="${aA === j ? "on" : ""}" data-v="${aA}">${aA}</button>`).join("")}</span></span></div>`);
+      } else nA.type === "toggle" ? Z.push(`<div class="row"><span>${nA.label}</span><span class="ctl"><span class="seg" data-p="${nA.path}" data-t="toggle"><button class="${j ? "" : "on"}" data-v="false">Off</button><button class="${j ? "on" : ""}" data-v="true">On</button></span></span></div>`) : nA.type === "seg" ? Z.push(`<div class="row"><span>${nA.label}</span><span class="ctl"><span class="seg" data-p="${nA.path}">${nA.options.map((aA, zA) => `<button class="${aA === j ? "on" : ""}" data-v="${aA}">${nA.labels?.[zA] ?? aA}</button>`).join("")}</span></span></div>`) : nA.type === "select" && (() => {
+        const aA = !nA.enabled || nA.enabled(A), zA = nA.options();
+        Z.push(`<div class="row${aA ? "" : " dis"}"><span>${nA.label}${aA ? "" : ` <em class="hint">${nA.hint || ""}</em>`}</span><span class="ctl"><select class="vsel" data-p="${nA.path}" ${aA ? "" : "disabled"}>${zA.map(([cA, bA]) => `<option value="${cA}" ${String(cA) === String(j) ? "selected" : ""}>${bA}</option>`).join("")}</select></span></div>`);
+      })();
     }
     s.setRows.innerHTML = Z.join("");
   }
@@ -44778,7 +44779,10 @@ function R9(A, e) {
     const nA = Z.target.closest(".seg button");
     if (!nA) return;
     const j = nA.parentElement, aA = j.getAttribute("data-p"), z = nA.getAttribute("data-v"), cA = j.getAttribute("data-t") === "toggle" ? z === "true" : z;
-    j.querySelectorAll("button").forEach((bA) => bA.classList.toggle("on", bA === nA)), e.uiSound?.("select"), e.setSetting(aA, cA);
+    j.querySelectorAll("button").forEach((bA) => bA.classList.toggle("on", bA === nA)), e.uiSound?.("select"), e.setSetting(aA, cA), D2.find((bA) => bA.path === aA)?.rerender && y();
+  }), s.setRows.addEventListener("change", (Z) => {
+    const nA = Z.target;
+    nA.matches("select.vsel") && (e.uiSound?.("select"), e.setSetting(nA.getAttribute("data-p"), nA.value));
   });
   function w() {
     const Z = A.input.bindings || {}, nA = [];
@@ -45130,6 +45134,22 @@ var I3, b2, u3, Q3, E3, JB, go, dc, wI, p3, D2, G9 = YA((() => {
       type: "toggle"
     },
     { group: "Video" },
+    {
+      path: "graphics.displayMode",
+      label: "Display mode",
+      type: "seg",
+      options: ["windowed", "borderless", "fullscreen"],
+      labels: ["Windowed", "Borderless", "Fullscreen"],
+      rerender: !0
+    },
+    {
+      path: "graphics.resolution",
+      label: "Resolution",
+      type: "select",
+      options: () => dmResList(),
+      enabled: (A) => A.settings.get("graphics.displayMode", "windowed") === "fullscreen",
+      hint: "Fullscreen only"
+    },
     {
       path: "graphics.fov",
       label: "Field of view",
@@ -50636,7 +50656,7 @@ function rJ(A) {
   const e = (t) => A.ctx.settings.get(t);
   return {
     graphics: [
-      { sec: "Display" },
+      { sec: "Video" },
       {
         path: "graphics.displayMode",
         label: "Display mode",
