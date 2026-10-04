@@ -52,22 +52,32 @@ let gameWindow;
 
 // Display mode requested by the game: windowed, borderless (fills the screen at desktop
 // resolution) or fullscreen (fills the screen; the game picks its own render resolution).
-ipcMain.handle('vangaurd:display-mode', (event, mode) => {
-  const win = BrowserWindow.fromWebContents(event.sender);
+// Display mode requested by the game:
+//  windowed   - normal window with a title bar
+//  borderless - borderless window covering the screen at desktop resolution; Alt+Tab just switches away
+//  fullscreen - covers the screen and stays on top like a classic fullscreen game, minimizes on Alt+Tab;
+//               the game renders at the resolution chosen in Settings and scales it to the screen
+let displayMode = 'windowed';
+function applyDisplayMode(win, mode) {
   if (!win || win.isDestroyed()) return false;
-  const full = mode === 'borderless' || mode === 'fullscreen';
+  displayMode = mode === 'borderless' || mode === 'fullscreen' ? mode : 'windowed';
+  const full = displayMode !== 'windowed';
+  if (displayMode !== 'fullscreen') win.setAlwaysOnTop(false);
   if (process.platform === 'darwin') {
     // macOS: borderless uses the classic full-screen (no separate Space), fullscreen the native one.
-    const simple = mode === 'borderless';
+    const simple = displayMode === 'borderless';
+    if (win.isFullScreen() && displayMode !== 'fullscreen') win.setFullScreen(false);
     if (win.isSimpleFullScreen() !== simple) win.setSimpleFullScreen(simple);
-    if (win.isFullScreen() !== (mode === 'fullscreen')) win.setFullScreen(mode === 'fullscreen');
+    if (displayMode === 'fullscreen' && !win.isFullScreen()) win.setFullScreen(true);
   } else if (win.isFullScreen() !== full) {
     win.setFullScreen(full);
   }
-  if (!full && win.isMaximized() === false && win.getBounds().width < 960) win.setSize(1440, 900);
-  log(`Display mode: ${mode}`);
+  if (displayMode === 'fullscreen' && process.platform !== 'darwin') win.setAlwaysOnTop(true, 'screen-saver');
+  if (!full && !win.isMaximized() && win.getBounds().width < 960) win.setSize(1440, 900);
+  log(`Display mode: ${displayMode}`);
   return true;
-});
+}
+ipcMain.handle('vangaurd:display-mode', (event, mode) => applyDisplayMode(BrowserWindow.fromWebContents(event.sender), String(mode || 'windowed')));
 
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
@@ -182,6 +192,13 @@ function createWindow() {
   // Show the window as soon as it has something to draw (the loading screen) instead of keeping it
   // hidden until the game is ready: a hidden window does not draw frames, which stalls loading.
   window.once('ready-to-show', () => { if (!window.isDestroyed() && !window.isVisible()) window.show(); });
+  // Fullscreen mode behaves like a classic fullscreen game: Alt+Tab minimizes it, coming back restores it.
+  window.on('blur', () => {
+    if (displayMode === 'fullscreen' && process.platform !== 'darwin' && !window.isDestroyed() && !window.isMinimized()) window.minimize();
+  });
+  window.on('restore', () => {
+    if (displayMode === 'fullscreen' && !window.isDestroyed()) applyDisplayMode(window, 'fullscreen');
+  });
   window.webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
     if (isMainFrame) showLaunchError(`Could not load the packaged game (${code}): ${description}\n${url}`);
   });

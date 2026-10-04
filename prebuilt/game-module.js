@@ -50642,7 +50642,7 @@ function rJ(A) {
         label: "Display mode",
         type: "cycle",
         options: [["windowed", "WINDOWED"], ["borderless", "BORDERLESS"], ["fullscreen", "FULLSCREEN"]],
-        desc: "Windowed: a normal window. Borderless: fills the screen at your desktop resolution. Fullscreen: fills the screen and lets you pick the resolution the game renders at."
+        desc: "Windowed: a normal window with a title bar. Borderless: fills the screen at your desktop resolution, Alt+Tab switches away instantly. Fullscreen: fills the screen and stays on top (Alt+Tab minimizes it), and lets you choose the Resolution below."
       },
       {
         path: "graphics.resolution",
