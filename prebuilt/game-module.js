@@ -52783,12 +52783,8 @@ function hJ(A) {
     a.uiTime += uA, E += uA;
     const XA = A.settings.get("graphics.showFps", !1) === !0;
     if (B && (B.style.display = XA ? "" : "none"), XA && (d += uA, f++, d >= 0.5 && (B.textContent = `${Math.round(f / d)} FPS`, d = 0, f = 0)), h) {
-      const Pe = A.services.gamemode.state || {}, Xe = Pe.matchType === "tdm" || Pe.matchType === "domination";
-      if (h.style.display = Xe && [
-        "match-live",
-        "match-dead",
-        "ended"
-      ].includes(Pe.stage) ? "" : "none", Xe) {
+      const Pe = A.services.gamemode.state || {}, Xe = !1;
+      if (h.style.display !== "none" && (h.style.display = "none"), Xe) {
         const qe = Pe.score || {}, gt = Pe.matchType === "domination" ? "DOMINATION" : "TEAM DEATHMATCH", L = Pe.scoreLimit || (Pe.matchType === "domination" ? 600 : 50);
         h.textContent = `${gt}  ·  BLUE ${qe.blue || 0} — RED ${qe.red || 0}  ·  FIRST TO ${L}`;
       }
@@ -61061,7 +61057,7 @@ float coc(ivec2 p) {
   if (z < 0.0) {
     float r = length((uv - 0.5) * vec2(uAspect, 1.0));
     float radial = smoothstep(uVM.y, uVM.z, r);
-    float nearBoost = 1.0 - smoothstep(uVM.w * 0.5, uVM.w, -z);
+    float nearBoost = (1.0 - smoothstep(uVM.w * 0.5, uVM.w, -z)) * smoothstep(uVM.y * 0.5, uVM.y, r);
     return uVM.x * sat(max(radial, nearBoost * 0.85));
   }
   float farC = smoothstep(uWorld.y, uWorld.y + uWorld.z, z);
