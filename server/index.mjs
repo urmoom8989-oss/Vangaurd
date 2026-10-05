@@ -29,7 +29,7 @@ const VERSION = '2.7.0';
 const GATE = String(process.env.VERSION_GATE || 'on').toLowerCase() !== 'off';
 const LATEST_URL = process.env.LATEST_VERSION_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest/download/version.json';
 const RELEASE_PAGE = process.env.RELEASE_PAGE_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest';
-const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 1.01', checkedAt: 0, source: 'env' };
+const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 1.02', checkedAt: 0, source: 'env' };
 async function refreshLatest() {
   if (!GATE || String(process.env.LATEST_VERSION_URL || '').toLowerCase() === 'off') return;
   try {

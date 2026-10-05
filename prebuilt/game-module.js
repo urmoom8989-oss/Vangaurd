@@ -28186,8 +28186,11 @@ var aY = class {
     this.ctx = A, this.records = e, this.reportError = t, this.initTimeoutMs = i, this.active = [], this._fixed = [], this._update = [], this._late = [];
   }
   async initAll() {
+    const vgN = Math.max(1, this.records.filter((r) => r.system).length);
+    let vgI = 0;
     for (const A of this.records) {
       if (!A.system) continue;
+      typeof window < "u" && (window.__VGD_BOOT__ = { p: 0.06 + 0.64 * (vgI++ / vgN), stage: `Loading game systems ${vgI}/${vgN}` });
       const e = A.system, t = performance.now();
       try {
         if (typeof e.init == "function") {
@@ -48627,7 +48630,7 @@ function om() {
   }
 }
 /* Game version. The release build stamps the CI build number into "__VGD_BUILD__". */
-var VGD = { label: "Beta 1.01", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 1.02", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -55007,7 +55010,8 @@ function hJ(A) {
     },
     async prepareStartup() {
       try {
-        if (await Z(), n.map.ready || n.bake(), await l.prewarmMenuScene(), await Z(), !n.map.ready) throw new Error("The deployment map minimap did not finish baking.");
+        const vgB = (p, stage) => typeof window < "u" && !window.__APP_STARTUP_READY__ && (window.__VGD_BOOT__ = { p, stage });
+        if (await Z(), vgB(0.84, "Drawing the minimap"), n.map.ready || n.bake(), vgB(0.88, "Warming up graphics"), await l.prewarmMenuScene(), vgB(0.92, "Finishing up"), await Z(), !n.map.ready) throw new Error("The deployment map minimap did not finish baking.");
         await new Promise(requestAnimationFrame), await new Promise(requestAnimationFrame);
       } catch (QA) {
         A.reportError("hud", "startup-render-warmup", QA);
@@ -92398,6 +92402,7 @@ var cd = new URLSearchParams(location.search), Of = (A) => {
 window.__SHOT_READY__ = !1;
 window.__SHOT_FAILED__ = null;
 window.__APP_STARTUP_READY__ = !1;
+window.__VGD_BOOT__ = { p: 0.02, stage: "Starting the engine" };
 new MutationObserver((A) => {
   for (const e of A) for (const t of e.addedNodes) t.nodeName === "VITE-ERROR-OVERLAY" && t.remove();
 }).observe(document.documentElement, {
@@ -92596,12 +92601,19 @@ async function Pz() {
     await x.run(S), window.__SHOT_INFO__.systems = M.status(), window.__SHOT_INFO__.t = B.t, window.__SHOT_INFO__.frame = B.frame;
     return;
   }
+  window.__VGD_BOOT__ = { p: 0.72, stage: "Loading textures and models" };
+  try {
+    await Promise.race([C.assets.whenIdle(), new Promise((G) => setTimeout(G, 2e4))]);
+  } catch {
+  }
+  window.__VGD_BOOT__ = { p: 0.8, stage: "Preparing the map" };
   try {
     await C.services.hud.prepareStartup?.();
   } catch (G) {
     console.warn("[core] startup map warmup failed; continuing to menu", G);
   }
-  S.start(), await gd(), await gd(), window.__APP_STARTUP_READY__ = !0, p.classList.toggle("hidden", !E);
+  window.__VGD_BOOT__ = { p: 0.95, stage: "Starting Vangaurd" };
+  S.start(), await gd(), await gd(), window.__VGD_BOOT__ = { p: 1, stage: "Ready" }, window.__APP_STARTUP_READY__ = !0, p.classList.toggle("hidden", !E);
   const U = () => {
     I.lock(), r.emit("core:user-gesture");
     try {

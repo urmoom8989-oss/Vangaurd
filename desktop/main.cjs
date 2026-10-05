@@ -96,9 +96,11 @@ function log(message) {
 }
 
 // ---------- launch window (Vangaurd Anti-Cheat) ----------
-// A small window on a graphite background shown while the app starts, before the game window opens
-// (like the anti-cheat windows other games show). It closes as soon as the game window appears.
-const SPLASH_MIN_MS = 2600;
+// A small window on a graphite background shown while the game starts (like the anti-cheat windows other
+// games show). Its bar follows the real start-up: app checks first, then the game's own loading progress
+// (window.__VGD_BOOT__). The game window loads behind it, invisible, and appears when the game is ready.
+const SPLASH_MIN_MS = 5000;
+const SPLASH_APP_SHARE = 0.15; // the bar's first 15 % is the app starting; the rest is the game loading
 let splash = null;
 let splashAt = 0;
 function createSplash() {
@@ -118,12 +120,13 @@ function createSplash() {
     splash = null;
   }
 }
+let splashShown = 0;
 function splashStatus(text, progress) {
   if (!splash || splash.isDestroyed()) return;
-  splash.webContents.executeJavaScript(`window.setStatus && setStatus(${JSON.stringify(text)}, ${Number(progress)})`).catch(() => {});
+  const p = Math.max(splashShown, Math.min(1, Number(progress) || 0)); // never goes backwards
+  splashShown = p;
+  splash.webContents.executeJavaScript(`window.setStatus && setStatus(${JSON.stringify(text)}, ${p})`).catch(() => {});
 }
-// Keep the launch window up for a moment so it doesn't just flash.
-const splashHold = () => new Promise((resolve) => setTimeout(resolve, Math.max(0, SPLASH_MIN_MS - (Date.now() - splashAt))));
 function closeSplash(delay = 300) {
   const win = splash;
   splash = null;
@@ -240,7 +243,15 @@ function createWindow() {
   window.setMenu(null);
   // Show the window as soon as it has something to draw (the loading screen) instead of keeping it
   // hidden until the game is ready: a hidden window does not draw frames, which stalls loading.
-  window.once('ready-to-show', () => { if (!window.isDestroyed() && !window.isVisible()) window.show(); closeSplash(); });
+  window.once('ready-to-show', () => {
+    if (window.isDestroyed() || window.isVisible()) return;
+    if (splash && !splash.isDestroyed() && process.platform !== 'linux') {
+      // Shown (so it keeps drawing frames and loading) but fully transparent and out of the taskbar,
+      // while the launch window shows the progress.
+      try { window.setOpacity(0); window.setSkipTaskbar(true); } catch { /* not supported: just show it */ }
+      window.showInactive();
+    } else window.show();
+  });
   // Fullscreen mode behaves like a classic fullscreen game: Alt+Tab minimizes it, coming back restores it.
   window.on('blur', () => {
     if (displayMode === 'fullscreen' && process.platform !== 'darwin' && !window.isDestroyed() && !window.isMinimized()) window.minimize();
@@ -254,16 +265,47 @@ function createWindow() {
   window.webContents.on('did-finish-load', () => {
     setTimeout(() => { if (updater && !window.isDestroyed()) updater.check(window, 'launch').catch((e) => log(`Update check error: ${e?.message || e}`)); }, 5000);
     const startedAt = Date.now();
+    let lastP = -1, lastMove = Date.now(), unveiled = false;
+    // Make the game window visible (behind the launch window if that is still up).
+    const unveil = () => {
+      if (unveiled || window.isDestroyed()) return;
+      unveiled = true;
+      try { window.setOpacity(1); window.setSkipTaskbar(false); } catch { /* ignore */ }
+      if (!window.isVisible()) window.showInactive();
+    };
+    let revealing = false;
+    const reveal = () => {
+      if (window.isDestroyed() || revealing) return;
+      revealing = true;
+      // Let the bar reach 100 % on screen, then bring up the game window and close the launch window.
+      const hadSplash = !!(splash && !splash.isDestroyed());
+      splashStatus('Ready', 1);
+      setTimeout(() => {
+        if (window.isDestroyed()) return;
+        unveil();
+        window.show();
+        window.focus();
+        closeSplash(150);
+      }, hadSplash ? 650 : 0);
+    };
     const revealWhenReady = async () => {
       if (window.isDestroyed()) return;
       try {
-        const ready = await window.webContents.executeJavaScript('window.__APP_STARTUP_READY__ === true');
-        if (ready || Date.now() - startedAt >= 90_000) {
-          window.show();
+        const r = await window.webContents.executeJavaScript('({ ready: window.__APP_STARTUP_READY__ === true, boot: window.__VGD_BOOT__ || null })');
+        const ready = r === true || !!r?.ready, boot = r && typeof r === 'object' ? r.boot : null;
+        if (boot && Number.isFinite(boot.p)) {
+          splashStatus(String(boot.stage || 'Loading'), SPLASH_APP_SHARE + (1 - SPLASH_APP_SHARE) * Math.min(1, boot.p));
+          if (boot.p !== lastP) { lastP = boot.p; lastMove = Date.now(); }
+        }
+        // Some systems only draw frames for a visible window: if loading stops moving, show the game
+        // window behind the launch window so it can finish.
+        if (!ready && !unveiled && Date.now() - lastMove > 8000) { log('Start-up paused while hidden; showing the game window behind the launch window.'); unveil(); if (splash && !splash.isDestroyed()) splash.setAlwaysOnTop(true); }
+        if ((ready && Date.now() - splashAt >= SPLASH_MIN_MS) || Date.now() - startedAt >= 120_000) {
+          reveal();
           return;
         }
       } catch { /* renderer is still booting */ }
-      setTimeout(revealWhenReady, 100);
+      setTimeout(revealWhenReady, 150);
     };
     revealWhenReady();
   });
@@ -297,9 +339,9 @@ app.whenReady().then(async () => {
   log(`Starting Vangaurd ${app.getVersion()} on ${process.platform} ${process.arch}; Electron ${process.versions.electron}, Chromium ${process.versions.chrome}`);
   log(`Game build directory: ${GAME_ROOT}`);
   try {
-    splashStatus('Checking game files', 0.3);
+    splashStatus('Checking game files', 0.04);
     await fs.promises.access(path.join(GAME_ROOT, 'index.html'), fs.constants.R_OK);
-    splashStatus('Starting game services', 0.55);
+    splashStatus('Starting game services', 0.08);
     await startGameServer();
     // Older builds told the browser to keep game.js forever, so an updated app kept running the old
     // game. Empty the browser cache on every launch (saved settings and progress are not touched).
@@ -309,8 +351,7 @@ app.whenReady().then(async () => {
     } catch (error) {
       log(`Could not clear the browser cache: ${error?.message || error}`);
     }
-    splashStatus('Launching Vangaurd', 0.85);
-    await splashHold();
+    splashStatus('Launching Vangaurd', 0.12);
     createWindow();
   } catch (error) {
     showLaunchError(`Could not prepare the packaged game files at ${GAME_ROOT}:\n${error?.stack || error}`);
