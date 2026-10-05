@@ -21,7 +21,7 @@ const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
 };
-const VERSION = '2.6.0';
+const VERSION = '2.7.0';
 // ---------- client version gate ----------
 // Only the newest game build may play online. The newest build number is read from the
 // version.json attached to the latest GitHub release (refreshed every 5 minutes).
@@ -29,7 +29,7 @@ const VERSION = '2.6.0';
 const GATE = String(process.env.VERSION_GATE || 'on').toLowerCase() !== 'off';
 const LATEST_URL = process.env.LATEST_VERSION_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest/download/version.json';
 const RELEASE_PAGE = process.env.RELEASE_PAGE_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest';
-const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 1.0', checkedAt: 0, source: 'env' };
+const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 1.01', checkedAt: 0, source: 'env' };
 async function refreshLatest() {
   if (!GATE || String(process.env.LATEST_VERSION_URL || '').toLowerCase() === 'off') return;
   try {
@@ -754,6 +754,9 @@ function onMark(c, msg) {
 // (data_conflict) so the game can decide which one to keep.
 const SAVES_FILE = pathMod.join(DATA_DIR, 'saves.json');
 const SAVE_MAX = 256 * 1024;
+// Cloud saves started with Beta 0.94. Accounts created before then never had a save of their own: their progress
+// lived on each device, so the first device they sign in on brings its progress along instead of starting fresh.
+const CLOUD_SAVES_SINCE = Date.UTC(2026, 9, 5, 12, 18);
 let saves = {};
 try {
   const raw = JSON.parse(fs.readFileSync(SAVES_FILE, 'utf8'));
@@ -773,7 +776,7 @@ function onData(c, msg) {
   const key = c.account ? keyOf(c.account) : null;
   if (!key || !userOf(key)) return send(c, { type: 'data_error', code: 'login_required', message: 'Sign in to save your progress to your account.' });
   const cur = saves[key] || { rev: 0, at: 0, blob: null };
-  if (msg.type === 'data_get') return send(c, { type: 'data', rev: cur.rev, at: cur.at, blob: cur.blob });
+  if (msg.type === 'data_get') return send(c, { type: 'data', rev: cur.rev, at: cur.at, blob: cur.blob, legacy: (userOf(key)?.created || 0) < CLOUD_SAVES_SINCE });
   const blob = msg.blob;
   if (typeof blob !== 'string' || !blob.length || blob.length > SAVE_MAX) return send(c, { type: 'data_error', code: 'bad_data', message: 'That save is empty or too large.' });
   try {
@@ -799,6 +802,13 @@ function kickClient(c, msg) {
 const mod = createModeration({
   DATA_DIR, accounts, saveAccounts, online, clients, statusOf, keyOf, userOf, nameOf, scrypt, now, log, send,
   kick: kickClient, saveOf: (key) => saves[key]?.blob || null,
+  putSave(key, blob) {
+    const cur = saves[key] || { rev: 0 };
+    saves[key] = { rev: cur.rev + 1, at: now(), blob };
+    if (!savesTimer) savesTimer = setTimeout(writeSaves, 1500);
+    sendTo(key, { type: 'data', rev: saves[key].rev, at: saves[key].at, blob, admin: true });
+    return saves[key].rev;
+  },
 });
 mod.kickNow = (c, b) => kickClient(c, mod.bannedMsg(b));
 function handle(c, raw) {

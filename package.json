@@ -1,7 +1,7 @@
 {
   "name": "vangaurd",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "main": "desktop/main.cjs",
   "author": "Vangaurd",
@@ -17,7 +17,7 @@
     "shot": "node tools/shot.mjs",
     "perf": "node tools/perf.mjs",
     "audio": "node tools/audio.mjs",
-    "build:release": "node tools/build-release.mjs --standalone Vangaurd-Beta-1.0.html --dist dist"
+    "build:release": "node tools/build-release.mjs --standalone Vangaurd-Beta-1.01.html --dist dist"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.20.0",
@@ -44,7 +44,8 @@
       "desktop/main.cjs",
       "package.json",
       "desktop/preload.cjs",
-      "desktop/updater.cjs"
+      "desktop/updater.cjs",
+      "desktop/splash.html"
     ],
     "extraResources": [
       {
@@ -71,7 +72,7 @@
         "nsis",
         "zip"
       ],
-      "artifactName": "${productName}-Beta-1.0-win.${ext}"
+      "artifactName": "${productName}-Beta-1.01-win.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -79,9 +80,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "${productName}-Beta-1.0-Setup.${ext}"
+      "artifactName": "${productName}-Beta-1.01-Setup.${ext}"
     },
     "afterPack": "desktop/after-pack.cjs",
-    "artifactName": "${productName}-Beta-1.0-${arch}.${ext}"
+    "artifactName": "${productName}-Beta-1.01-${arch}.${ext}"
   }
 }

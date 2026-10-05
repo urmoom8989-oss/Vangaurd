@@ -95,7 +95,45 @@ function log(message) {
   try { if (logFile) fs.appendFileSync(logFile, line); } catch { /* logging must not block launch */ }
 }
 
+// ---------- launch window (Vangaurd Anti-Cheat) ----------
+// A small window on a graphite background shown while the app starts, before the game window opens
+// (like the anti-cheat windows other games show). It closes as soon as the game window appears.
+const SPLASH_MIN_MS = 2600;
+let splash = null;
+let splashAt = 0;
+function createSplash() {
+  try {
+    splashAt = Date.now();
+    splash = new BrowserWindow({
+      width: 800, height: 450, frame: false, resizable: false, maximizable: false, minimizable: false, fullscreenable: false,
+      center: true, show: false, backgroundColor: '#2b2d31', title: 'Vangaurd Anti-Cheat', autoHideMenuBar: true,
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
+    });
+    const win = splash;
+    win.once('ready-to-show', () => { if (!win.isDestroyed()) win.show(); });
+    win.on('closed', () => { if (splash === win) splash = null; });
+    win.loadFile(path.join(__dirname, 'splash.html')).catch((e) => log(`Launch window failed to load: ${e?.message || e}`));
+  } catch (e) {
+    log(`Launch window failed: ${e?.message || e}`);
+    splash = null;
+  }
+}
+function splashStatus(text, progress) {
+  if (!splash || splash.isDestroyed()) return;
+  splash.webContents.executeJavaScript(`window.setStatus && setStatus(${JSON.stringify(text)}, ${Number(progress)})`).catch(() => {});
+}
+// Keep the launch window up for a moment so it doesn't just flash.
+const splashHold = () => new Promise((resolve) => setTimeout(resolve, Math.max(0, SPLASH_MIN_MS - (Date.now() - splashAt))));
+function closeSplash(delay = 300) {
+  const win = splash;
+  splash = null;
+  if (!win || win.isDestroyed()) return;
+  win.webContents.executeJavaScript('window.setStatus && setStatus("Ready", 1)').catch(() => {});
+  setTimeout(() => { if (!win.isDestroyed()) win.destroy(); }, delay);
+}
+
 function showLaunchError(message) {
+  closeSplash(0);
   log(message);
   dialog.showErrorBox('Vangaurd could not start', `${message}\n\nA diagnostic log was saved at:\n${logFile || app.getPath('userData')}`);
 }
@@ -202,7 +240,7 @@ function createWindow() {
   window.setMenu(null);
   // Show the window as soon as it has something to draw (the loading screen) instead of keeping it
   // hidden until the game is ready: a hidden window does not draw frames, which stalls loading.
-  window.once('ready-to-show', () => { if (!window.isDestroyed() && !window.isVisible()) window.show(); });
+  window.once('ready-to-show', () => { if (!window.isDestroyed() && !window.isVisible()) window.show(); closeSplash(); });
   // Fullscreen mode behaves like a classic fullscreen game: Alt+Tab minimizes it, coming back restores it.
   window.on('blur', () => {
     if (displayMode === 'fullscreen' && process.platform !== 'darwin' && !window.isDestroyed() && !window.isMinimized()) window.minimize();
@@ -255,10 +293,13 @@ app.whenReady().then(async () => {
   if (!hasAppLock) return;
   logFile = path.join(app.getPath('userData'), 'launch.log');
   updater = createUpdater({ app, dialog, shell, log });
+  createSplash();
   log(`Starting Vangaurd ${app.getVersion()} on ${process.platform} ${process.arch}; Electron ${process.versions.electron}, Chromium ${process.versions.chrome}`);
   log(`Game build directory: ${GAME_ROOT}`);
   try {
+    splashStatus('Checking game files', 0.3);
     await fs.promises.access(path.join(GAME_ROOT, 'index.html'), fs.constants.R_OK);
+    splashStatus('Starting game services', 0.55);
     await startGameServer();
     // Older builds told the browser to keep game.js forever, so an updated app kept running the old
     // game. Empty the browser cache on every launch (saved settings and progress are not touched).
@@ -268,6 +309,8 @@ app.whenReady().then(async () => {
     } catch (error) {
       log(`Could not clear the browser cache: ${error?.message || error}`);
     }
+    splashStatus('Launching Vangaurd', 0.85);
+    await splashHold();
     createWindow();
   } catch (error) {
     showLaunchError(`Could not prepare the packaged game files at ${GAME_ROOT}:\n${error?.stack || error}`);

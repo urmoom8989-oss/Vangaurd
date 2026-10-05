@@ -173,3 +173,12 @@ tbody tr.click:hover { background: rgba(255, 255, 255, 0.025); }
 .row.static:hover { background: none; }
 .muted { color: var(--muted); }
 .addform { display: flex; gap: 8px; padding: 14px; }
+
+/* progress tools (owner) */
+.pane.progress { padding: 14px; }
+.pane.progress p { margin: 0 0 12px; color: var(--fg-2); }
+.pane.progress small { display: block; margin-top: 10px; color: var(--muted); }
+form.inline { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+form.inline label { display: flex; align-items: center; gap: 8px; color: var(--fg-2); font-size: 13px; }
+form.inline .input { width: 180px; padding: 7px 10px; }
+form.inline input[type=number] { width: 90px; }

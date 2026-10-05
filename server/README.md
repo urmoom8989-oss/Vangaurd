@@ -1,6 +1,6 @@
 # Vangaurd matchmaking server 2.4
 
-This is the online server for Vangaurd Beta 1.0. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
+This is the online server for Vangaurd Beta 1.01. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
 
 What it does:
 
@@ -25,11 +25,11 @@ The game points at `https://opus-of-duty-production-f963.up.railway.app` by defa
 
 ## Check that it worked
 
-Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.6.0"`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
+Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.7.0"`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
 
 ## Anti-cheat console (`/admin`)
 
-Open `https://opus-of-duty-production-f963.up.railway.app/admin/`. The first time, the server log shows a one-time line `moderation console is not set up yet: … setup code XXXX-XXXX-XXXX`; enter that code with your game account's username and password and that account becomes the owner. After that, sign in with your game account. The owner can add moderators by username (they sign in with their own game accounts). The console only talks to this server, so it works with every game version.
+Open `https://opus-of-duty-production-f963.up.railway.app/admin/`. The first time, the server log shows a one-time line `moderation console is not set up yet: … setup code XXXX-XXXX-XXXX`; enter that code with your game account's username and password and that account becomes the owner. After that, sign in with your game account. The owner can add moderators by username (they sign in with their own game accounts), and on a player's page can set their level or copy another account's progress onto them (for fixing progress that ended up on the wrong account). The console only talks to this server, so it works with every game version.
 
 ## Optional settings
 

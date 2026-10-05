@@ -38,6 +38,13 @@ const SECURITY_HEADERS = {
   'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
 };
 
+// The game's level curve: level n needs 5,000 + 1,000 x (n - 1) XP to reach level n + 1.
+export const xpForLevel = (level) => { let t = 0; for (let l = 1; l < level; l++) t += 5000 + 1000 * (l - 1); return t; };
+export function levelOf(xp) {
+  let l = 1, t = Math.max(0, Math.floor(xp || 0));
+  while (t >= 5000 + 1000 * (l - 1) && l < 999) { t -= 5000 + 1000 * (l - 1); l++; }
+  return l;
+}
 export const cleanDevice = (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v) ? v : null);
 
 export function createModeration(d) {
@@ -237,7 +244,7 @@ export function createModeration(d) {
       name: u.name, created: u.created || null, lastLogin: u.lastLogin || null, status: d.statusOf(key), role: roleOf(key),
       ban: b ? { ...banView(key, b), by: d.nameOf(b.by), devices: !!b.devices } : null,
       reportsOpen: against.filter((r) => r.status === 'open').length, reportsTotal: against.length,
-      reportsMade: mod.reports.filter((r) => r.reporter === key).length, devices: (u.devices || []).length, xp: xpOf(key), friends: (u.friends || []).length,
+      reportsMade: mod.reports.filter((r) => r.reporter === key).length, devices: (u.devices || []).length, xp: xpOf(key), level: levelOf(xpOf(key)), friends: (u.friends || []).length,
     };
   }
   function groups(list) {
@@ -410,6 +417,37 @@ export function createModeration(d) {
         return true;
       }
       case 'log': send(res, 200, { log: mod.log.slice(0, 400).map((l) => ({ ...l, by: l.by === 'system' ? 'system' : d.nameOf(l.by), target: l.target ? d.nameOf(l.target) : null })) }); return true;
+      // Owner only: set a player's level, or copy another account's progress (XP, level, loadouts, camos, perks,
+      // weapon stats) onto them. Their game picks it up straight away if they are online.
+      case 'progress': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can change progress.', 403)) return true;
+        const key = findKey(body.name);
+        if (need(key, 'There is no player with that name.', 404)) return true;
+        const parse = (t) => { try { const o = JSON.parse(t || 'null'); return o && typeof o === 'object' ? o : null; } catch { return null; } };
+        const cur = parse(d.saveOf(key)) || { v: 1, progression: null, records: null, settings: {} };
+        let prog, detail;
+        if (body.copyFrom) {
+          const from = findKey(body.copyFrom);
+          if (need(from, `There is no player called ${body.copyFrom}.`, 404)) return true;
+          if (need(from !== key, 'Pick a different account to copy from.')) return true;
+          const src = parse(d.saveOf(from))?.progression;
+          if (need(src && typeof src === 'object', `${d.nameOf(from)} has no saved progress to copy.`)) return true;
+          prog = JSON.parse(JSON.stringify(src));
+          detail = `copied progress from ${d.nameOf(from)} (level ${levelOf(prog.xp)})`;
+        } else {
+          const level = Math.floor(Number(body.level));
+          if (need(level >= 1 && level <= 500, 'Pick a level from 1 to 500.')) return true;
+          prog = cur.progression && typeof cur.progression === 'object' ? cur.progression : { version: 1, xp: 0, kills: 0, headshots: 0, deaths: 0, weapons: {}, grenadeType: 'frag' };
+          prog.version = 1; prog.xp = xpForLevel(level);
+          detail = `set to level ${level}`;
+        }
+        cur.v = 1; cur.progression = prog;
+        d.putSave(key, JSON.stringify(cur));
+        addLog(by, 'progress', key, detail); save();
+        send(res, 200, { ok: true, player: playerView(key) });
+        return true;
+      }
       case 'mods': send(res, 200, { owner: d.nameOf(mod.owner), moderators: mod.admins.map((k) => ({ name: d.nameOf(k), status: d.statusOf(k) })) }); return true;
       case 'mods/add': case 'mods/remove': {
         if (need(post, 'Use POST.', 405)) return true;

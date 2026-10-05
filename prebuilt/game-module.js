@@ -48627,7 +48627,7 @@ function om() {
   }
 }
 /* Game version. The release build stamps the CI build number into "__VGD_BUILD__". */
-var VGD = { label: "Beta 1.0", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 1.01", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -51909,7 +51909,9 @@ function vgSyncResolve(m, conflict) {
   // Data on this device that was never uploaded (from before cloud saves) counts as new.
   const localChanged = same ? localHash !== meta.hash : !meta.user;
   let act;
-  if (!server || !rev) act = same || !meta.user ? "upload" : "fresh";
+  // Accounts from before cloud saves (m.legacy) had their progress on each device: keep this device's.
+  if (m.admin && server && rev) act = "apply";
+  else if (!server || !rev) act = same || !meta.user || m.legacy ? "upload" : "fresh";
   else if (same && meta.rev === rev && !conflict) act = localChanged ? "upload" : "none";
   else if (!localChanged || meta.user && !same) act = "apply";
   else act = vgSyncXp(local) > vgSyncXp(server) ? "force" : "apply";
@@ -51920,12 +51922,12 @@ function vgSyncResolve(m, conflict) {
   }
   if (act === "apply") {
     vgSyncApply(server), vgSyncSetMeta({ user, rev, hash: vgSyncHash(vgSyncJson()) }), vgSync.at = Date.now();
-    localHash !== vgSyncHash(vgSyncJson()) && vgToast(`Loaded your progress and settings from your account (${user}).`);
+    m.admin ? vgToast(`Your progress was updated by the Vangaurd team (level ${pgLevel().level}).`) : localHash !== vgSyncHash(vgSyncJson()) && vgToast(`Loaded your progress and settings from your account (${user}).`);
   } else if (act === "fresh") {
     // A different account used this device last: this account starts with its own (new) progress.
     vgSyncApply({ v: 1, progression: null, records: null, settings: null }), vgSyncSetMeta({ user, rev, hash: "" }), vgSyncPut(rev);
   } else if (act === "upload" || act === "force") {
-    !meta.user && vgToast("Your progress, loadouts and settings are now saved to your account."), vgSyncSetMeta({ user, rev, hash: same ? meta.hash : "" }), vgSyncPut(rev, act === "force");
+    (!meta.user || !same && m.legacy) && vgToast("Your progress, loadouts and settings are now saved to your account."), vgSyncSetMeta({ user, rev, hash: same ? meta.hash : "" }), vgSyncPut(rev, act === "force");
   } else vgSync.at = vgSync.at || Date.now();
   vgSync.ready = !0, vgSyncNotify();
 }

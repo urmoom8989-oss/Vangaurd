@@ -175,16 +175,33 @@
     const p = d.player, open = d.reportsAgainst.filter((r) => r.status === 'open').length;
     box.innerHTML = `<div class="detail">
       <div class="head"><div><h2>${dot(p.status)}${esc(p.name)}${playerTags(p)}</h2>
-        <div class="facts"><span>${esc(STATUS[p.status] || p.status)}</span><span>${Number(p.xp).toLocaleString()} XP</span><span>Joined ${esc(fmt(p.created))}</span><span>Last sign-in ${esc(ago(p.lastLogin))}</span><span>${plural(p.devices, 'device')}</span></div></div>
+        <div class="facts"><span>${esc(STATUS[p.status] || p.status)}</span><span>Level ${p.level} · ${Number(p.xp).toLocaleString()} XP</span><span>Joined ${esc(fmt(p.created))}</span><span>Last sign-in ${esc(ago(p.lastLogin))}</span><span>${plural(p.devices, 'device')}</span></div></div>
         <div class="acts">${p.ban ? '<button class="btn" data-act="unban">Unban</button>' : p.role ? '' : '<button class="btn danger" data-act="ban">Ban</button>'}
           ${p.status !== 'offline' ? '<button class="btn" data-act="kick">Disconnect</button>' : ''}
           ${open ? `<button class="btn" data-act="dismiss-all">Dismiss ${plural(open, 'open report')}</button>` : ''}</div></div>
       ${p.ban ? `<div class="banbox"><b>Banned</b> by ${esc(p.ban.by)} · ${esc(ago(p.ban.at))} · ${esc(banEnds(p.ban))}${p.ban.devices ? ' · devices blocked' : ''}<div class="mt4">Reason: ${esc(p.ban.reason)}</div></div>` : ''}
+      ${ui.role === 'owner' ? `<div class="section"><span class="k">Progress (owner only)</span><div class="pane progress">
+        <p>Level ${p.level} · ${Number(p.xp).toLocaleString()} XP. Changes apply to their account straight away, and to their game if they are playing.</p>
+        <form data-prog="level" class="inline"><label>Set level <input class="input" name="level" type="number" min="1" max="500" value="${p.level}"></label><button class="btn" type="submit">Set level</button></form>
+        <form data-prog="copy" class="inline"><label>Copy progress from <input class="input" name="from" placeholder="another username" autocomplete="off" spellcheck="false"></label><button class="btn" type="submit">Copy</button></form>
+        <small>Copying brings over XP, level, loadouts, camos, perks and weapon stats, replacing theirs. Useful when an account's progress was saved under another account.</small></div></div>` : ''}
       <div class="section"><span class="k">Reports against ${esc(p.name)} (${d.reportsAgainst.length})</span>${d.reportsAgainst.length ? d.reportsAgainst.map((r) => reportCard(r)).join('') : '<div class="empty pad14">No reports against this player.</div>'}</div>
       ${d.reportsBy.length ? `<div class="section"><span class="k">Reports made by ${esc(p.name)} (${d.reportsBy.length})</span>${d.reportsBy.map((r) => reportCard(r, false)).join('')}</div>` : ''}
       ${d.history.length ? `<div class="section"><span class="k">Moderation history</span><div class="pane log">${d.history.map(logItem).join('')}</div></div>` : ''}
     </div>`;
     const again = () => { detail(name, box); summary(); if (ui.tab === 'reports') groupsList(true); if (ui.tab === 'players') playersList(true); };
+    $$('form[data-prog]', box).forEach((f) => {
+      f.onsubmit = async (ev) => {
+        ev.preventDefault();
+        const copy = f.dataset.prog === 'copy', from = copy ? f.from.value.trim() : '', level = copy ? null : Number(f.level.value);
+        if (copy ? !from : !(level >= 1 && level <= 500)) return toast(copy ? 'Enter the username to copy from.' : 'Pick a level from 1 to 500.', true);
+        if (!confirm(copy ? `Replace ${p.name}'s progress with ${from}'s? This overwrites their XP, loadouts, camos and perks.` : `Set ${p.name} to level ${level}?`)) return;
+        try {
+          const r = await api('progress', { body: copy ? { name: p.name, copyFrom: from } : { name: p.name, level } });
+          toast(`${p.name} is now level ${r.player.level}.`); again();
+        } catch (e) { fail(e); }
+      };
+    });
     $$('[data-act]', box).forEach((b) => {
       b.onclick = async () => {
         const act = b.dataset.act;
@@ -263,7 +280,7 @@
       box.innerHTML = r.players.map((p) => `<button class="row" data-name="${esc(p.name)}">
         <span class="count${p.reportsOpen ? '' : ' zero'}" title="Open reports">${p.reportsOpen}</span>
         <span class="main"><span class="nm">${dot(p.status)}${esc(p.name)}${playerTags(p)}</span>
-        <span class="sub">${esc(STATUS[p.status] || p.status)} · ${Number(p.xp).toLocaleString()} XP · last sign-in ${esc(ago(p.lastLogin))}</span></span></button>`).join('')
+        <span class="sub">${esc(STATUS[p.status] || p.status)} · Level ${p.level} · last sign-in ${esc(ago(p.lastLogin))}</span></span></button>`).join('')
         + (r.total > r.players.length ? `<div class="empty">Showing ${r.players.length} of ${r.total}. Search to narrow it down.</div>` : '');
       $$('.row', box).forEach((b) => { b.onclick = () => { $$('.row', box).forEach((x) => x.classList.toggle('on', x === b)); detail(b.dataset.name); }; });
     } catch (e) { if (!quiet) fail(e); }
@@ -289,7 +306,7 @@
   }
 
   // ---------- activity ----------
-  const ACT = { ban: 'banned', unban: 'unbanned', kick: 'disconnected', dismiss: 'dismissed reports against', reopen: 'reopened reports against', mod_add: 'made a moderator:', mod_remove: 'removed moderator', setup: 'set up the console', ban_expired: 'ban ended for' };
+  const ACT = { progress: 'changed the progress of', ban: 'banned', unban: 'unbanned', kick: 'disconnected', dismiss: 'dismissed reports against', reopen: 'reopened reports against', mod_add: 'made a moderator:', mod_remove: 'removed moderator', setup: 'set up the console', ban_expired: 'ban ended for' };
   const logItem = (l) => `<div class="item"><time title="${esc(fmt(l.at))}">${esc(fmt(l.at))}</time><div><b>${esc(l.by)}</b> ${esc(ACT[l.action] || l.action)} ${l.action === 'setup' ? '' : `<b>${esc(l.target || '')}</b>`}${l.detail && l.action !== 'setup' ? ` <span class="muted">· ${esc(l.detail)}</span>` : ''}</div></div>`;
   async function viewActivity() {
     const v = $('#view');
