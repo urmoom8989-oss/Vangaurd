@@ -20,7 +20,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUILD_LABEL: "1.0"
+  BUILD_LABEL: "Beta 0.9"
+  FILE_LABEL: "Beta-0.9"
+  RELEASE_TAG: "beta-0.9"
+  # Every run gets a new build number. The game, the desktop apps and the server compare build numbers:
+  # the desktop app offers to update, and the server only lets the newest build play online.
+  BUILD_NUMBER: ${{ github.run_number }}
 
 jobs:
   standalone:
@@ -31,7 +36,7 @@ jobs:
         with:
           node-version: 22
       - name: Build the standalone HTML
-        run: node tools/build-release.mjs --standalone "Vangaurd-MP-Test-${BUILD_LABEL}.html"
+        run: node tools/build-release.mjs --standalone "Vangaurd-${FILE_LABEL}.html"
       - uses: actions/upload-artifact@v4
         with:
           name: standalone
@@ -48,6 +53,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
+      - name: Stamp the app version (0.9.<build>)
+        run: npm pkg set version="0.9.${BUILD_NUMBER}"
       - name: Build Mac app (Apple Silicon + Intel)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -70,6 +77,9 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
+      - name: Stamp the app version (0.9.<build>)
+        shell: bash
+        run: npm pkg set version="0.9.${BUILD_NUMBER}"
       - name: Build Windows app
         run: npx electron-builder --win nsis zip --x64 --publish never
       - uses: actions/upload-artifact@v4
@@ -89,18 +99,38 @@ jobs:
           path: out
           merge-multiple: true
       - run: ls -la out
+      - name: Write version.json (read by the desktop updater and the multiplayer server)
+        run: |
+          cat > out/version.json <<JSON
+          {
+            "label": "${BUILD_LABEL}",
+            "version": "0.9.${BUILD_NUMBER}",
+            "build": ${BUILD_NUMBER},
+            "tag": "${RELEASE_TAG}",
+            "commit": "${GITHUB_SHA::7}",
+            "files": {
+              "win": "Vangaurd-${FILE_LABEL}-Setup.exe",
+              "winZip": "Vangaurd-${FILE_LABEL}-win.zip",
+              "macArm": "Vangaurd-${FILE_LABEL}-arm64.dmg",
+              "macX64": "Vangaurd-${FILE_LABEL}-x64.dmg",
+              "html": "Vangaurd-${FILE_LABEL}.html"
+            }
+          }
+          JSON
+          cat out/version.json
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          TAG="mp-test-${BUILD_LABEL}"
-          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release delete "$RELEASE_TAG" --yes --cleanup-tag || true
           cat > notes.md <<NOTES
-          Vangaurd Multiplayer Test ${BUILD_LABEL} (commit ${GITHUB_SHA::7}).
+          Vangaurd ${BUILD_LABEL} · build ${BUILD_NUMBER} (commit ${GITHUB_SHA::7}).
 
-          - **Mac**: \`Vangaurd-*-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-*-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
-          - **Windows**: \`Vangaurd-Setup-*.exe\` installs the game; the \`-win.zip\` runs without installing. If SmartScreen appears, choose **More info → Run anyway**.
-          - **Standalone**: \`Vangaurd-MP-Test-${BUILD_LABEL}.html\` is the whole game in one file. Open it in Chrome or Edge.
+          - **Windows**: \`Vangaurd-${FILE_LABEL}-Setup.exe\` installs the game; \`Vangaurd-${FILE_LABEL}-win.zip\` runs without installing. If SmartScreen appears, choose **More info → Run anyway**.
+          - **Mac**: \`Vangaurd-${FILE_LABEL}-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-${FILE_LABEL}-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
+          - **Browser**: \`Vangaurd-${FILE_LABEL}.html\` is the whole game in one file. Open it in Chrome or Edge.
+
+          The desktop apps check for a newer build when they start and offer to install it. Online play needs the newest build.
           NOTES
-          gh release create "$TAG" out/* --target "$GITHUB_SHA" --title "Vangaurd Multiplayer Test ${BUILD_LABEL}" --notes-file notes.md
+          gh release create "$RELEASE_TAG" out/* --target "$GITHUB_SHA" --latest --title "Vangaurd ${BUILD_LABEL} (build ${BUILD_NUMBER})" --notes-file notes.md

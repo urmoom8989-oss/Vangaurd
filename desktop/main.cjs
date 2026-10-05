@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { createUpdater } = require('./updater.cjs');
 
 const GAME_ROOT = path.join(process.resourcesPath, 'game');
 
@@ -78,6 +79,14 @@ function applyDisplayMode(win, mode) {
   return true;
 }
 ipcMain.handle('vangaurd:display-mode', (event, mode) => applyDisplayMode(BrowserWindow.fromWebContents(event.sender), String(mode || 'windowed')));
+
+// Auto-update: checked shortly after launch, and again when the multiplayer server reports this build is outdated.
+let updater = null;
+ipcMain.handle('vangaurd:check-update', async (event, reason) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  try { return updater ? await updater.check(win, String(reason || 'manual')) : { error: 'not ready' }; } catch (e) { log(`Update check error: ${e?.message || e}`); return { error: String(e?.message || e) }; }
+});
+ipcMain.handle('vangaurd:app-info', () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch }));
 
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
@@ -204,6 +213,7 @@ function createWindow() {
     if (isMainFrame) showLaunchError(`Could not load the packaged game (${code}): ${description}\n${url}`);
   });
   window.webContents.on('did-finish-load', () => {
+    setTimeout(() => { if (updater && !window.isDestroyed()) updater.check(window, 'launch').catch((e) => log(`Update check error: ${e?.message || e}`)); }, 5000);
     const startedAt = Date.now();
     const revealWhenReady = async () => {
       if (window.isDestroyed()) return;
@@ -243,6 +253,7 @@ if (!hasAppLock) app.quit();
 app.whenReady().then(async () => {
   if (!hasAppLock) return;
   logFile = path.join(app.getPath('userData'), 'launch.log');
+  updater = createUpdater({ app, dialog, shell, log });
   log(`Starting Vangaurd ${app.getVersion()} on ${process.platform} ${process.arch}; Electron ${process.versions.electron}, Chromium ${process.versions.chrome}`);
   log(`Game build directory: ${GAME_ROOT}`);
   try {

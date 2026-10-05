@@ -1,5 +1,6 @@
 // Protocol test for the matchmaking server using plain ws clients.
-// Run the server with MATCH_COUNTDOWN=2 MAP_VOTE_SECONDS=2 KC_SCORE_LIMIT=3 PORT=8099, then: node test-protocol.mjs
+// Run the server with MATCH_COUNTDOWN=2 MAP_VOTE_SECONDS=2 KC_SCORE_LIMIT=3 PORT=8099 DATA_DIR=/tmp/vg-test LATEST_VERSION_URL=off, then: node test-protocol.mjs
+// Every test client creates an account first (online play needs a signed-in account).
 import { WebSocket } from 'ws';
 const URL = process.argv[2] || 'ws://127.0.0.1:8099/ws';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -10,11 +11,17 @@ const MAPS = ['vardanek', 'kessel', 'foundry', 'freighter', 'airfield', 'lindenh
 function client(name) {
   const ws = new WebSocket(URL);
   const c = { name, ws, msgs: [], id: null };
-  ws.on('message', (d) => { const m = JSON.parse(d.toString()); c.msgs.push(m); if (m.type === 'connected') c.id = m.playerId; });
-  c.send = (o) => ws.send(JSON.stringify(o));
+  const user = `${name}_${Math.random().toString(36).slice(2, 8)}`.slice(0, 16);
+  let authed;
+  c.open = new Promise((r) => { authed = r; });
+  ws.on('message', (d) => {
+    const m = JSON.parse(d.toString()); c.msgs.push(m);
+    if (m.type === 'connected') { c.id = m.playerId; c.send({ type: 'register', username: user, password: 'test-pass-1' }); }
+    if (m.type === 'auth_ok') authed();
+  });
+  c.send = (o) => ws.send(JSON.stringify(o.type === 'join_queue' ? { clientBuild: 99999, ...o } : o));
   c.last = (t) => [...c.msgs].reverse().find((m) => m.type === t);
   c.all = (t) => c.msgs.filter((m) => m.type === t);
-  c.open = new Promise((r) => ws.on('open', r));
   c.at = (x, z) => { c.send({ type: 'player_respawn', position: { x, y: 0, z } }); c.send({ type: 'player_state', state: { position: { x, y: 0, z }, alive: true } }); };
   return c;
 }
@@ -138,7 +145,7 @@ const waitFor = async (c, type, ms = 6000) => { const t0 = Date.now(); while (Da
   d.send({ type: 'tag_pickup', tagId: t4.id });
   await sleep(200);
   const end = d.last('match_ended');
-  check(end?.ffa === true && end.winner === d.id && end.winnerName === 'Delta' && end.players[0].id === d.id, 'first to the score limit wins the free-for-all');
+  check(end?.ffa === true && end.winner === d.id && String(end.winnerName).startsWith('Delta_') && end.players[0].id === d.id, 'first to the score limit wins the free-for-all');
   d.ws.close(); e.ws.close(); f.ws.close();
   await sleep(100);
   console.log(failures ? `${failures} FAILED` : 'ALL PASSED');

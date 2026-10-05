@@ -3,6 +3,8 @@
 // Railway: root directory /server, start command `npm start`; it listens on $PORT.
 import http from 'node:http';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import pathMod from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 
 const PORT = Number(process.env.PORT) || 8080;
@@ -18,7 +20,153 @@ const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
 };
-const VERSION = '2.1.0';
+const VERSION = '2.3.0';
+// ---------- client version gate ----------
+// Only the newest game build may play online. The newest build number is read from the
+// version.json attached to the latest GitHub release (refreshed every 5 minutes).
+// MIN_CLIENT_BUILD sets a floor (and is used if GitHub cannot be reached); VERSION_GATE=off disables the check.
+const GATE = String(process.env.VERSION_GATE || 'on').toLowerCase() !== 'off';
+const LATEST_URL = process.env.LATEST_VERSION_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest/download/version.json';
+const RELEASE_PAGE = process.env.RELEASE_PAGE_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest';
+const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 0.9', checkedAt: 0, source: 'env' };
+async function refreshLatest() {
+  if (!GATE || String(process.env.LATEST_VERSION_URL || '').toLowerCase() === 'off') return;
+  try {
+    const res = await fetch(LATEST_URL, { redirect: 'follow', headers: { 'cache-control': 'no-cache' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const v = await res.json();
+    const b = Math.floor(Number(v.build));
+    if (Number.isFinite(b) && b > 0) {
+      if (b !== latest.build) log(`latest client build ${latest.build} -> ${b} (${v.label || ''})`);
+      latest.build = Math.max(b, Math.floor(Number(process.env.MIN_CLIENT_BUILD) || 0));
+      latest.label = typeof v.label === 'string' ? v.label.slice(0, 40) : latest.label;
+      latest.source = 'github';
+    }
+    latest.checkedAt = Date.now();
+  } catch (e) {
+    log(`could not read the latest build (${e.message}); keeping build ${latest.build}`);
+  }
+}
+refreshLatest();
+setInterval(refreshLatest, 5 * 60 * 1000);
+function clientOutdated(c, msg) {
+  if (!GATE) return false;
+  const b = Math.floor(num(msg.clientBuild ?? msg.build, 0));
+  c.build = b;
+  if (b >= latest.build) return false;
+  send(c, {
+    type: 'error', code: 'outdated', latestBuild: latest.build, latestLabel: latest.label, yourBuild: b || null, downloadUrl: RELEASE_PAGE,
+    message: `Your game is out of date${b ? ` (build ${b})` : ''}. Update to the latest Vangaurd ${latest.label} (build ${latest.build}) to play online.`,
+  });
+  log(`refused outdated client ${c.id} (build ${b || 'none'} < ${latest.build})`);
+  return true;
+}
+
+
+// ---------- accounts ----------
+// Username + password accounts. Passwords are stored only as salted scrypt hashes; sessions are random tokens
+// (stored as SHA-256 hashes). Everything lives in DATA_DIR/accounts.json, so DATA_DIR must be on a persistent
+// volume (Railway: mount a volume at /data and set DATA_DIR=/data).
+const DATA_DIR = process.env.DATA_DIR || pathMod.join(process.cwd(), 'data');
+const ACCOUNTS_FILE = pathMod.join(DATA_DIR, 'accounts.json');
+const SESSION_DAYS = Math.max(1, Number(process.env.SESSION_DAYS) || 60);
+const accounts = { users: {}, sessions: {} };
+try {
+  const raw = JSON.parse(fs.readFileSync(ACCOUNTS_FILE, 'utf8'));
+  if (raw && typeof raw === 'object') { accounts.users = raw.users || {}; accounts.sessions = raw.sessions || {}; }
+} catch (e) { if (e.code !== 'ENOENT') console.error('could not read accounts:', e.message); }
+let saveTimer = null;
+function writeAccounts() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = `${ACCOUNTS_FILE}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(accounts));
+    fs.renameSync(tmp, ACCOUNTS_FILE);
+  } catch (e) { console.error('could not save accounts:', e.message); }
+}
+// New accounts, sign-ins and sign-outs are written straight away; "last used" bumps are batched.
+function saveAccounts(urgent = true) {
+  if (urgent) return writeAccounts();
+  if (!saveTimer) saveTimer = setTimeout(writeAccounts, 5000);
+}
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { if (saveTimer) writeAccounts(); process.exit(0); });
+const NAME_RE = /^[A-Za-z0-9_-]{3,16}$/;
+const RESERVED = new Set(['player', 'admin', 'administrator', 'moderator', 'server', 'vangaurd', 'system', 'bot', 'guest']);
+const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
+function scrypt(pw, salt) {
+  return new Promise((res, rej) => crypto.scrypt(String(pw), Buffer.from(salt, 'hex'), 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (e, k) => (e ? rej(e) : res(k.toString('hex')))));
+}
+function newSession(name) {
+  const token = crypto.randomBytes(32).toString('hex');
+  accounts.sessions[sha(token)] = { user: name.toLowerCase(), created: now(), lastUsed: now() };
+  saveAccounts();
+  return token;
+}
+function sessionUser(token) {
+  if (typeof token !== 'string' || token.length !== 64) return null;
+  const k = sha(token), ses = accounts.sessions[k];
+  if (!ses) return null;
+  const u = accounts.users[ses.user];
+  if (!u || now() - (ses.lastUsed || ses.created) > SESSION_DAYS * 864e5) { delete accounts.sessions[k]; saveAccounts(); return null; }
+  if (now() - ses.lastUsed > 36e5) { ses.lastUsed = now(); saveAccounts(false); }
+  return u;
+}
+// Simple brute-force guard: at most 10 failed attempts per address per 10 minutes.
+const failures = new Map();
+function limited(c) {
+  const f = failures.get(c.ip);
+  return f && f.n >= 10 && now() - f.t < 10 * 60e3;
+}
+function failed(c) {
+  const f = failures.get(c.ip);
+  if (!f || now() - f.t > 10 * 60e3) failures.set(c.ip, { n: 1, t: now() }); else f.n++;
+}
+function authOk(c, u, token, created = false) {
+  c.account = u.name;
+  c.name = u.name;
+  send(c, { type: 'auth_ok', username: u.name, token, created });
+}
+function authError(c, code, message) { send(c, { type: 'auth_error', code, message }); }
+async function onRegister(c, msg) {
+  if (limited(c)) return authError(c, 'too_many', 'Too many attempts. Wait a few minutes and try again.');
+  const name = String(msg.username || '').trim(), pw = String(msg.password || '');
+  if (!NAME_RE.test(name)) return authError(c, 'bad_name', 'Usernames are 3 to 16 letters, numbers, - or _.');
+  if (RESERVED.has(name.toLowerCase())) return authError(c, 'taken', 'That username is taken. Pick another one.');
+  if (pw.length < 6 || pw.length > 64) return authError(c, 'bad_password', 'Passwords must be 6 to 64 characters long.');
+  const key = name.toLowerCase();
+  if (accounts.users[key]) { failed(c); return authError(c, 'taken', 'That username is taken. If it is yours, sign in instead.'); }
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = await scrypt(pw, salt);
+  if (accounts.users[key]) return authError(c, 'taken', 'That username is taken. If it is yours, sign in instead.');
+  const u = accounts.users[key] = { name, salt, hash, created: now(), lastLogin: now() };
+  saveAccounts();
+  log(`account created: ${name}`);
+  authOk(c, u, newSession(name), true);
+}
+async function onLogin(c, msg) {
+  if (limited(c)) return authError(c, 'too_many', 'Too many attempts. Wait a few minutes and try again.');
+  const name = String(msg.username || '').trim(), pw = String(msg.password || '');
+  const u = accounts.users[name.toLowerCase()];
+  const hash = await scrypt(pw, u ? u.salt : '00'.repeat(16));
+  if (!u || !crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(u.hash, 'hex'))) {
+    failed(c);
+    return authError(c, 'bad_login', u ? 'Wrong password for that username.' : 'No account with that username. Create one instead.');
+  }
+  u.lastLogin = now();
+  saveAccounts();
+  authOk(c, u, newSession(u.name));
+}
+function onResume(c, msg) {
+  const u = sessionUser(msg.token);
+  if (!u) return authError(c, 'session_expired', 'Your sign-in has expired. Please sign in again.');
+  authOk(c, u, msg.token);
+}
+function onLogout(c, msg) {
+  if (typeof msg.token === 'string') { delete accounts.sessions[sha(msg.token)]; saveAccounts(); }
+  c.account = null;
+  send(c, { type: 'logged_out' });
+}
 
 const clients = new Map(); // id -> client
 const queues = { tdm: [], kc: [] }; // arrays of client ids
@@ -143,9 +291,15 @@ function openMatchFor(mode) {
   return best;
 }
 function joinQueue(c, msg) {
+  if (clientOutdated(c, msg)) return;
+  if (!c.account && msg.token) { const u = sessionUser(msg.token); if (u) { c.account = u.name; } }
+  if (!c.account) {
+    send(c, { type: 'error', code: 'login_required', message: 'Sign in to your Vangaurd account to play online.' });
+    return;
+  }
   if (c.matchId) leaveMatch(c, false);
   removeFromQueue(c);
-  c.name = cleanName(msg.name || c.name);
+  c.name = c.account;
   const mode = modeOf(msg.mode);
   const open = openMatchFor(mode);
   if (open) { addToMatch(open, c, true); return; }
@@ -301,7 +455,7 @@ function onState(c, msg) {
     position: { x, y, z }, x, y, z,
     yaw: num(s.yaw), pitch: num(s.pitch),
     stance: typeof s.stance === 'string' ? s.stance.slice(0, 12) : 'stand',
-    moving: !!s.moving, sprinting: !!s.sprinting,
+    moving: !!s.moving, sprinting: !!s.sprinting, quiet: !!s.quiet,
     weaponId: typeof s.weaponId === 'string' ? s.weaponId.slice(0, 24) : null,
     variant: typeof s.variant === 'string' ? s.variant.slice(0, 24) : null,
     alive: s.alive !== false && p.alive,
@@ -322,6 +476,22 @@ function onRespawn(c, msg) {
   broadcast(match, { type: 'player_respawned', matchId: match.id, playerId: p.id, state: p.pos ? { position: p.pos, ...p.pos, alive: true } : { alive: true } }, c.id);
 }
 
+// Ping marks: relayed to teammates (rate limited).
+function onMark(c, msg) {
+  const match = matches.get(c.matchId);
+  if (!match || match.ended || match.phase !== 'live') return;
+  const p = match.players.get(c.id);
+  if (!p) return;
+  const t = now();
+  if (t - (c.lastMark || 0) < 250) return;
+  c.lastMark = t;
+  const x = num(msg.x, NaN), y = num(msg.y, NaN), z = num(msg.z, NaN);
+  if (![x, y, z].every(Number.isFinite)) return;
+  const kind = msg.kind === 'enemy' ? 'enemy' : 'spot';
+  const targetId = typeof msg.targetId === 'string' && match.players.has(msg.targetId) ? msg.targetId : null;
+  const out = { type: 'mark', matchId: match.id, playerId: p.id, name: p.name, team: p.team, kind, x, y, z, id: typeof msg.id === 'string' ? msg.id.slice(0, 24) : null, targetId };
+  for (const q of match.players.values()) if (q.id !== p.id && (match.ffa ? false : q.team === p.team)) send(clients.get(q.id), out);
+}
 function handle(c, raw) {
   let msg;
   try { msg = JSON.parse(raw); } catch { return; }
@@ -345,7 +515,13 @@ function handle(c, raw) {
       if (match) { send(c, scoreMsg(match)); for (const t of match.tags.values()) send(c, { type: 'tag_spawned', matchId: match.id, tag: t }); if (match.phase === 'vote') send(c, { type: 'map_vote', matchId: match.id, ...voteInfo(match, c.id) }); }
       break;
     }
-    case 'ping': send(c, { type: 'pong', t: msg.t }); break;
+    case 'ping': send(c, { type: 'pong', t: msg.t, seq: msg.seq, serverTime: now() }); break;
+    case 'mark': onMark(c, msg); break;
+    case 'hello': c.build = Math.floor(num(msg.clientBuild, 0)); break;
+    case 'register': onRegister(c, msg).catch((e) => { log(`register error: ${e.message}`); authError(c, 'server', 'The server could not create the account. Try again.'); }); break;
+    case 'login': onLogin(c, msg).catch((e) => { log(`login error: ${e.message}`); authError(c, 'server', 'The server could not sign you in. Try again.'); }); break;
+    case 'resume': onResume(c, msg); break;
+    case 'logout': onLogout(c, msg); break;
     default: break;
   }
 }
@@ -375,7 +551,7 @@ const server = http.createServer((req, res) => {
       ok: true, service: 'vangaurd-matchmaking', version: VERSION,
       queued: queues.tdm.length + queues.kc.length, queuedByMode: { tdm: queues.tdm.length, kc: queues.kc.length },
       matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, matches: matches.size, playersInMatches: players, connected: clients.size,
-      maps: MAPS, mapVoteSeconds: VOTE_S, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
+      maps: MAPS, mapVoteSeconds: VOTE_S, versionGate: GATE, accounts: Object.keys(accounts.users).length, accountsPersistent: !!process.env.DATA_DIR, minClientBuild: latest.build, latestLabel: latest.label, latestSource: latest.source, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
     });
     res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' });
     res.end(body);
@@ -393,8 +569,9 @@ const wss = new WebSocketServer({
   server, maxPayload: 16 * 1024,
   verifyClient: ({ origin }) => !allowedOrigins || !origin || origin === 'null' || allowedOrigins.has(origin),
 });
-wss.on('connection', (ws) => {
-  const c = { id: newId('p'), ws, name: 'Player', matchId: null, queuedMode: null, alive: true };
+wss.on('connection', (ws, req) => {
+  const fwd = String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
+  const c = { id: newId('p'), ws, name: 'Player', matchId: null, queuedMode: null, alive: true, account: null, ip: fwd || req?.socket?.remoteAddress || '?' };
   clients.set(c.id, c);
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
@@ -405,7 +582,7 @@ wss.on('connection', (ws) => {
     clients.delete(c.id);
   });
   ws.on('error', () => {});
-  send(c, { type: 'connected', playerId: c.id, version: VERSION, matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS });
+  send(c, { type: 'connected', playerId: c.id, version: VERSION, matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label });
 });
 setInterval(() => {
   for (const ws of wss.clients) {

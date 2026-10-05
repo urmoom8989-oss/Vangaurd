@@ -19,7 +19,10 @@ if (!standaloneOut && !distOut) {
 }
 
 const head = await readFile(path.join(root, 'prebuilt', 'standalone-head.html'), 'utf8');
-const moduleCode = await readFile(path.join(root, 'prebuilt', 'game-module.js'), 'utf8');
+// BUILD_NUMBER (set by the release workflow) is stamped into the game so it can tell the server and the
+// desktop updater which build it is. Local builds are build 0.
+const buildNumber = String(Math.max(0, Math.floor(Number(process.env.BUILD_NUMBER) || 0)));
+const moduleCode = (await readFile(path.join(root, 'prebuilt', 'game-module.js'), 'utf8')).replaceAll('"__VGD_BUILD__"', JSON.stringify(buildNumber));
 const ARCHIVE_OPEN = '<script id="asset-archive" type="application/octet-stream">';
 const MODULE_OPEN = '</script><script type="module">\n';
 if (!head.endsWith(ARCHIVE_OPEN)) throw new Error('prebuilt/standalone-head.html must end with the asset-archive script tag.');
@@ -95,5 +98,5 @@ if (distOut) {
     await mkdir(path.dirname(target), { recursive: true });
     await copyFile(file.absolute, target);
   }
-  console.log(`dist: ${dist} (${assetFiles.length} assets, ${Object.keys(workerMap).length} worker(s))`);
+  console.log(`dist: ${dist} (${assetFiles.length} assets, ${Object.keys(workerMap).length} worker(s), build ${buildNumber})`);
 }

@@ -4,20 +4,21 @@ An original first-person shooter built with Three.js and Vite. You hold a city p
 enemy soldiers. It runs in a desktop browser with WebGL2 (Chrome or Edge recommended) and needs a mouse
 and keyboard.
 
-## Multiplayer Test 1.0 downloads
+## Beta 0.9 downloads
 
-The current game (Multiplayer Test 1.0: loadouts and levels, six maps with a map vote, Kill Confirmed, online play) is kept
-ready-built in `prebuilt/`, and GitHub Actions turns it into downloads on every push to `main` (or when you run
-the **Build Vangaurd** workflow by hand). The finished files are attached to the **Vangaurd Multiplayer Test 1.0** release
-on the repository's Releases page:
+The current game (Beta 0.9: accounts, loadouts with perks and camos, levels, six maps with a map vote, online
+Team Deathmatch, controller support) is kept ready-built in `prebuilt/`, and GitHub Actions turns it into downloads on
+every push to `main` (or when you run the **Build Vangaurd** workflow by hand). Every run gets a new build number; the
+finished files are attached to the **Vangaurd Beta 0.9 (build N)** release on the repository's Releases page:
 
 | File | What it is |
 | --- | --- |
-| `Vangaurd-1.0.0-arm64.dmg` / `Vangaurd-1.0.0-x64.dmg` | Mac app for Apple Silicon / Intel Macs |
-| `Vangaurd-Setup-1.0.0.exe` / `Vangaurd-1.0.0-win.zip` | Windows installer / portable Windows app |
-| `Vangaurd-MP-Test-1.0.html` | The whole game in one HTML file (open in Chrome or Edge) |
+| `Vangaurd-Beta-0.9-arm64.dmg` / `Vangaurd-Beta-0.9-x64.dmg` | Mac app for Apple Silicon / Intel Macs |
+| `Vangaurd-Beta-0.9-Setup.exe` / `Vangaurd-Beta-0.9-win.zip` | Windows installer / portable Windows app |
+| `Vangaurd-Beta-0.9.html` | The whole game in one HTML file (open in Chrome or Edge) |
+| `version.json` | Newest build number, read by the desktop apps (auto-update) and the server (only the newest build plays online) |
 
-To build the same files locally: `node tools/build-release.mjs --standalone Vangaurd-MP-Test-1.0.html` for the HTML
+To build the same files locally: `node tools/build-release.mjs --standalone Vangaurd-Beta-0.9.html` for the HTML
 (no dependencies needed), and `npm install && npm run desktop:mac` or `npm run desktop:win` for the apps.
 
 The Vite sources under `src/` are an older version of the game; `prebuilt/game-module.js` is the current one.
