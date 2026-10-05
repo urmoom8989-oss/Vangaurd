@@ -47506,17 +47506,20 @@ var Jo, x2, C3, jh, m3, w3, bp, y3, b3, D3, v2, M3, Y9 = YA((() => {
 .od-mode-popup { position: absolute; z-index: 30; inset: 0; display: grid; place-items: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .18s, visibility .18s; }
 .od-mode-popup.on { opacity: 1; visibility: visible; pointer-events: auto; }
 .od-mode-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: rgba(3,5,7,.78); backdrop-filter: blur(calc(var(--u) * 8)); -webkit-backdrop-filter: blur(calc(var(--u) * 8)); cursor: default; }
-.od-mode-dialog { position: relative; width: min(calc(var(--u) * 1020), calc(100vw - var(--u) * 48)); padding: calc(var(--u) * 34); background: linear-gradient(145deg, rgba(20,25,26,.98), rgba(8,11,12,.98)); border: 1px solid rgba(236,240,234,.2); box-shadow: 0 calc(var(--u) * 24) calc(var(--u) * 80) rgba(0,0,0,.65); }
+.od-mode-dialog { position: relative; width: min(calc(var(--u) * 1340), calc(100vw - var(--u) * 48)); padding: calc(var(--u) * 34); background: linear-gradient(145deg, rgba(20,25,26,.98), rgba(8,11,12,.98)); border: 1px solid rgba(236,240,234,.2); box-shadow: 0 calc(var(--u) * 24) calc(var(--u) * 80) rgba(0,0,0,.65); }
 .od-mode-dialog::before { content: ''; position: absolute; left: 0; top: 0; width: calc(var(--u) * 110); height: calc(var(--u) * 3); background: var(--accent); }
 .od-mode-dialog-head { display: flex; align-items: center; justify-content: space-between; }
 .od-mode-dialog-title { font-size: calc(var(--u) * 28); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
 .od-mode-close { width: calc(var(--u) * 38); height: calc(var(--u) * 38); border: 1px solid rgba(236,240,234,.2); background: rgba(236,240,234,.05); color: var(--fg); font: inherit; font-size: calc(var(--u) * 27); line-height: 1; cursor: pointer; }
 .od-mode-close:hover, .od-mode-close:focus-visible { color: #111; background: var(--accent); outline: none; }
 .od-mode-dialog-sub { margin-top: calc(var(--u) * 5); color: var(--fg2); font-size: calc(var(--u) * 13); letter-spacing: .16em; text-transform: uppercase; }
-.od-mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--u) * 14); margin-top: calc(var(--u) * 24); }
+.od-mode-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(var(--u) * 14); margin-top: calc(var(--u) * 24); }
 .od-mode-group { grid-column: 1 / -1; display: flex; align-items: center; gap: calc(var(--u) * 12); margin: calc(var(--u) * 6) 0 calc(var(--u) * -2); color: var(--accent, #f0c048); font-size: calc(var(--u) * 12); font-weight: 700; letter-spacing: .3em; text-transform: uppercase; }
 .od-mode-group::after { content: ""; flex: 1; height: 1px; background: rgba(236,240,234,.16); }
 .od-mode-group[hidden] { display: none; }
+/* One row per group: the two featured modes share the width, the other three sit side by side. */
+.od-mode-grid > .od-mode-option { grid-column: span 2; }
+.od-mode-grid > .od-mode-option[data-mode="tdm"], .od-mode-grid > .od-mode-option[data-mode="kc"] { grid-column: span 3; }
 .od-mode-option { min-width: 0; padding: 0; overflow: hidden; text-align: left; border: 1px solid rgba(236,240,234,.16); background: rgba(236,240,234,.045); color: var(--fg); font: inherit; cursor: pointer; transition: border-color .15s, background .15s, transform .15s, box-shadow .15s; }
 .od-mode-option:hover, .od-mode-option:focus-visible { transform: translateY(calc(var(--u) * -3)); border-color: rgba(240,192,72,.72); outline: none; }
 .od-mode-option.sel { border-color: var(--accent); background: rgba(240,192,72,.09); box-shadow: 0 0 0 1px rgba(240,192,72,.25), 0 calc(var(--u) * 8) calc(var(--u) * 24) rgba(0,0,0,.25); }
@@ -48617,7 +48620,7 @@ function om() {
   }
 }
 /* Game version. The release build stamps the CI build number into "__VGD_BUILD__". */
-var VGD = { label: "Beta 0.9", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 0.91", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 VGD.text = `Vangaurd · ${VGD.label}${VGD.build ? ` · build ${VGD.build}` : ""}`;
 typeof window < "u" && (window.__VGD__ = VGD);
 /* ------------------------------------------------------------------ weapon camos (procedural, tileable) */
@@ -49816,7 +49819,9 @@ var svCss = `
 .vg-snd i { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 .vg-snd i::before { content: ""; position: absolute; left: -36px; top: calc(-1 * var(--r)); width: 72px; height: 20px; box-sizing: border-box; border-top: 3px solid rgba(232,236,228,.92); border-radius: 50% 50% 0 0 / 100% 100% 0 0; filter: drop-shadow(0 0 2px rgba(0,0,0,.95)); }
 .vg-snd i.near::before { border-top-width: 5px; }
-.vg-snd i.shot::before { left: -54px; width: 108px; border-top: 5px solid rgba(255,116,66,.96); filter: drop-shadow(0 0 5px rgba(255,80,40,.65)); }
+.vg-snd i.shot::before { left: -54px; width: 108px; border-top: 5px solid rgba(255,154,26,.97); filter: drop-shadow(0 0 5px rgba(255,140,20,.6)); }
+.vg-snd i b { position: absolute; left: -11px; top: calc(-1 * var(--r) - 30px); width: 22px; height: 22px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23eef1ea' d='M7.6 1.5c-1.9 0-3.1 2.6-3.1 5.3 0 2.3.9 3.7 1 5.4.1 1.2 1 1.9 2 1.9s1.9-.8 1.9-2.1c0-1.9 1.1-3.4 1.1-5.5 0-2.6-1-5-2.9-5zm-.4 13.6c-1.1 0-1.9 1-1.9 2.3 0 1.8 1 3.5 2.3 3.5s1.9-1.3 1.9-2.7c0-1.8-1.2-3.1-2.3-3.1zM16.4 4.5c-1.9 0-2.9 2.4-2.9 5 0 2.1 1.1 3.6 1.1 5.5 0 1.3.9 2.1 1.9 2.1s1.9-.7 2-1.9c.1-1.7 1-3.1 1-5.4 0-2.7-1.2-5.3-3.1-5.3zm.4 13.6c-1.1 0-2.3 1.3-2.3 3.1 0 1.4.6 2.7 1.9 2.7s2.3-1.7 2.3-3.5c0-1.3-.8-2.3-1.9-2.3z'/%3E%3C/svg%3E") center / contain no-repeat; filter: drop-shadow(0 0 2px rgba(0,0,0,.95)); }
+.vg-snd i.shot b { left: -13px; top: calc(-1 * var(--r) - 34px); width: 26px; height: 26px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23ff9a1a' d='M12 .5l2.3 6.4 6.3-3.3-3.2 6.4 6.1 2-6.1 2 3.2 6.4-6.3-3.3L12 23.5l-2.3-6.4-6.3 3.3 3.2-6.4-6.1-2 6.1-2-3.2-6.4 6.3 3.3z'/%3E%3Ccircle cx='12' cy='12' r='3.6' fill='%23fff4e0'/%3E%3C/svg%3E"); }
 `;
 function soundVizSystem(A) {
   const cues = [], f = new b(), dir = new b();
@@ -49845,7 +49850,7 @@ function soundVizSystem(A) {
     if (!c) {
       for (; cues.length >= 14; ) drop(cues[0]);
       const e = document.createElement("i");
-      e.className = shot ? "shot" : "", el().appendChild(e), c = { key, shot, el: e }, cues.push(c);
+      e.className = shot ? "shot" : "", e.innerHTML = "<b></b>", el().appendChild(e), c = { key, shot, el: e, icon: e.firstChild }, cues.push(c);
     }
     c.x = pos.x, c.z = pos.z, c.born = performance.now(), c.life = shot ? 1600 : 950, c.el.classList.toggle("near", d < 8);
   }
@@ -49863,7 +49868,7 @@ function soundVizSystem(A) {
         continue;
       }
       const dx = c.x - f.x, dz = c.z - f.z, ang = Math.atan2(-dx * fz + dz * fx, dx * fx + dz * fz);
-      c.el.style.transform = `rotate(${ang.toFixed(3)}rad)`, c.el.style.opacity = Math.min(1, (1 - age / c.life) * 1.7).toFixed(2);
+      c.el.style.transform = `rotate(${ang.toFixed(3)}rad)`, c.icon.style.transform = `rotate(${(-ang).toFixed(3)}rad)`, c.el.style.opacity = Math.min(1, (1 - age / c.life) * 1.7).toFixed(2);
     }
   }
   function clear() {
@@ -49873,8 +49878,10 @@ function soundVizSystem(A) {
 }
 /* Network stats beside the minimap (online matches): ping, packet loss and how often other players' updates arrive. */
 var nsCss = `
-.vg-net { position: absolute; left: calc(var(--u) * 292); top: calc(var(--u) * 28); display: grid; gap: calc(var(--u) * 5); min-width: calc(var(--u) * 120); padding: calc(var(--u) * 8) calc(var(--u) * 11); background: rgba(8,12,11,.58); border: 1px solid rgba(255,255,255,.14); font: 700 calc(var(--u) * 12)/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #e8ebe4; letter-spacing: .06em; pointer-events: none; z-index: 6; }
+.vg-net { position: fixed; left: 300px; top: 28px; display: grid; gap: calc(var(--u) * 5); min-width: calc(var(--u) * 120); padding: calc(var(--u) * 8) calc(var(--u) * 11); background: rgba(8,12,11,.58); border: 1px solid rgba(255,255,255,.14); font: 700 calc(var(--u) * 12)/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #e8ebe4; letter-spacing: .06em; pointer-events: none; z-index: 60; }
 .vg-net span { display: flex; justify-content: space-between; gap: calc(var(--u) * 14); }
+.vg-lobnet { position: absolute; right: calc(var(--u) * 28); top: calc(var(--u) * 26); z-index: 30; padding: calc(var(--u) * 8) calc(var(--u) * 12); background: rgba(8,12,11,.6); border: 1px solid rgba(255,255,255,.14); color: #e8ebe4; font: 700 calc(var(--u) * 12)/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .06em; }
+.vg-lobnet .g { color: #7fe08c; } .vg-lobnet .y { color: #f2c94c; } .vg-lobnet .r { color: #ff6b5b; }
 .vg-net em { font-style: normal; color: #98a199; }
 .vg-net .g { color: #7fe08c; } .vg-net .y { color: #f2c94c; } .vg-net .r { color: #ff6b5b; }
 `;
@@ -49883,14 +49890,16 @@ function netStatsSystem(A) {
   const rtts = [], sent = /* @__PURE__ */ new Map(), loss = [], senders = /* @__PURE__ */ new Set();
   let states = 0;
   function el() {
-    const mm = document.querySelector(".od-minimap");
-    if (!mm || !mm.parentElement) return null;
-    if (root && root.parentElement === mm.parentElement) return root;
-    if (!document.getElementById("vg-net-style")) {
-      const e = document.createElement("style");
-      e.id = "vg-net-style", e.textContent = nsCss, document.head.appendChild(e);
+    if (!root) {
+      if (!document.getElementById("vg-net-style")) {
+        const e = document.createElement("style");
+        e.id = "vg-net-style", e.textContent = nsCss, document.head.appendChild(e);
+      }
+      root = document.createElement("div"), root.className = "vg-net", document.body.appendChild(root);
     }
-    return root?.remove(), root = document.createElement("div"), root.className = "vg-net", mm.parentElement.appendChild(root), root;
+    // Sit just right of the minimap wherever it is drawn (HUD scale, resolution); top-left if it is hidden.
+    const mm = document.querySelector(".od-minimap"), rc = mm && mm.offsetParent !== null ? mm.getBoundingClientRect() : null;
+    return root.style.left = `${Math.round(rc && rc.width ? rc.right + 10 : 24)}px`, root.style.top = `${Math.round(rc && rc.width ? rc.top : 24)}px`, root;
   }
   function message(m) {
     if (!m || typeof m != "object") return;
@@ -49915,7 +49924,7 @@ function netStatsSystem(A) {
     const r = el();
     if (!r) return;
     r.style.display = "";
-    const ping = rtts.length ? [...rtts].sort((x, y) => x - y)[rtts.length >> 1] : null, lp = loss.length ? loss.reduce((x, y) => x + y, 0) / loss.length * 100 : 0;
+    const vs = vgNetStats(), ping = rtts.length ? [...rtts].sort((x, y) => x - y)[rtts.length >> 1] : vs.ping, lp = loss.length ? loss.reduce((x, y) => x + y, 0) / loss.length * 100 : vs.loss;
     const pc = ping == null ? "" : ping < 70 ? "g" : ping < 130 ? "y" : "r", lc = lp < 1 ? "g" : lp < 6 ? "y" : "r", tc = tickRate >= 8 ? "g" : tickRate >= 4 ? "y" : "r";
     r.innerHTML = `<span><em>PING</em><b class="${pc}">${ping == null ? "--" : Math.round(ping)} ms</b></span><span><em>LOSS</em><b class="${lc}">${lp.toFixed(0)}%</b></span><span><em>TICK</em><b class="${tc}">${tickRate ? Math.round(tickRate) : "--"} Hz</b></span>`;
   }
@@ -50027,7 +50036,32 @@ function pingSystem(A, H) {
     }
     return best;
   }
+  // Your own mark under the crosshair (within 48 px), if any.
+  function ownAtCrosshair() {
+    const c = A.camera;
+    if (!c) return null;
+    const W = window.innerWidth, Hh = window.innerHeight;
+    let best = null, bd = 48 * 48;
+    for (const m of marks) {
+      if (!m.mine) continue;
+      if (v.set(m.pos.x, m.pos.y + (m.follow ? 2.1 : 0.35), m.pos.z).project(c), v.z > 1) continue;
+      const dx = (v.x * 0.5 + 0.5) * W - W / 2, dy = (-v.y * 0.5 + 0.5) * Hh - Hh / 2, d = dx * dx + dy * dy;
+      d < bd && (bd = d, best = m);
+    }
+    return best;
+  }
+  function unmark(m) {
+    remove(m), H.online() && H.send({ type: "mark", kind: "remove", x: +m.pos.x.toFixed(2), y: +m.pos.y.toFixed(2), z: +m.pos.z.toFixed(2), id: m.id });
+    try {
+      A.services.audio?.play?.("ui_back", { bus: "ui", volume: 0.4 });
+    } catch {
+    }
+    A.events.emit("ping:unmark", { id: m.id, kind: m.kind });
+  }
   function mark(kind) {
+    // A click on one of your marks removes it; a double-click on your location mark turns it into an enemy mark.
+    const own = ownAtCrosshair();
+    if (own && (kind === "spot" || own.kind === "enemy")) return unmark(own);
     const a = aim();
     if (!a) return;
     let pos = a.point, follow = null, targetId = null;
@@ -50040,9 +50074,13 @@ function pingSystem(A, H) {
     H.online() || H.allies(m.pos, m.kind);
   }
   function remote(o) {
+    if (o?.kind === "remove") {
+      for (const m of marks.filter((x) => !x.mine && x.from === o.playerId && (!o.id || x.id === `r:${o.playerId}:${o.id}`))) remove(m);
+      return;
+    }
     if (!o || !Number.isFinite(o.x) || !Number.isFinite(o.y) || !Number.isFinite(o.z)) return;
     const pos = new b(o.x, o.y, o.z), follow = o.targetId ? H.foeById(o.targetId) : null;
-    add({ kind: o.kind, pos: follow?.() ? follow().clone() : pos, follow, mine: !1, name: String(o.name || "Teammate").slice(0, 16), from: o.playerId });
+    add({ kind: o.kind, pos: follow?.() ? follow().clone() : pos, follow, mine: !1, name: String(o.name || "Teammate").slice(0, 16), from: o.playerId, id: o.id ? `r:${o.playerId}:${o.id}` : null });
   }
   function update(on) {
     const now = performance.now();
@@ -51648,6 +51686,234 @@ var UM, $3, xp, vp, rm, _c, Za, A5 = YA((() => {
     }
   }, Za = tJ();
 }));
+/* ------------------------------------------------------------------ always-on account connection (friends, parties, ping) */
+var vgNet = { ws: null, open: !1, retry: 0, timer: 0, stopped: !1, listeners: [], social: null, rtts: [], loss: [], sent: /* @__PURE__ */ new Map(), seq: 0 };
+function vgNetEmit(m) {
+  for (const f of vgNet.listeners) try {
+    f(m);
+  } catch (e) {
+    console.error(e);
+  }
+}
+function vgNetStart() {
+  if (!vgAuth.token || vgNet.ws || typeof WebSocket > "u") return;
+  vgNet.stopped = !1, clearTimeout(vgNet.timer);
+  let ws;
+  try {
+    ws = new WebSocket(vgServerWs());
+  } catch {
+    return vgNetRetry();
+  }
+  vgNet.ws = ws, ws.addEventListener("message", (ev) => {
+    let m;
+    try {
+      m = JSON.parse(ev.data);
+    } catch {
+      return;
+    }
+    if (m.type === "connected") ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build }));
+    else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, ws.send(JSON.stringify({ type: "social_state" }));
+    else if (m.type === "auth_error") {
+      vgNet.stopped = !0, ws.close();
+      return;
+    } else if (m.type === "pong" && vgNet.sent.has(m.seq)) {
+      const t0 = vgNet.sent.get(m.seq);
+      vgNet.sent.delete(m.seq), vgNet.rtts.push(performance.now() - t0), vgNet.rtts.length > 7 && vgNet.rtts.shift(), vgNet.loss.push(0), vgNet.loss.length > 30 && vgNet.loss.shift();
+      return;
+    }
+    m.type === "social" && (vgNet.social = m), vgNetEmit(m);
+  }), ws.addEventListener("close", () => {
+    vgNet.ws === ws && (vgNet.ws = null, vgNet.open = !1, vgNet.social = null, vgNetEmit({ type: "_closed" }), vgAuth.token && !vgNet.stopped && vgNetRetry());
+  });
+}
+function vgNetRetry() {
+  clearTimeout(vgNet.timer), vgNet.timer = setTimeout(vgNetStart, Math.min(3e4, 1500 * 2 ** vgNet.retry++));
+}
+function vgNetStop() {
+  vgNet.stopped = !0, clearTimeout(vgNet.timer);
+  try {
+    vgNet.ws?.close();
+  } catch {
+  }
+  vgNet.ws = null, vgNet.open = !1, vgNet.social = null, vgNet.rtts.length = 0, vgNet.loss.length = 0, vgNetEmit({ type: "_closed" });
+}
+function vgNetSend(m) {
+  return vgNet.open && vgNet.ws?.readyState === 1 ? (vgNet.ws.send(JSON.stringify(m)), !0) : !1;
+}
+function vgNetStats() {
+  return { ping: vgNet.rtts.length ? [...vgNet.rtts].sort((a, b) => a - b)[vgNet.rtts.length >> 1] : null, loss: vgNet.loss.length ? vgNet.loss.reduce((a, b) => a + b, 0) / vgNet.loss.length * 100 : 0, open: vgNet.open };
+}
+typeof window < "u" && setInterval(() => {
+  if (!vgNet.open) return;
+  const now = performance.now();
+  for (const [k, t0] of vgNet.sent) now - t0 > 4e3 && (vgNet.sent.delete(k), vgNet.loss.push(1), vgNet.loss.length > 30 && vgNet.loss.shift());
+  vgNet.sent.set(++vgNet.seq, now), vgNetSend({ type: "ping", t: Math.round(now), seq: vgNet.seq });
+}, 2e3);
+var vgToastCss = `
+.vg-toasts { position: fixed; left: 24px; bottom: 70px; z-index: 395; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.vg-toast { min-width: 240px; max-width: 360px; padding: 11px 14px; background: rgba(12,15,17,.95); border: 1px solid rgba(236,240,234,.16); border-left: 3px solid #f2c14e; color: #e9ece6; font-size: 13px; line-height: 1.35; box-shadow: 0 10px 30px rgba(0,0,0,.45); transition: opacity .3s, transform .3s; }
+.vg-toast.out { opacity: 0; transform: translateX(-12px); }
+`;
+function vgToast(text) {
+  if (typeof document > "u" || !text) return;
+  let box = document.querySelector(".vg-toasts");
+  if (!box) {
+    const st = document.createElement("style");
+    st.textContent = vgToastCss, document.head.appendChild(st), box = document.createElement("div"), box.className = "vg-toasts", document.body.appendChild(box);
+  }
+  const t = document.createElement("div");
+  for (t.className = "vg-toast", t.textContent = text, box.appendChild(t); box.children.length > 4; ) box.firstChild.remove();
+  setTimeout(() => t.classList.add("out"), 4200), setTimeout(() => t.remove(), 4600);
+}
+/* Friends panel: the three-line button in the top-left corner of the lobby. */
+var vgFrCss = `
+.vg-burger { position: absolute; left: calc(var(--u) * 28); top: calc(var(--u) * 22); z-index: 30; width: calc(var(--u) * 46); height: calc(var(--u) * 40); display: flex; flex-direction: column; justify-content: center; gap: calc(var(--u) * 6); padding: 0 calc(var(--u) * 11); background: rgba(10,13,15,.6); border: 1px solid rgba(236,240,234,.18); cursor: pointer; }
+.vg-burger:hover { border-color: #f2c14e; }
+.vg-burger i { display: block; height: 2px; background: #e9ece6; }
+.vg-burger b { position: absolute; right: -7px; top: -7px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #f2c14e; color: #111; font: 800 11px/18px ui-sans-serif, system-ui, sans-serif; text-align: center; }
+.vg-burger b:empty { display: none; }
+.vg-fr { position: fixed; left: 0; top: 0; bottom: 0; z-index: 380; width: min(380px, 92vw); display: flex; flex-direction: column; background: rgba(10,13,15,.97); border-right: 1px solid rgba(236,240,234,.14); box-shadow: 20px 0 60px rgba(0,0,0,.5); color: #e9ece6; transform: translateX(-102%); transition: transform .22s ease; font-size: 13px; }
+.vg-fr.on { transform: none; }
+.vg-fr header { display: flex; align-items: center; padding: 20px 20px 14px; border-bottom: 1px solid rgba(236,240,234,.1); }
+.vg-fr header h3 { margin: 0; font-size: 18px; letter-spacing: .26em; text-transform: uppercase; }
+.vg-fr header small { display: block; margin-top: 4px; color: #f2c14e; letter-spacing: .14em; font-size: 11px; text-transform: uppercase; }
+.vg-fr header button { margin-left: auto; background: none; border: 1px solid rgba(236,240,234,.2); color: #e9ece6; width: 32px; height: 32px; font-size: 18px; cursor: pointer; }
+.vg-fr .add { display: flex; gap: 8px; padding: 14px 20px; border-bottom: 1px solid rgba(236,240,234,.08); }
+.vg-fr .add input { flex: 1; min-width: 0; padding: 9px 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(236,240,234,.2); color: #fff; font: 600 13px/1.2 inherit; outline: none; }
+.vg-fr .add input:focus { border-color: #f2c14e; }
+.vg-fr .btn { padding: 7px 11px; background: rgba(255,255,255,.06); border: 1px solid rgba(236,240,234,.22); color: #e9ece6; font: 700 11px/1 inherit; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+.vg-fr .btn:hover { border-color: #f2c14e; }
+.vg-fr .btn.pri { background: #f2c14e; border-color: #f2c14e; color: #111; }
+.vg-fr .btn.x { padding: 7px 9px; }
+.vg-fr .msg { padding: 0 20px; min-height: 0; color: #ff8070; font-size: 12px; }
+.vg-fr .msg:not(:empty) { padding: 8px 20px 0; }
+.vg-fr .list { flex: 1; overflow-y: auto; padding: 6px 0 20px; }
+.vg-fr h4 { margin: 16px 20px 6px; font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: #949c95; }
+.vg-fr .row { display: flex; align-items: center; gap: 8px; padding: 8px 20px; }
+.vg-fr .row:hover { background: rgba(255,255,255,.03); }
+.vg-fr .row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.vg-fr .row .nm small { display: block; font-weight: 500; color: #949c95; font-size: 11px; margin-top: 2px; }
+.vg-fr .dot { width: 9px; height: 9px; border-radius: 50%; background: #59605a; flex: none; }
+.vg-fr .dot.online { background: #6fdc7f; } .vg-fr .dot.searching { background: #f2c14e; } .vg-fr .dot.match { background: #4fa3ff; }
+.vg-fr .empty { padding: 8px 20px; color: #858d86; line-height: 1.45; }
+.vg-fr .crown { color: #f2c14e; margin-left: 4px; }
+.vg-lobnet { position: absolute; right: calc(var(--u) * 28); top: calc(var(--u) * 26); z-index: 30; padding: calc(var(--u) * 8) calc(var(--u) * 12); background: rgba(8,12,11,.6); border: 1px solid rgba(255,255,255,.14); color: #e8ebe4; font: 700 calc(var(--u) * 12)/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .06em; }
+.vg-lobnet .g { color: #7fe08c; } .vg-lobnet .y { color: #f2c94c; } .vg-lobnet .r { color: #ff6b5b; }
+`;
+function vgFriendsMount(host, opts = {}) {
+  if (!document.getElementById("vg-fr-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-fr-style", st.textContent = vgFrCss, document.head.appendChild(st);
+  }
+  const burger = document.createElement("button");
+  burger.type = "button", burger.className = "vg-burger", burger.title = "Friends and party", burger.setAttribute("aria-label", "Friends and party"), burger.innerHTML = "<i></i><i></i><i></i><b></b>", host.appendChild(burger);
+  const panel = document.createElement("aside");
+  panel.className = "vg-fr", panel.innerHTML = '<header><div><h3>Friends</h3><small class="me"></small></div><button type="button" data-close aria-label="Close">×</button></header><form class="add"><input name="n" maxlength="16" placeholder="Add a friend by username" autocomplete="off" spellcheck="false"><button class="btn pri" type="submit">Add</button></form><div class="msg"></div><div class="list"></div>', document.body.appendChild(panel);
+  const list = panel.querySelector(".list"), msg = panel.querySelector(".msg"), input = panel.querySelector("input"), me = panel.querySelector(".me");
+  const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const status = (s) => s === "match" ? "In a match" : s === "searching" ? "Searching for a match" : s === "online" ? "Online" : "Offline";
+  let open = !1, confirmRemove = null;
+  const ui = {
+    get open() {
+      return open;
+    },
+    toggle(v = !open) {
+      open = v, panel.classList.toggle("on", open), open && (vgNetSend({ type: "social_state" }) || render(), setTimeout(() => input.focus(), 230));
+    },
+    close() {
+      ui.toggle(!1);
+    }
+  };
+  function render() {
+    msg.textContent = msg.dataset.keep ? msg.textContent : "";
+    const sn = vgNet.social, n = sn ? sn.incoming.length + sn.invites.length : 0;
+    if (burger.querySelector("b").textContent = n ? String(n) : "", me.textContent = vgAuth.user ? `${vgAuth.user}${vgNet.open ? "" : " · connecting…"}` : "Not signed in", !vgAuth.user) {
+      list.innerHTML = '<div class="empty">Sign in to your Vangaurd account to add friends and play together.</div><div class="row"><button class="btn pri" data-signin>Sign in</button></div>';
+      return;
+    }
+    if (!sn) {
+      list.innerHTML = `<div class="empty">${vgNet.open ? "Loading…" : "Connecting to the Vangaurd server…"}</div>`;
+      return;
+    }
+    const pt = sn.party, leader = pt && pt.leader === sn.me, h = [];
+    pt && (h.push(`<h4>Party · ${pt.members.length}/6</h4>`), pt.members.forEach((m) => h.push(`<div class="row"><span class="dot ${m.status}"></span><span class="nm">${esc(m.name)}${m.leader ? '<span class="crown" title="Party leader">★</span>' : ""}<small>${m.name === sn.me ? "You" : status(m.status)}</small></span>${leader && m.name !== sn.me ? `<button class="btn x" data-kick="${esc(m.name)}" title="Remove from party">×</button>` : ""}</div>`)), h.push(`<div class="row"><span class="nm"><small>${leader ? "When you queue for Multiplayer, your party joins your match on your team." : "Your party joins the leader's match when they queue."}</small></span><button class="btn" data-leave>Leave party</button></div>`));
+    sn.invites.length && (h.push("<h4>Party invites</h4>"), sn.invites.forEach((iv) => h.push(`<div class="row"><span class="dot online"></span><span class="nm">${esc(iv.from)}<small>Invited you to their party (${iv.size}/6)</small></span><button class="btn pri" data-join="${esc(iv.partyId)}">Join</button><button class="btn x" data-nojoin="${esc(iv.partyId)}" title="Decline">×</button></div>`)));
+    sn.incoming.length && (h.push("<h4>Friend requests</h4>"), sn.incoming.forEach((nm) => h.push(`<div class="row"><span class="dot"></span><span class="nm">${esc(nm)}<small>Wants to be your friend</small></span><button class="btn pri" data-accept="${esc(nm)}">Accept</button><button class="btn x" data-decline="${esc(nm)}" title="Decline">×</button></div>`)));
+    h.push(`<h4>Friends · ${sn.friends.filter((f) => f.status !== "offline").length} online</h4>`), sn.friends.length || h.push('<div class="empty">No friends yet. Add someone by their username above.</div>');
+    for (const f of sn.friends) {
+      const canInvite = f.status !== "offline" && !f.inParty && (!pt || leader);
+      h.push(`<div class="row"><span class="dot ${f.status}"></span><span class="nm">${esc(f.name)}<small>${f.inParty ? "In your party" : status(f.status)}</small></span>${canInvite ? `<button class="btn" data-invite="${esc(f.name)}">Invite</button>` : ""}<button class="btn x" data-remove="${esc(f.name)}" title="Remove friend">${confirmRemove === f.name ? "Remove?" : "×"}</button></div>`);
+    }
+    sn.outgoing.length && (h.push("<h4>Sent requests</h4>"), sn.outgoing.forEach((nm) => h.push(`<div class="row"><span class="dot"></span><span class="nm">${esc(nm)}<small>Waiting for them to accept</small></span><button class="btn x" data-decline="${esc(nm)}" title="Cancel request">×</button></div>`))), list.innerHTML = h.join("");
+  }
+  panel.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    const d = b.dataset;
+    if ("close" in d) return ui.close();
+    if ("signin" in d) return ui.close(), vgAuthShow();
+    if ("leave" in d) return vgNetSend({ type: "party_leave" });
+    if (d.kick) return vgNetSend({ type: "party_kick", username: d.kick });
+    if (d.join) return vgNetSend({ type: "party_accept", partyId: d.join });
+    if (d.nojoin) return vgNetSend({ type: "party_decline", partyId: d.nojoin });
+    if (d.accept) return vgNetSend({ type: "friend_accept", username: d.accept });
+    if (d.decline) return vgNetSend({ type: "friend_decline", username: d.decline });
+    if (d.invite) return vgNetSend({ type: "party_invite", username: d.invite }), b.disabled = !0, b.textContent = "Invited";
+    if (d.remove) return confirmRemove === d.remove ? (confirmRemove = null, vgNetSend({ type: "friend_remove", username: d.remove })) : (confirmRemove = d.remove, render());
+  }), panel.querySelector("form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const nm = input.value.trim();
+    if (!nm) return;
+    if (!vgAuth.user) return msg.textContent = "Sign in first.";
+    vgNetSend({ type: "friend_add", username: nm }) ? (input.value = "", msg.textContent = "") : msg.textContent = "Not connected to the server yet. Try again in a moment.";
+  }), panel.addEventListener("keydown", (ev) => {
+    ev.stopPropagation(), ev.key === "Escape" && ui.close();
+  }), burger.addEventListener("click", (ev) => {
+    ev.stopPropagation(), ui.toggle();
+  }), window.addEventListener("keydown", (ev) => {
+    open && ev.key === "Escape" && (ui.close(), ev.preventDefault());
+  });
+  vgNet.listeners.push((m) => {
+    m.type === "social_error" ? (msg.textContent = m.message, panel.classList.contains("on") || vgToast(m.message)) : m.type === "social_note" && (vgToast(m.text), m.kind === "friend_request" || m.kind === "party_invite") && (burger.animate?.([{ transform: "scale(1)" }, { transform: "scale(1.15)" }, { transform: "scale(1)" }], { duration: 500, iterations: 2 })), (m.type === "social" || m.type === "_closed") && render(), opts.onMessage?.(m);
+  }), vgAuth.listeners.push(() => render()), render();
+  return ui;
+}
+/* Quit Game (menus): closes the desktop app, or the browser tab when the browser allows it. */
+var vgQuitCss = `
+.vg-quit { position: fixed; inset: 0; z-index: 410; display: grid; place-items: center; background: rgba(4,6,8,.7); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #e9ece6; }
+.vg-quit .card { width: min(380px, 90vw); padding: 26px 28px; background: rgba(12,15,17,.97); border: 1px solid rgba(236,240,234,.14); border-top: 3px solid #f2c14e; }
+.vg-quit h3 { margin: 0 0 8px; font-size: 20px; letter-spacing: .16em; text-transform: uppercase; }
+.vg-quit p { margin: 0 0 20px; color: #b9bfb8; font-size: 14px; line-height: 1.45; }
+.vg-quit .acts { display: flex; gap: 10px; }
+.vg-quit button { flex: 1; padding: 12px; border: 1px solid rgba(236,240,234,.24); background: rgba(255,255,255,.06); color: #e9ece6; font: 800 12px/1 inherit; letter-spacing: .18em; text-transform: uppercase; cursor: pointer; }
+.vg-quit button.pri { background: #f2c14e; border-color: #f2c14e; color: #111; }
+`;
+var vgQuitOpen = !1;
+function vgQuitAsk() {
+  if (vgQuitOpen) return;
+  if (!document.getElementById("vg-quit-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-quit-style", st.textContent = vgQuitCss, document.head.appendChild(st);
+  }
+  vgQuitOpen = !0;
+  const d = document.createElement("div");
+  d.className = "vg-quit", d.innerHTML = '<div class="card" role="dialog" aria-label="Quit"><h3>Quit Vangaurd?</h3><p>Your progress and loadouts are saved on this device.</p><div class="acts"><button type="button" class="pri" data-q>Quit game</button><button type="button" data-c>Cancel</button></div></div>', document.body.appendChild(d);
+  const close = () => {
+    vgQuitOpen = !1, d.remove(), window.removeEventListener("keydown", key, !0);
+  }, key = (ev) => {
+    ev.key === "Escape" ? (close(), ev.preventDefault(), ev.stopPropagation()) : ev.key === "Enter" && (go(), ev.preventDefault(), ev.stopPropagation());
+  }, go = () => {
+    if (window.vangaurdDesktop?.quit) return window.vangaurdDesktop.quit();
+    try {
+      window.close();
+    } catch {
+    }
+    setTimeout(() => {
+      d.isConnected && (d.querySelector("p").textContent = "Your browser keeps this tab open. Close the tab to quit.", d.querySelector("[data-q]").remove());
+    }, 400);
+  };
+  d.querySelector("[data-q]").addEventListener("click", go), d.querySelector("[data-c]").addEventListener("click", close), window.addEventListener("keydown", key, !0), d.querySelector("[data-q]").focus();
+}
 /* ------------------------------------------------------------------ accounts (sign in before the main menu) */
 // Usernames and passwords live on the Vangaurd server; the game only keeps a sign-in token on this device
 // ("Stay signed in"). A username that is taken can only be used by signing in to that account.
@@ -51660,7 +51926,7 @@ function vgAuthSet(user, token, remember) {
     !user && sessionStorage.removeItem(VG_AUTH_KEY);
   } catch {
   }
-  user && oJ(user);
+  user && oJ(user), user && token ? (vgNet.stopped = !1, vgNetStart()) : vgNetStop();
   for (const el of document.querySelectorAll(".vg-who")) el.textContent = user ? `● ${user}` : "Offline";
   for (const f of vgAuth.listeners) try {
     f(vgAuth);
@@ -52330,7 +52596,7 @@ function cJ(A) {
   NA("div", "od-scrim", n), NA("div", "od-scan", n);
   const o = NA("div", "od-title", n);
   NA("div", "emb", o, R2), NA("div", "op", o).textContent = "Vangaurd", NA("h1", "", o, "<span>VANGAURD</span>"), NA("div", "sub", o).textContent = "Choose your deployment";
-  const r = NA("div", "od-menu od-entry-menu", n), c = [de(r, "Singleplayer", "Play immediately against AI", se), de(r, "Multiplayer", "Open the deployment menu, then queue for a match", Qe)], l = NA("div", "od-foot", n);
+  const r = NA("div", "od-menu od-entry-menu", n), c = [de(r, "Singleplayer", "Play immediately against AI", se), de(r, "Multiplayer", "Open the deployment menu, then queue for a match", Qe), de(r, "Quit Game", "Close Vangaurd", vgQuitAsk)], l = NA("div", "od-foot", n);
   l.innerHTML = `<span class="hint"><span class="od-key">↑↓</span>Navigate</span><span class="hint"><span class="od-key">ENTER</span>Select</span><span class="sp"></span><span class="vg-who"></span><span class="ver">${VGD.text}</span>`;
   const g = s("loading", "od-loading");
   NA("div", "od-scrim dark", g);
@@ -52343,6 +52609,20 @@ function cJ(A) {
   const u = s("main", "od-main");
   NA("div", "od-scrim", u), NA("div", "od-scan", u);
   const Q = NA("div", "od-title", u);
+  const vgFr = typeof document < "u" ? vgFriendsMount(u, {
+    onMessage(m) {
+      if (m.type === "party_queue") {
+        if (F.multiplayerMatch || F.waitingForPlayers) return;
+        F.screen === "entry" || F.screen === "main" ? (vgToast(`${m.leader} is starting a match. Joining your party…`), F.sessionType !== "multiplayer" && Qe(), setTimeout(() => {
+          F.multiplayerMatch || F.waitingForPlayers || ye();
+        }, 400)) : vgToast(`${m.leader} is queueing for a match. Open Multiplayer to join them.`);
+      } else m.type === "party_cancel" && F.waitingForPlayers && !F.multiplayerMatch && (vgToast(`${m.leader} cancelled the queue.`), ye());
+    }
+  }) : null, vgLobNet = NA("div", "vg-lobnet", u);
+  typeof window < "u" && setInterval(() => {
+    const on = F.sessionType === "multiplayer" && !!vgAuth.user, st = vgNetStats();
+    vgLobNet.style.display = on ? "" : "none", on && (vgLobNet.innerHTML = st.open ? `<span class="${st.ping == null ? "" : st.ping < 70 ? "g" : st.ping < 130 ? "y" : "r"}">●</span> PING ${st.ping == null ? "--" : Math.round(st.ping)} ms · LOSS ${st.loss.toFixed(0)}%` : '<span class="r">●</span> Connecting…');
+  }, 1e3);
   NA("div", "emb", Q, R2), NA("div", "op", Q).textContent = "Vangaurd", NA("h1", "", Q, "<span>VANGAURD</span>"), NA("div", "sub", Q).textContent = "";
   const d = NA("div", "od-menu", u), f = [
     [
@@ -52385,7 +52665,8 @@ function cJ(A) {
       F.armoryPage !== "armory" && (F.armoryPage = "level"), F.armoryFrom = "main", z(), tt("armory");
     }),
     de(d, "Settings", "Graphics, mouse, audio and interface", () => Ct("graphics")),
-    de(d, "Back", "Return to deployment selection", () => tt("entry"))
+    de(d, "Back", "Return to deployment selection", () => tt("entry")),
+    de(d, "Quit Game", "Close Vangaurd", vgQuitAsk)
   ], C = NA("div", "od-card", u), y = NA("div", "od-card-head", C), w = NA("div", "k", y), m = NA("div", "t", C), D = NA("div", "p", C), M = NA("div", "map", C), x = NA("canvas", "", M), S = NA("div", "stats", C), U = NA("div", "od-mp-status", u);
   U.setAttribute("role", "status"), U.setAttribute("aria-live", "polite");
   const G = NA("div", "", U), P = NA("button", "od-btn", U);
@@ -53229,7 +53510,7 @@ function cJ(A) {
     F.screen === "replay" && (F.killReplaySkipped = !0, e.services.player.state.alive === !1 ? tt("death") : (A.mode = "play", ni(), e.input.locked || A.requestResume()));
   }
   const th = (yA) => {
-    if (F.screen === "none" || e.flags.shotMode || vgAuth.open) return;
+    if (F.screen === "none" || e.flags.shotMode || vgAuth.open || vgQuitOpen || vgFr?.open) return;
     const tgt = yA.target;
     if (tgt && tgt !== document.body && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable) && yA.code !== "Escape") return;
     if (F.screen === "main" && Y.classList.contains("on")) {

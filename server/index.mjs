@@ -20,7 +20,7 @@ const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
 };
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 // ---------- client version gate ----------
 // Only the newest game build may play online. The newest build number is read from the
 // version.json attached to the latest GitHub release (refreshed every 5 minutes).
@@ -28,7 +28,7 @@ const VERSION = '2.3.0';
 const GATE = String(process.env.VERSION_GATE || 'on').toLowerCase() !== 'off';
 const LATEST_URL = process.env.LATEST_VERSION_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest/download/version.json';
 const RELEASE_PAGE = process.env.RELEASE_PAGE_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest';
-const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 0.9', checkedAt: 0, source: 'env' };
+const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 0.91', checkedAt: 0, source: 'env' };
 async function refreshLatest() {
   if (!GATE || String(process.env.LATEST_VERSION_URL || '').toLowerCase() === 'off') return;
   try {
@@ -126,6 +126,7 @@ function authOk(c, u, token, created = false) {
   c.account = u.name;
   c.name = u.name;
   send(c, { type: 'auth_ok', username: u.name, token, created });
+  goOnline(c);
 }
 function authError(c, code, message) { send(c, { type: 'auth_error', code, message }); }
 async function onRegister(c, msg) {
@@ -164,8 +165,218 @@ function onResume(c, msg) {
 }
 function onLogout(c, msg) {
   if (typeof msg.token === 'string') { delete accounts.sessions[sha(msg.token)]; saveAccounts(); }
+  goOffline(c);
   c.account = null;
   send(c, { type: 'logged_out' });
+}
+
+// ---------- friends, presence and parties ----------
+// Friends are stored with the accounts. Presence and parties live in memory: a party is a group of
+// signed-in friends that queue together and are put on the same team.
+const MAX_PARTY = 6;
+const online = new Map(); // account key -> Set of client connections
+const parties = new Map(); // party id -> { id, leader, members: [keys], invites: Set(keys) }
+const partyOf = new Map(); // account key -> party id
+const keyOf = (name) => String(name || '').trim().toLowerCase();
+const userOf = (key) => accounts.users[key] || null;
+const nameOf = (key) => accounts.users[key]?.name || key;
+function social(u) {
+  u.friends ||= []; u.incoming ||= []; u.outgoing ||= [];
+  return u;
+}
+function statusOf(key) {
+  const set = online.get(key);
+  if (!set || !set.size) return 'offline';
+  let st = 'online';
+  for (const c of set) { if (c.matchId) return 'match'; if (c.queuedMode) st = 'searching'; }
+  return st;
+}
+function sendTo(key, msg) {
+  const set = online.get(key);
+  if (set) for (const c of set) send(c, msg);
+}
+function note(key, text, extra = {}) { sendTo(key, { type: 'social_note', text, ...extra }); }
+function partyView(pid) {
+  const pt = parties.get(pid);
+  if (!pt) return null;
+  return { id: pt.id, leader: nameOf(pt.leader), members: pt.members.map((k) => ({ name: nameOf(k), status: statusOf(k), leader: k === pt.leader })) };
+}
+function socialSnapshot(key) {
+  const u = userOf(key);
+  if (!u) return null;
+  social(u);
+  const invites = [];
+  for (const pt of parties.values()) if (pt.invites.has(key)) invites.push({ partyId: pt.id, from: nameOf(pt.leader), size: pt.members.length });
+  return {
+    type: 'social', me: u.name,
+    friends: u.friends.map((k) => ({ name: nameOf(k), status: statusOf(k), inParty: partyOf.get(k) != null && partyOf.get(k) === partyOf.get(key) })).sort((a, b) => (a.status === 'offline') - (b.status === 'offline') || a.name.localeCompare(b.name)),
+    incoming: u.incoming.map(nameOf), outgoing: u.outgoing.map(nameOf), party: partyView(partyOf.get(key)), invites,
+  };
+}
+function pushSocial(key) { const snap = socialSnapshot(key); if (snap) sendTo(key, snap); }
+// Tell everyone who can see this account (friends and party) that something changed.
+function pushAround(key) {
+  pushSocial(key);
+  const u = userOf(key);
+  for (const f of u?.friends || []) pushSocial(f);
+  const pt = parties.get(partyOf.get(key));
+  if (pt) for (const m of pt.members) if (m !== key) pushSocial(m);
+}
+function goOnline(c) {
+  const key = keyOf(c.account);
+  if (!key) return;
+  let set = online.get(key);
+  if (!set) online.set(key, set = new Set());
+  const was = set.size > 0;
+  set.add(c);
+  c.accountKey = key;
+  if (!was) pushAround(key); else pushSocial(key);
+}
+function goOffline(c) {
+  const key = c.accountKey;
+  if (!key) return;
+  const set = online.get(key);
+  if (!set) return;
+  set.delete(c);
+  if (!set.size) {
+    online.delete(key);
+    // An offline player leaves their party after a short grace period (reconnects keep it).
+    setTimeout(() => { if (!online.get(key)?.size && partyOf.has(key)) leaveParty(key); }, 60000);
+    pushAround(key);
+  }
+}
+function socialError(c, message) { send(c, { type: 'social_error', message }); }
+function friendAdd(c, msg) {
+  const me = keyOf(c.account), them = keyOf(msg.username);
+  const u = userOf(me), t = userOf(them);
+  if (!u) return;
+  if (!t) return socialError(c, `There is no player called ${String(msg.username || '').slice(0, 16)}.`);
+  if (them === me) return socialError(c, "You can't add yourself.");
+  social(u); social(t);
+  if (u.friends.includes(them)) return socialError(c, `${t.name} is already your friend.`);
+  if (u.incoming.includes(them)) return friendAccept(c, { username: t.name });
+  if (u.outgoing.includes(them)) return socialError(c, `You already sent ${t.name} a friend request.`);
+  if (u.friends.length >= 200) return socialError(c, 'Your friends list is full (200).');
+  u.outgoing.push(them); t.incoming.push(me);
+  saveAccounts();
+  note(them, `${u.name} sent you a friend request`, { kind: 'friend_request', from: u.name });
+  pushSocial(me); pushSocial(them);
+}
+function friendAccept(c, msg) {
+  const me = keyOf(c.account), them = keyOf(msg.username);
+  const u = userOf(me), t = userOf(them);
+  if (!u || !t) return;
+  social(u); social(t);
+  if (!u.incoming.includes(them)) return socialError(c, 'That friend request is no longer open.');
+  u.incoming = u.incoming.filter((k) => k !== them); t.outgoing = t.outgoing.filter((k) => k !== me);
+  if (!u.friends.includes(them)) u.friends.push(them);
+  if (!t.friends.includes(me)) t.friends.push(me);
+  saveAccounts();
+  note(them, `${u.name} accepted your friend request`, { kind: 'friend_accepted', from: u.name });
+  pushSocial(me); pushSocial(them);
+}
+function friendDecline(c, msg) {
+  const me = keyOf(c.account), them = keyOf(msg.username);
+  const u = userOf(me), t = userOf(them);
+  if (!u) return;
+  social(u);
+  u.incoming = u.incoming.filter((k) => k !== them); u.outgoing = u.outgoing.filter((k) => k !== them);
+  if (t) { social(t); t.outgoing = t.outgoing.filter((k) => k !== me); t.incoming = t.incoming.filter((k) => k !== me); }
+  saveAccounts();
+  pushSocial(me); if (t) pushSocial(them);
+}
+function friendRemove(c, msg) {
+  const me = keyOf(c.account), them = keyOf(msg.username);
+  const u = userOf(me), t = userOf(them);
+  if (!u) return;
+  social(u);
+  u.friends = u.friends.filter((k) => k !== them);
+  if (t) { social(t); t.friends = t.friends.filter((k) => k !== me); }
+  saveAccounts();
+  pushSocial(me); if (t) pushSocial(them);
+}
+function leaveParty(key) {
+  const pid = partyOf.get(key);
+  const pt = parties.get(pid);
+  partyOf.delete(key);
+  if (!pt) return;
+  pt.members = pt.members.filter((k) => k !== key);
+  if (pt.members.length <= 1) {
+    for (const k of pt.members) { partyOf.delete(k); note(k, 'Your party was disbanded', { kind: 'party' }); pushSocial(k); }
+    for (const k of pt.invites) pushSocial(k);
+    parties.delete(pid);
+  } else {
+    if (pt.leader === key) pt.leader = pt.members[0];
+    for (const k of pt.members) { note(k, `${nameOf(key)} left the party`, { kind: 'party' }); pushSocial(k); }
+  }
+  pushAround(key);
+}
+function partyInvite(c, msg) {
+  const me = keyOf(c.account), them = keyOf(msg.username);
+  const u = userOf(me), t = userOf(them);
+  if (!u || !t) return socialError(c, 'That player does not exist.');
+  social(u);
+  if (!u.friends.includes(them)) return socialError(c, `Add ${t.name} as a friend first.`);
+  if (statusOf(them) === 'offline') return socialError(c, `${t.name} is offline.`);
+  let pid = partyOf.get(me), pt = parties.get(pid);
+  if (pt && pt.leader !== me) return socialError(c, 'Only the party leader can invite players.');
+  if (pt && pt.members.includes(them)) return socialError(c, `${t.name} is already in your party.`);
+  if (!pt) {
+    pid = newId('party');
+    pt = { id: pid, leader: me, members: [me], invites: new Set() };
+    parties.set(pid, pt); partyOf.set(me, pid);
+  }
+  if (pt.members.length + pt.invites.size >= MAX_PARTY) return socialError(c, `Parties hold up to ${MAX_PARTY} players.`);
+  pt.invites.add(them);
+  note(them, `${u.name} invited you to their party`, { kind: 'party_invite', from: u.name, partyId: pid });
+  pushSocial(me); pushSocial(them);
+}
+function partyAccept(c, msg) {
+  const me = keyOf(c.account), pt = parties.get(String(msg.partyId || ''));
+  if (!pt || !pt.invites.has(me)) { socialError(c, 'That party invite has expired.'); return pushSocial(me); }
+  if (pt.members.length >= MAX_PARTY) return socialError(c, 'That party is full.');
+  if (partyOf.has(me) && partyOf.get(me) !== pt.id) leaveParty(me);
+  pt.invites.delete(me);
+  pt.members.push(me); partyOf.set(me, pt.id);
+  for (const k of pt.members) { if (k !== me) note(k, `${nameOf(me)} joined the party`, { kind: 'party' }); pushSocial(k); }
+  pushAround(me);
+}
+function partyDecline(c, msg) {
+  const me = keyOf(c.account), pt = parties.get(String(msg.partyId || ''));
+  if (pt) {
+    pt.invites.delete(me);
+    if (pt.members.length <= 1 && !pt.invites.size) { for (const k of pt.members) partyOf.delete(k); parties.delete(pt.id); }
+    for (const k of pt.members) pushSocial(k);
+  }
+  pushSocial(me);
+}
+function partyKick(c, msg) {
+  const me = keyOf(c.account), them = keyOf(msg.username), pt = parties.get(partyOf.get(me));
+  if (!pt || pt.leader !== me || !pt.members.includes(them) || them === me) return;
+  note(them, 'You were removed from the party', { kind: 'party' });
+  leaveParty(them);
+}
+// The leader queued: bring the rest of the party along.
+function partyFollow(c, mode) {
+  const me = keyOf(c.account), pt = parties.get(partyOf.get(me));
+  if (!pt || pt.leader !== me) return;
+  for (const k of pt.members) if (k !== me && statusOf(k) !== 'match') sendTo(k, { type: 'party_queue', mode, leader: nameOf(me) });
+}
+function handleSocial(c, msg) {
+  if (!c.account) return socialError(c, 'Sign in to use friends and parties.');
+  switch (msg.type) {
+    case 'social_state': pushSocial(keyOf(c.account)); break;
+    case 'friend_add': friendAdd(c, msg); break;
+    case 'friend_accept': friendAccept(c, msg); break;
+    case 'friend_decline': friendDecline(c, msg); break;
+    case 'friend_remove': friendRemove(c, msg); break;
+    case 'party_invite': partyInvite(c, msg); break;
+    case 'party_accept': partyAccept(c, msg); break;
+    case 'party_decline': partyDecline(c, msg); break;
+    case 'party_leave': leaveParty(keyOf(c.account)); break;
+    case 'party_kick': partyKick(c, msg); break;
+    default: break;
+  }
 }
 
 const clients = new Map(); // id -> client
@@ -282,7 +493,17 @@ function checkQueue(mode) {
   }
   queueStatus(mode);
 }
-function openMatchFor(mode) {
+function openMatchFor(mode, c = null) {
+  // A party member goes to the match their party is already playing, if it has room.
+  const pid = c?.accountKey ? partyOf.get(c.accountKey) : null;
+  if (pid) {
+    for (const k of parties.get(pid)?.members || []) {
+      for (const pc of online.get(k) || []) {
+        const m = pc.matchId && matches.get(pc.matchId);
+        if (m && !m.ended && m.mode === mode && m.players.size < MAX_PLAYERS) return m;
+      }
+    }
+  }
   let best = null;
   for (const m of matches.values()) {
     if (m.mode !== mode || m.ended || m.players.size >= MAX_PLAYERS || m.players.size === 0) continue;
@@ -292,7 +513,7 @@ function openMatchFor(mode) {
 }
 function joinQueue(c, msg) {
   if (clientOutdated(c, msg)) return;
-  if (!c.account && msg.token) { const u = sessionUser(msg.token); if (u) { c.account = u.name; } }
+  if (!c.account && msg.token) { const u = sessionUser(msg.token); if (u) { c.account = u.name; goOnline(c); } }
   if (!c.account) {
     send(c, { type: 'error', code: 'login_required', message: 'Sign in to your Vangaurd account to play online.' });
     return;
@@ -301,16 +522,29 @@ function joinQueue(c, msg) {
   removeFromQueue(c);
   c.name = c.account;
   const mode = modeOf(msg.mode);
-  const open = openMatchFor(mode);
-  if (open) { addToMatch(open, c, true); return; }
+  partyFollow(c, mode);
+  const open = openMatchFor(mode, c);
+  if (open) { addToMatch(open, c, true); if (c.accountKey) pushAround(c.accountKey); return; }
   queues[mode].push(c.id);
   c.queuedMode = mode;
+  if (c.accountKey) pushAround(c.accountKey);
   checkQueue(mode);
 }
 
 // ---------- matches ----------
-function pickTeam(match) {
+function pickTeam(match, c = null) {
   if (match.ffa) return 'ffa';
+  const pid = c?.accountKey ? partyOf.get(c.accountKey) : null;
+  if (pid) {
+    for (const p of match.players.values()) {
+      const pc = clients.get(p.id);
+      if (pc && pc.accountKey && partyOf.get(pc.accountKey) === pid) {
+        let n = 0;
+        for (const q of match.players.values()) if (q.team === p.team) n++;
+        if (n < Math.ceil(MAX_PLAYERS / 2)) return p.team;
+      }
+    }
+  }
   let a = 0, b = 0;
   for (const p of match.players.values()) p.team === 'alpha' ? a++ : b++;
   return a <= b ? 'alpha' : 'bravo';
@@ -333,6 +567,7 @@ function startMatch(mode) {
     addToMatch(match, c, false);
   }
   for (const id of match.players.keys()) sendMatchFound(match, clients.get(id));
+  for (const id of match.players.keys()) { const pc = clients.get(id); if (pc?.accountKey) pushAround(pc.accountKey); }
   queueStatus(mode);
   log(`match ${match.id} (${mode}) started with ${match.players.size} player(s)`);
 }
@@ -350,7 +585,7 @@ function sendMatchFound(match, c) {
 }
 function addToMatch(match, c, inProgress) {
   removeFromQueue(c);
-  const p = { id: c.id, name: c.name, team: pickTeam(match), health: 100, alive: true, kills: 0, deaths: 0, score: 0, state: null, pos: null, joinedAt: now(), spawnedAt: now() + (match.phase === 'vote' ? LOAD_GRACE_MS : 0), diedAt: 0 };
+  const p = { id: c.id, name: c.name, team: pickTeam(match, c), health: 100, alive: true, kills: 0, deaths: 0, score: 0, state: null, pos: null, joinedAt: now(), spawnedAt: now() + (match.phase === 'vote' ? LOAD_GRACE_MS : 0), diedAt: 0 };
   match.players.set(c.id, p);
   c.matchId = match.id;
   if (inProgress) {
@@ -364,6 +599,7 @@ function addToMatch(match, c, inProgress) {
 function leaveMatch(c, notify = true) {
   const match = matches.get(c.matchId);
   c.matchId = null;
+  if (c.accountKey) setTimeout(() => pushAround(c.accountKey), 0);
   if (!match) return;
   match.players.delete(c.id);
   if (notify) send(c, { type: 'match_left', matchId: match.id });
@@ -487,7 +723,7 @@ function onMark(c, msg) {
   c.lastMark = t;
   const x = num(msg.x, NaN), y = num(msg.y, NaN), z = num(msg.z, NaN);
   if (![x, y, z].every(Number.isFinite)) return;
-  const kind = msg.kind === 'enemy' ? 'enemy' : 'spot';
+  const kind = msg.kind === 'enemy' ? 'enemy' : msg.kind === 'remove' ? 'remove' : 'spot';
   const targetId = typeof msg.targetId === 'string' && match.players.has(msg.targetId) ? msg.targetId : null;
   const out = { type: 'mark', matchId: match.id, playerId: p.id, name: p.name, team: p.team, kind, x, y, z, id: typeof msg.id === 'string' ? msg.id.slice(0, 24) : null, targetId };
   for (const q of match.players.values()) if (q.id !== p.id && (match.ffa ? false : q.team === p.team)) send(clients.get(q.id), out);
@@ -498,7 +734,13 @@ function handle(c, raw) {
   if (!msg || typeof msg !== 'object') return;
   switch (msg.type) {
     case 'join_queue': joinQueue(c, msg); break;
-    case 'cancel_queue': removeFromQueue(c); send(c, { type: 'queue_cancelled' }); break;
+    case 'cancel_queue': {
+      removeFromQueue(c); send(c, { type: 'queue_cancelled' });
+      const pt = c.accountKey && parties.get(partyOf.get(c.accountKey));
+      if (pt && pt.leader === c.accountKey) for (const k of pt.members) if (k !== c.accountKey) sendTo(k, { type: 'party_cancel', leader: nameOf(c.accountKey) });
+      if (c.accountKey) pushAround(c.accountKey);
+      break;
+    }
     case 'leave_match': leaveMatch(c, true); break;
     case 'player_state': onState(c, msg); break;
     case 'player_hit': onHit(c, msg); break;
@@ -521,6 +763,9 @@ function handle(c, raw) {
     case 'register': onRegister(c, msg).catch((e) => { log(`register error: ${e.message}`); authError(c, 'server', 'The server could not create the account. Try again.'); }); break;
     case 'login': onLogin(c, msg).catch((e) => { log(`login error: ${e.message}`); authError(c, 'server', 'The server could not sign you in. Try again.'); }); break;
     case 'resume': onResume(c, msg); break;
+    case 'social_state': case 'friend_add': case 'friend_accept': case 'friend_decline': case 'friend_remove':
+    case 'party_invite': case 'party_accept': case 'party_decline': case 'party_leave': case 'party_kick':
+      handleSocial(c, msg); break;
     case 'logout': onLogout(c, msg); break;
     default: break;
   }
@@ -551,7 +796,7 @@ const server = http.createServer((req, res) => {
       ok: true, service: 'vangaurd-matchmaking', version: VERSION,
       queued: queues.tdm.length + queues.kc.length, queuedByMode: { tdm: queues.tdm.length, kc: queues.kc.length },
       matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, matches: matches.size, playersInMatches: players, connected: clients.size,
-      maps: MAPS, mapVoteSeconds: VOTE_S, versionGate: GATE, accounts: Object.keys(accounts.users).length, accountsPersistent: !!process.env.DATA_DIR, minClientBuild: latest.build, latestLabel: latest.label, latestSource: latest.source, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
+      maps: MAPS, mapVoteSeconds: VOTE_S, versionGate: GATE, accounts: Object.keys(accounts.users).length, online: online.size, parties: parties.size, accountsPersistent: !!process.env.DATA_DIR, minClientBuild: latest.build, latestLabel: latest.label, latestSource: latest.source, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
     });
     res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' });
     res.end(body);
@@ -577,6 +822,7 @@ wss.on('connection', (ws, req) => {
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('message', (data) => handle(c, data.toString()));
   ws.on('close', () => {
+    goOffline(c);
     removeFromQueue(c);
     if (c.matchId) leaveMatch(c, false);
     clients.delete(c.id);

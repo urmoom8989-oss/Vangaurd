@@ -1,6 +1,6 @@
-# Vangaurd matchmaking server 2.3
+# Vangaurd matchmaking server 2.4
 
-This is the online server for Vangaurd Beta 0.9. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
+This is the online server for Vangaurd Beta 0.91. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
 
 What it does:
 
@@ -11,6 +11,7 @@ What it does:
 - **Only the newest game build can play online.** The game sends its build number when it queues. The server reads the newest build from `version.json` on the latest GitHub release (every 5 minutes) and turns older builds away with an "update to play online" message. Builds from before Beta 0.9 send no build number and are always turned away.
 - **Ping marks** (middle mouse in the game) are relayed to the player's teammates.
 - **Accounts.** The game asks players to sign in (or create an account) before the main menu. Usernames are unique (case-insensitive): a taken name can only be used by signing in to that account, and online play needs a signed-in account (the in-match name is always the account name). Passwords are stored only as salted scrypt hashes; the game keeps a sign-in token, never the password. Ten failed attempts from one address pause sign-in for ten minutes.
+- **Friends and parties.** Players add friends by username (requests are accepted or declined), see who is online, searching or in a match, and invite online friends to a party of up to 6. When the party leader queues, the others are brought into the same match on the same team. Friends are saved with the accounts; parties last while their members are online.
 
 This build of the game needs this server for online play. An older server still runs matches, but there is no map vote and Kill Confirmed stays team-based.
 
@@ -22,7 +23,7 @@ The game points at `https://opus-of-duty-production-f963.up.railway.app` by defa
 
 ## Check that it worked
 
-Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.3.0"`, `"accountsPersistent":true`, `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
+Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.4.0"`, `"accountsPersistent":true`, `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
 
 ## Optional settings
 

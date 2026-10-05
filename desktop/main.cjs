@@ -86,6 +86,7 @@ ipcMain.handle('vangaurd:check-update', async (event, reason) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   try { return updater ? await updater.check(win, String(reason || 'manual')) : { error: 'not ready' }; } catch (e) { log(`Update check error: ${e?.message || e}`); return { error: String(e?.message || e) }; }
 });
+ipcMain.handle('vangaurd:quit', () => { log('Quit from the game menu'); setTimeout(() => app.quit(), 50); return true; });
 ipcMain.handle('vangaurd:app-info', () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch }));
 
 function log(message) {
