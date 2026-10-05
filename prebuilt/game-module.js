@@ -32294,7 +32294,7 @@ var sa, Mo, vh, Cs, vn, xo, Us, Sh, _S, dy, rE, cE, JS, lE, VS, LH, n_ = YA((() 
     }
     spawn({ position: A, yaw: e = 0, loadout: t = "rifle", behavior: i = {}, team: a = "enemy", t: s = 0 }) {
       const n = this.sys;
-      this.rng = this.ctx.rng.fork(`ai-agent-${this.id}`), this.active = !0, this.alive = !0, this.state = "idle", this.team = a, this.targetAgent = null, this.targetIsPlayer = !1, this.loadoutName = jb[t] ? t : "rifle", this.loadout = jb[this.loadoutName], this.weaponId = this.loadout.weaponId, this.behavior = i || {}, this.role = this.behavior.role || (this.loadoutName === "shotgun" ? "rush" : "assault"), this.accuracy = vs(this.behavior.accuracy ?? 0.8, 0.2, 1.5), this.aggression = vs(this.behavior.aggression ?? 0.6, 0.05, 1.3), this.objective = this.behavior.objective ? new b().copy(this.behavior.objective) : null, this.maxHealth = this.behavior.health ?? wt.health, this.health = this.maxHealth, this.position.copy(A), this.position.y = n.wq.ground(A.x, A.z, A.y + 1.5, A.y), this.prevPos.copy(this.position), this.velocity.set(0, 0, 0), this.bodyYaw = this.aimYaw = e, this.aimPitch = 0, this.crouch = 0, this.lean = 0, this.weaponMode = "patrol", this.mode = "relaxed", this.tac = "idle", this.awareness = 0, this.tgtVisible = !1, this.visTime = 0, this.knowT = this.seenT = this.heardT = this.lastDamageT = -1e9, this.suppression = 0, this.cover = null, this.peek = null, this.hasGoal = !1, this.path = null, this.relocating = !1, this.ammo = this.loadout.mag, this.burstLeft = 0, this.pauseUntil = 0, this.nextShotT = 0, this.reloadEndT = -1, this.grenades = this.loadout.grenades, this.fireMode = "none", this.shots = 0, this.phase0 = this.rng.next() * 100, this.perceiveAt = s + this.rng.next() * wt.perceiveEvery, this.thinkAt = s + this.rng.next() * wt.thinkEvery, this.patrolT = s + 1 + this.rng.next() * 3, this.hasLook = !1, this.puppet = null, this.ragdoll.active = !1, this.body.mesh.visible = !0, this.body.mesh.position.set(0, 0, 0), this.sinkOffset = 0, this.sinkT = 0, this.body.group.visible = !0, this.body.group.position.copy(this.position), this.name = this.behavior.name || `Vanguard ${this.id}`;
+      this.rng = this.ctx.rng.fork(`ai-agent-${this.id}`), this.active = !0, this.alive = !0, this.state = "idle", this.team = a, this.targetAgent = null, this.targetIsPlayer = !1, this.loadoutName = jb[t] ? t : "rifle", this.loadout = jb[this.loadoutName], this.weaponId = this.loadout.weaponId, this.behavior = i || {}, this.role = this.behavior.role || (this.loadoutName === "shotgun" ? "rush" : "assault"), this.accuracy = vs(this.behavior.accuracy ?? 0.8, 0.2, 1.5), this.aggression = vs(this.behavior.aggression ?? 0.6, 0.05, 1.3), this.objective = this.behavior.objective ? new b().copy(this.behavior.objective) : null, this.maxHealth = this.behavior.health ?? wt.health, this.health = this.maxHealth, this.position.copy(A), this.position.y = n.wq.ground(A.x, A.z, A.y + 1.5, A.y), this.prevPos.copy(this.position), this.velocity.set(0, 0, 0), this.bodyYaw = this.aimYaw = e, this.aimPitch = 0, this.crouch = 0, this.lean = 0, this.weaponMode = "patrol", this.mode = "relaxed", this.tac = "idle", this.awareness = 0, this.tgtVisible = !1, this.visTime = 0, this.knowT = this.seenT = this.heardT = this.lastDamageT = -1e9, this.suppression = 0, this.cover = null, this.peek = null, this.hasGoal = !1, this.path = null, this.relocating = !1, this.ammo = this.loadout.mag, this.burstLeft = 0, this.pauseUntil = 0, this.nextShotT = 0, this.reloadEndT = -1, this.grenades = this.loadout.grenades, this.fireMode = "none", this.shots = 0, this.phase0 = this.rng.next() * 100, this.perceiveAt = s + this.rng.next() * wt.perceiveEvery, this.thinkAt = s + this.rng.next() * wt.thinkEvery, this.patrolT = s + 1 + this.rng.next() * 3, this.hasLook = !1, this.puppet = null, this.ragdoll.active = !1, this.body.mesh.visible = !0, this.body.mesh.position.set(0, 0, 0), this.sinkOffset = 0, this.sinkT = 0, this.body.group.visible = !0, this.body.group.position.copy(this.position), this.name = this.behavior.name || vgBotName();
       const o = this.anim.in;
       o.pos.copy(this.position), o.vel.set(0, 0, 0), o.bodyYaw = e, o.aimYaw = e, o.aimPitch = 0, o.crouch = 0, o.weapon = "patrol", o.lean = 0, o.headYaw = null, this.anim.initialized = !1, this.anim.reloadT = -1, this.anim.throwT = -1, this.anim.update(1 / 60, s), this.prevPose.copy(this.body.pose), this.syncBody(), this.damageable = this.ctx.services.combat.registerDamageable({
         object: this.object,
@@ -45922,7 +45922,7 @@ function T9(A) {
     const Ne = $A.groundHeight(de.x, de.z, de.y + 4);
     Number.isFinite(Ne) && (de.y = Ne);
     const ke = se % 4 === 3 ? "smg" : "rifle", Ye = {
-      name: O.ffa ? Qe : `${Qe} ${se + 1}`,
+      name: O.ffa ? Qe : O.name || (O.name = vgBotName()),
       target: "match",
       objective: KA,
       squad: `match:${he}:${se}`,
@@ -46493,11 +46493,14 @@ function T9(A) {
     fA.final = r.lives <= 0, fA.killer = "", fA.distance = 0;
     const DA = O?.source;
     if (typeof DA == "string" && DA.startsWith("ai")) {
+      // killed by: the bot's callsign (any mode), with its distance
       let UA = "Crimson Vanguard";
-      for (const $A of g) {
+      const byAg = (Z().ai?.agents || []).find((KA) => KA.key === DA);
+      byAg && (UA = byAg.name || UA, byAg.position && (fA.distance = byAg.position.distanceTo(Z().player.state.position)));
+      if (!byAg) for (const $A of g) {
         const KA = $A.agent;
         if (DA === `ai:${KA.id}`) {
-          UA = `Vanguard ${$A.meta?.role?.label || "Rifleman"}`, KA.position && (fA.distance = KA.position.distanceTo(Z().player.state.position));
+          UA = KA.name || `Vanguard ${$A.meta?.role?.label || "Rifleman"}`, KA.position && (fA.distance = KA.position.distanceTo(Z().player.state.position));
           break;
         }
       }
@@ -47427,6 +47430,67 @@ var Jo, x2, C3, jh, m3, w3, bp, y3, b3, D3, v2, M3, Y9 = YA((() => {
 .od-toast { position: absolute; left: 50%; top: calc(50% - var(--u) * 150); transform: translateX(-50%); white-space: nowrap; font-size: calc(var(--u) * 16); font-weight: 600;
   letter-spacing: .12em; text-transform: uppercase; text-shadow: var(--ts); will-change: opacity; }
 .od-toast.warn { color: var(--warn); }
+
+/* ============================================================ eliminated (bottom centre) */
+.od-elim { position: absolute; left: 50%; bottom: calc(var(--u) * 168); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 4); pointer-events: none; }
+.od-elim .ln { display: flex; align-items: baseline; gap: calc(var(--u) * 10); white-space: nowrap; text-shadow: var(--ts); animation: odElimIn .24s cubic-bezier(.2,1.5,.4,1) both; }
+.od-elim .ln.out { animation: odElimOut .45s ease-in both; }
+.od-elim .k { font-size: calc(var(--u) * 14); font-weight: 700; letter-spacing: .26em; text-transform: uppercase; color: var(--fg2); }
+.od-elim .n { font-size: calc(var(--u) * 24); font-weight: 700; letter-spacing: .05em; color: var(--enemy); }
+.od-elim .h { font-size: calc(var(--u) * 11); font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); }
+@keyframes odElimIn { from { opacity: 0; transform: translateY(calc(var(--u) * 10)) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes odElimOut { to { opacity: 0; transform: translateY(calc(var(--u) * -6)); } }
+
+/* ================================================================== level up */
+.od-lvup { position: absolute; left: 50%; top: calc(var(--u) * 92); transform: translateX(-50%); display: flex; align-items: center; gap: calc(var(--u) * 26); pointer-events: none; z-index: 5;
+  animation: odLvOut .6s ease-in 4.4s both; }
+.od-lvup::before { content: ''; position: absolute; left: calc(var(--u) * -70); right: calc(var(--u) * -90); top: calc(var(--u) * -24); bottom: calc(var(--u) * -24); z-index: -1;
+  background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(4,6,8,.6), rgba(4,6,8,.24) 60%, rgba(4,6,8,0) 100%); animation: odLvFade .5s ease-out both; }
+.od-lvup .fx { position: relative; width: calc(var(--u) * 120); height: calc(var(--u) * 132); flex: none; }
+.od-lvup .fx > * { position: absolute; left: 50%; top: 50%; }
+.od-lvup .rays { width: calc(var(--u) * 380); height: calc(var(--u) * 380); margin: calc(var(--u) * -190) 0 0 calc(var(--u) * -190); border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255,214,120,.75) 0deg 3deg, rgba(255,214,120,0) 3deg 15deg);
+  -webkit-mask: radial-gradient(circle, #000 16%, rgba(0,0,0,.55) 36%, transparent 68%); mask: radial-gradient(circle, #000 16%, rgba(0,0,0,.55) 36%, transparent 68%);
+  animation: odLvRays 2.8s cubic-bezier(.15,.8,.3,1) .36s both; }
+.od-lvup .ring { width: calc(var(--u) * 120); height: calc(var(--u) * 120); margin: calc(var(--u) * -60) 0 0 calc(var(--u) * -60); border-radius: 50%; box-sizing: border-box;
+  border: calc(var(--u) * 3) solid rgba(255,214,120,.95); box-shadow: 0 0 calc(var(--u) * 18) rgba(240,192,72,.65), inset 0 0 calc(var(--u) * 12) rgba(240,192,72,.4);
+  animation: odLvRing .85s cubic-bezier(.1,.7,.3,1) .4s both; }
+.od-lvup .ring.r2 { animation-delay: .62s; border-width: calc(var(--u) * 2); }
+.od-lvup .sp { width: calc(var(--u) * 4); height: calc(var(--u) * 18); margin: calc(var(--u) * -9) 0 0 calc(var(--u) * -2); border-radius: calc(var(--u) * 3);
+  background: linear-gradient(#ffffff, #ffd060 40%, #ff9a1f); box-shadow: 0 0 calc(var(--u) * 8) rgba(255,160,40,1), 0 0 calc(var(--u) * 2) #fff; animation: odLvSpark var(--t) cubic-bezier(.1,.75,.3,1) var(--w) both; }
+.od-lvup .emb { width: calc(var(--u) * 120); height: calc(var(--u) * 132); margin: calc(var(--u) * -66) 0 0 calc(var(--u) * -60); overflow: visible;
+  filter: drop-shadow(0 0 calc(var(--u) * 10) rgba(240,192,72,.55)) drop-shadow(0 calc(var(--u) * 3) calc(var(--u) * 6) rgba(0,0,0,.7));
+  animation: odLvEmb .9s cubic-bezier(.18,1.25,.35,1) both, odLvGlow .8s ease-in-out .9s 4 alternate; }
+.od-lvup .emb .gl { transform: translateX(-150px) skewX(-20deg); animation: odLvGloss .7s ease-in-out 1.15s both; }
+.od-lvup .emb text { font-weight: 800; fill: #fff; font-family: inherit; transform-box: fill-box; transform-origin: center; }
+.od-lvup .emb .n0 { animation: odLvN0 .25s ease-in .42s both; }
+.od-lvup .emb .n1 { animation: odLvN1 .55s cubic-bezier(.2,1.6,.4,1) .62s both; }
+.od-lvup .flash { width: calc(var(--u) * 240); height: calc(var(--u) * 240); margin: calc(var(--u) * -120) 0 0 calc(var(--u) * -120); border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,250,232,.95), rgba(255,214,120,.38) 34%, rgba(255,214,120,0) 64%); animation: odLvFlash .55s ease-out .38s both; }
+.od-lvup .tx { text-shadow: var(--ts); white-space: nowrap; }
+.od-lvup .kk { font-size: calc(var(--u) * 14); font-weight: 700; letter-spacing: .42em; color: var(--accent); text-transform: uppercase; animation: odLvKk .8s cubic-bezier(.2,.8,.3,1) .15s both; }
+.od-lvup .tt { margin-top: calc(var(--u) * 3); font-size: calc(var(--u) * 46); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; line-height: 1; animation: odLvUp .5s cubic-bezier(.2,.9,.3,1) .5s both; }
+.od-lvup .tt b { color: #ffd166; }
+.od-lvup .rule { height: calc(var(--u) * 2); width: calc(var(--u) * 320); margin: calc(var(--u) * 10) 0 calc(var(--u) * 9); background: linear-gradient(90deg, rgba(240,192,72,.95), rgba(240,192,72,0));
+  transform-origin: 0 50%; animation: odLvRule .7s cubic-bezier(.2,.8,.3,1) .62s both; }
+.od-lvup .ul { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--u) * 6); max-width: calc(var(--u) * 480); white-space: normal; }
+.od-lvup .ul span { font-size: calc(var(--u) * 11); font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--fg2); margin-right: calc(var(--u) * 4); animation: odLvUp .4s ease-out .85s both; }
+.od-lvup .ul em { font-style: normal; font-size: calc(var(--u) * 13); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: calc(var(--u) * 3) calc(var(--u) * 9);
+  border: 1px solid rgba(240,192,72,.55); background: rgba(240,192,72,.12); color: #fff; animation: odLvUp .4s cubic-bezier(.2,.9,.3,1) calc(.95s + var(--k) * .12s) both; }
+@keyframes odLvOut { to { opacity: 0; transform: translateX(-50%) translateY(calc(var(--u) * -14)); } }
+@keyframes odLvFade { from { opacity: 0; } }
+@keyframes odLvRays { 0% { opacity: 0; transform: scale(.2) rotate(0deg); } 22% { opacity: 1; } 100% { opacity: 0; transform: scale(1.15) rotate(55deg); } }
+@keyframes odLvRing { 0% { opacity: 0; transform: scale(.35); } 8% { opacity: .95; } 100% { opacity: 0; transform: scale(2.8); } }
+@keyframes odLvSpark { 0% { opacity: 0; transform: rotate(var(--a)) translateY(0) scaleY(.4); } 12% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(var(--u) * var(--d) * -1)) scaleY(1); } }
+@keyframes odLvEmb { 0% { opacity: 0; transform: scale(3) rotate(-10deg); animation-timing-function: cubic-bezier(.55,0,.85,.35); } 45% { opacity: 1; transform: scale(.86) rotate(2deg); animation-timing-function: cubic-bezier(.2,1.6,.4,1); } 100% { opacity: 1; transform: scale(1) rotate(0deg); } }
+@keyframes odLvGloss { from { transform: translateX(-150px) skewX(-20deg); } to { transform: translateX(150px) skewX(-20deg); } }
+@keyframes odLvGlow { to { filter: drop-shadow(0 0 calc(var(--u) * 24) rgba(255,214,120,.95)) drop-shadow(0 calc(var(--u) * 3) calc(var(--u) * 6) rgba(0,0,0,.7)); } }
+@keyframes odLvN0 { to { opacity: 0; transform: scale(.3); } }
+@keyframes odLvN1 { 0% { opacity: 0; transform: scale(2.2); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes odLvFlash { 0% { opacity: 0; transform: scale(.4); } 30% { opacity: 1; } 100% { opacity: 0; transform: scale(1.3); } }
+@keyframes odLvKk { from { opacity: 0; letter-spacing: .95em; } }
+@keyframes odLvUp { from { opacity: 0; transform: translateY(calc(var(--u) * 10)); } }
+@keyframes odLvRule { from { transform: scaleX(0); } }
 
 /* ===================================================================== menus */
 .od-ui { pointer-events: none; contain: none; }
@@ -48394,12 +48458,41 @@ function q9(A) {
       ut(l, Ut(_ / 0.1) * k), ti(g, "transform", `scale(${(R * (1 + (1 - k) * 0.1)).toFixed(3)})`), ti(l, "transform", `translate3d(0,${((1 - k) * -10 * P).toFixed(1)}px,0)`), _ >= u.life && (u = null, ut(l, 0));
     }
     for (; !w && m.length && performance.now() - (m[0].at || 0) > 1e4; ) m.shift();
-    if (!w && m.length && (w = m.shift(), w.age = 0, $t(E, w.title), $t(y, w.sub), $t(p, w.kicker), E.classList.toggle("warn", !!w.warn), p.style.display = w.kicker ? "" : "none", y.style.display = w.sub ? "" : "none"), w) {
+    if (!w && !lvEl && m.length && (w = m.shift(), w.age = 0, $t(E, w.title), $t(y, w.sub), $t(p, w.kicker), E.classList.toggle("warn", !!w.warn), p.style.display = w.kicker ? "" : "none", y.style.display = w.sub ? "" : "none"), w) {
       w.age += G;
       const _ = w.age, v = Nr(Ut(_ / 0.5)), R = Ut((w.life - _) / 0.5);
       ut(f, Ut(_ / 0.2) * R), ti(E, "letterSpacing", `${(0.22 + (1 - v) * 0.3).toFixed(3)}em`), ti(C, "transform", `scaleX(${v.toFixed(3)})`), _ >= w.life && (w = null, ut(f, 0));
     }
     x.age < x.life ? (x.age += G, ut(M, Ut(x.age / 0.1) * Ut((x.life - x.age) / 0.4))) : ut(M, 0);
+  }
+  // "Eliminated <name>" under the crosshair area, bottom centre: newest at the bottom, up to 3 lines.
+  const elimBox = NA("div", "od-elim", A.layer);
+  function eliminated(name, o = {}) {
+    const n = String(name || "").trim();
+    if (!n) return;
+    const row = NA("div", "ln" + (o.headshot ? " hs" : ""), elimBox);
+    row.innerHTML = `<span class="k">Eliminated</span><span class="n">${Nn(n)}</span>` + (o.headshot ? `<span class="h">Headshot</span>` : "");
+    for (; elimBox.children.length > 3; ) elimBox.firstChild.remove();
+    setTimeout(() => row.classList.add("out"), 2400), setTimeout(() => row.remove(), 2900);
+  }
+  // Level up: the rank emblem slams in with a flash, rays, rings and sparks, the number rolls over to the new
+  // level, then "Level up / Level N" and the unlocks slide in. Pure CSS animation; removed after ~5 s.
+  let lvEl = null, lvT = 0;
+  function levelUp({ level: L0, from: F0, unlocked: un = [] } = {}) {
+    lvEl?.remove(), clearTimeout(lvT);
+    w && (m.unshift({ ...w, at: performance.now() }), w = null, ut(f, 0));
+    const L = Math.max(2, L0 | 0), F = Math.max(1, Math.min(L - 1, F0 == null ? L - 1 : F0 | 0)), fs = (v) => String(v).length > 2 ? 34 : 46;
+    let sp = "";
+    for (let k = 0; k < 24; k++) {
+      const a = k / 24 * 360 + (Math.random() * 12 - 6), d = 90 + Math.random() * 90, t = 0.75 + Math.random() * 0.6, w = 0.4 + Math.random() * 0.12;
+      sp += `<i class="sp" style="--a:${a.toFixed(1)}deg;--d:${d.toFixed(0)};--t:${t.toFixed(2)}s;--w:${w.toFixed(2)}s"></i>`;
+    }
+    const list = (Array.isArray(un) ? un : []).filter(Boolean), ul = list.slice(0, 4).map((x, k) => `<em style="--k:${k}">${Nn(String(x))}</em>`).join("") + (list.length > 4 ? `<em style="--k:4">+${list.length - 4} more</em>` : "");
+    lvEl = NA("div", "od-lvup", A.layer);
+    lvEl.innerHTML = `<div class="fx"><i class="rays"></i><i class="ring"></i><i class="ring r2"></i>${sp}<svg class="emb" viewBox="0 0 120 132" aria-hidden="true"><defs><linearGradient id="odLvG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffeab0"/><stop offset=".55" stop-color="#f0c048"/><stop offset="1" stop-color="#b37f26"/></linearGradient><linearGradient id="odLvW" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><clipPath id="odLvC"><path d="M60 4 L112 22 V62 C112 94 90 114 60 126 C30 114 8 94 8 62 V22 Z"/></clipPath></defs><path d="M60 4 L112 22 V62 C112 94 90 114 60 126 C30 114 8 94 8 62 V22 Z" fill="#0d1114" stroke="url(#odLvG)" stroke-width="5"/><path d="M60 13 L104 28 V62 C104 89 85 106 60 116 C35 106 16 89 16 62 V28 Z" fill="none" stroke="rgba(240,192,72,.35)" stroke-width="1.5"/><path d="M38 90 L60 101 L82 90 V97 L60 108 L38 97 Z" fill="url(#odLvG)"/><path d="M46 21 H74 V25 H46 Z" fill="url(#odLvG)"/><text class="n0" x="60" y="${F > 99 ? 72 : 76}" text-anchor="middle" font-size="${fs(F)}">${F}</text><text class="n1" x="60" y="${L > 99 ? 72 : 76}" text-anchor="middle" font-size="${fs(L)}">${L}</text><g clip-path="url(#odLvC)"><rect class="gl" x="30" y="-10" width="34" height="150" fill="url(#odLvW)"/></g></svg><i class="flash"></i></div><div class="tx"><div class="kk">Level up</div><div class="tt">Level <b>${L}</b></div><div class="rule"></div>${ul ? `<div class="ul"><span>Unlocked</span>${ul}</div>` : ""}</div>`;
+    lvT = setTimeout(() => {
+      lvEl?.remove(), lvEl = null;
+    }, 5200);
   }
   return {
     killfeed: i,
@@ -48407,6 +48500,8 @@ function q9(A) {
     pushMedal: Q,
     pushBanner: D,
     pushToast: S,
+    eliminated,
+    levelUp,
     update: U,
     get medalActive() {
       return !!u;
@@ -48630,7 +48725,22 @@ function om() {
   }
 }
 /* Game version. The release build stamps the CI build number into "__VGD_BUILD__". */
-var VGD = { label: "Beta 1.05", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+// Bots get callsigns instead of "Vanguard 1, 2, 3": a shuffled list handed out in turn, so no two bots share a
+// name until all 163 have been used (match bots keep theirs when they respawn).
+var VG_BOT_NAMES = ["Ashfall", "Badger", "Banshee", "Barracuda", "Basilisk", "Bastion", "Blackjack", "Blitz", "Bolt", "Bramble", "Brimstone", "Bulldog", "Buzzard", "Cactus", "Caliber", "Canary", "Cardinal", "Cascade", "Cinder", "Cipher", "Clutch", "Cobalt", "Comet", "Condor", "Copperhead", "Corsair", "Coyote", "Crowbar", "Cyclone", "Dagger", "Deadbolt", "Delta", "Domino", "Dragoon", "Drifter", "Dusk", "Dynamo", "Echo", "Ember", "Falcon", "Fang", "Ferret", "Firefly", "Flak", "Flint", "Foxtrot", "Frostbite", "Fury", "Gambit", "Gargoyle", "Garnet", "Gauntlet", "Gizmo", "Glacier", "Gravel", "Gremlin", "Grizzly", "Gunner", "Halberd", "Hammer", "Harrier", "Hatchet", "Hawk", "Hazard", "Hornet", "Hurricane", "Husk", "Icarus", "Iron", "Jackal", "Jaguar", "Javelin", "Jester", "Jinx", "Juniper", "Kestrel", "Kingpin", "Kodiak", "Kraken", "Lancer", "Ledger", "Lynx", "Mako", "Mamba", "Marauder", "Maverick", "Midnight", "Mongoose", "Monsoon", "Mortar", "Mustang", "Nightjar", "Nova", "Onyx", "Oracle", "Osprey", "Outlaw", "Paladin", "Panther", "Patriot", "Phantom", "Pike", "Piston", "Prowler", "Puma", "Quarry", "Quill", "Radar", "Rampart", "Ranger", "Raptor", "Ratchet", "Raven", "Razor", "Rebel", "Relic", "Riptide", "Rogue", "Rook", "Rumble", "Rust", "Sable", "Sentry", "Shrapnel", "Sidewinder", "Siren", "Slate", "Sledge", "Smoke", "Snapper", "Sparrow", "Specter", "Spike", "Stinger", "Stormy", "Sundown", "Tank", "Tempest", "Thistle", "Thunder", "Tinder", "Titan", "Torch", "Tracer", "Trigger", "Tundra", "Typhoon", "Undertow", "Valkyrie", "Vandal", "Vapor", "Vector", "Venom", "Vortex", "Vulture", "Warden", "Whiplash", "Wildcard", "Wolfhound", "Wraith", "Yankee", "Zephyr", "Zulu"];
+var vgBotNames = { order: null, i: 0 };
+function vgBotName() {
+  const b = vgBotNames;
+  if (!b.order) {
+    b.order = VG_BOT_NAMES.slice();
+    for (let i = b.order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [b.order[i], b.order[j]] = [b.order[j], b.order[i]];
+    }
+  }
+  return b.order[b.i++ % b.order.length];
+}
+var VGD = { label: "Beta 1.1", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -48980,7 +49090,7 @@ function perkHas(A) {
 }
 var pgSlotLv = [1, 1, 3, 4, 5], pgCtx = null;
 function pgCost(A) {
-  return 5e3 + 1e3 * (A - 1);
+  return 5e3 + 500 * (A - 1);
 }
 function pgLevel(A = Za.xp) {
   let e = 1, t = Math.max(0, Math.floor(A || 0));
@@ -49073,7 +49183,9 @@ function pgAddXp(A, e = "", t = !0) {
     const s = [];
     for (let n = i + 1; n <= a; n++) s.push(...pgUnlocksAt(n));
     try {
-      pgCtx?.services.hud?.notify?.(`LEVEL UP · LEVEL ${a}${s.length ? ` · Unlocked: ${s.join(", ")}` : ""}`, { kind: "banner", duration: 4.5 });
+      const hud = pgCtx?.services.hud;
+      hud?.levelUp ? hud.levelUp({ level: a, from: i, unlocked: s }) : hud?.notify?.(`LEVEL UP · LEVEL ${a}${s.length ? ` · Unlocked: ${s.join(", ")}` : ""}`, { kind: "banner", duration: 4.5 });
+      pgCtx?.services.audio?.ui?.("success");
     } catch {
     }
     try {
@@ -53429,7 +53541,7 @@ function cJ(A) {
         for (let i = 1; i < L; i++) t += pgCost(i);
         return Math.max(0, t - lv.total);
       };
-      j.innerHTML = `<div class="od-armory-grid"><section><h3>Operator level</h3><p class="od-armory-rank od-pg-level">Level ${lv.level}</p><div class="od-armory-bar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div><p>${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.level + 1}</p><p>${nxt ? `Next unlock at level ${nxt}: <strong>${pgUnlocksAt(nxt).map(Nn).join(", ")}</strong> · ${toL(nxt).toLocaleString()} XP to go` : "Every loadout and attachment is unlocked."}</p><h3>Service record</h3><p>${yA.kills} eliminations · ${yA.headshots} headshots · ${yA.deaths} deaths · ${lv.total.toLocaleString()} XP total</p></section><section><h3>How to earn XP</h3><div class="od-armory-unlock on"><b>+100</b><span>Elimination (+50 more for a headshot)</span></div><div class="od-armory-unlock on"><b>+50</b><span>Confirming a dog tag in Kill Confirmed</span></div><div class="od-armory-unlock on"><b>+200</b><span>Surviving a wave in Protection</span></div><div class="od-armory-unlock on"><b>+500</b><span>Winning a match (+150 for finishing one)</span></div><p>Level 1 to 2 takes 5,000 XP, level 2 to 3 takes 6,000, and each level after takes 1,000 more. Your XP bar starts from zero after every level up.</p></section></div><div class="od-armory-grid od-armory-weapons"><section><h3>Unlock track</h3>${track.join("")}</section><section><h3>Loadout slots</h3>${pgSlotLv.map((L, i) => `<div class="od-armory-unlock ${pgUnlocked(i) ? "on" : ""}"><b>${pgUnlocked(i) ? "UNLOCKED" : "LEVEL " + L}</b><span>Loadout ${i + 1}${i === pgActive() ? " · equipped" : ""}</span></div>`).join("")}<p>Build and equip loadouts from <strong>Loadouts</strong> in the main menu or the pause menu.</p></section></div>`;
+      j.innerHTML = `<div class="od-armory-grid"><section><h3>Operator level</h3><p class="od-armory-rank od-pg-level">Level ${lv.level}</p><div class="od-armory-bar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div><p>${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.level + 1}</p><p>${nxt ? `Next unlock at level ${nxt}: <strong>${pgUnlocksAt(nxt).map(Nn).join(", ")}</strong> · ${toL(nxt).toLocaleString()} XP to go` : "Every loadout and attachment is unlocked."}</p><h3>Service record</h3><p>${yA.kills} eliminations · ${yA.headshots} headshots · ${yA.deaths} deaths · ${lv.total.toLocaleString()} XP total</p></section><section><h3>How to earn XP</h3><div class="od-armory-unlock on"><b>+100</b><span>Elimination (+50 more for a headshot)</span></div><div class="od-armory-unlock on"><b>+50</b><span>Confirming a dog tag in Kill Confirmed</span></div><div class="od-armory-unlock on"><b>+200</b><span>Surviving a wave in Protection</span></div><div class="od-armory-unlock on"><b>+500</b><span>Winning a match (+150 for finishing one)</span></div><p>Level 1 to 2 takes 5,000 XP, level 2 to 3 takes 5,500, and each level after takes 500 more. Your XP bar starts from zero after every level up.</p></section></div><div class="od-armory-grid od-armory-weapons"><section><h3>Unlock track</h3>${track.join("")}</section><section><h3>Loadout slots</h3>${pgSlotLv.map((L, i) => `<div class="od-armory-unlock ${pgUnlocked(i) ? "on" : ""}"><b>${pgUnlocked(i) ? "UNLOCKED" : "LEVEL " + L}</b><span>Loadout ${i + 1}${i === pgActive() ? " · equipped" : ""}</span></div>`).join("")}<p>Build and equip loadouts from <strong>Loadouts</strong> in the main menu or the pause menu.</p></section></div>`;
     } else {
       const gun = (w, kind) => `<section><h3>${Nn(w.name)}</h3><p class="od-lw-sum">${Nn(w.cls)} · ${kind}</p><p>${Nn(w.desc)}</p>${barH(w)}</section>`, att = Object.entries(_c).map(([sl, d]) => `<section><h3>${d.label}${d.frames ? " · rifles only" : ""}</h3>${d.options.map((o) => `<div class="od-armory-unlock ${lv.level >= (o.lv || 1) ? "on" : ""}"><b>${o.id === "none" ? "STANDARD" : lv.level >= o.lv ? "UNLOCKED" : "LEVEL " + o.lv}</b><span>${Nn(o.name)}${o.frames ? " (rifles only)" : ""} — ${Nn(o.effect || "")}</span></div>`).join("")}</section>`).join("");
       j.innerHTML = `<p class="od-armory-note">Every weapon is available from level 1. Attachments unlock as you level up and are fitted per loadout in <strong>Loadouts</strong>.</p><h3 class="od-pg-h">Attachments</h3><div class="od-armory-grid od-armory-weapons">${att}</div><h3 class="od-pg-h">Primary weapons</h3><div class="od-armory-grid od-armory-weapons">${D.primary.map((w) => gun(w, "Primary")).join("")}</div><h3 class="od-pg-h">Secondary weapons</h3><div class="od-armory-grid od-armory-weapons">${D.secondary.map((w) => gun(w, "Secondary")).join("")}</div>`;
@@ -54930,6 +55042,7 @@ function hJ(A) {
         victimTeam: Me,
         kind: et
       }), !ae) continue;
+      Ce?.key !== "player" && Me !== "friendly" && ve && r.eliminated(ve, { headshot: XA.zone === "head" });
       let ft = XA.dist;
       ft == null && Ce?.object && (Ce.object.getWorldPosition(tA), ft = tA.distanceTo(A.services.player.state.position));
       const Te = a.uiTime;
@@ -55067,6 +55180,12 @@ function hJ(A) {
     },
     banner(QA, uA) {
       m.banner = !1, r.pushBanner(QA, uA);
+    },
+    eliminated(QA, uA) {
+      r.eliminated(QA, uA);
+    },
+    levelUp(QA) {
+      r.levelUp(QA || {});
     },
     setInteraction(QA, uA) {
       c.setInteraction(QA, uA);

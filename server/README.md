@@ -1,6 +1,6 @@
 # Vangaurd matchmaking server 2.9
 
-This is the online server for Vangaurd Beta 1.05. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
+This is the online server for Vangaurd Beta 1.1. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
 
 What it does:
 

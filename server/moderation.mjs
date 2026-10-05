@@ -38,11 +38,12 @@ const SECURITY_HEADERS = {
   'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
 };
 
-// The game's level curve: level n needs 5,000 + 1,000 x (n - 1) XP to reach level n + 1.
-export const xpForLevel = (level) => { let t = 0; for (let l = 1; l < level; l++) t += 5000 + 1000 * (l - 1); return t; };
+// The game's level curve (Beta 1.1 on): level n needs 5,000 + 500 x (n - 1) XP to reach level n + 1.
+export const levelCost = (l) => 5000 + 500 * (l - 1);
+export const xpForLevel = (level) => { let t = 0; for (let l = 1; l < level; l++) t += levelCost(l); return t; };
 export function levelOf(xp) {
   let l = 1, t = Math.max(0, Math.floor(xp || 0));
-  while (t >= 5000 + 1000 * (l - 1) && l < 999) { t -= 5000 + 1000 * (l - 1); l++; }
+  while (t >= levelCost(l) && l < 999) { t -= levelCost(l); l++; }
   return l;
 }
 // Moderators see a player's email partly hidden (enough to recognise it, not to copy it).
