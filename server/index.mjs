@@ -3,6 +3,7 @@
 // Railway: root directory /server, start command `npm start`; it listens on $PORT.
 import http from 'node:http';
 import { createModeration, cleanDevice } from './moderation.mjs';
+import { createMailer, codeEmail } from './mailer.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import pathMod from 'node:path';
@@ -21,7 +22,7 @@ const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
 };
-const VERSION = '2.7.0';
+const VERSION = '2.8.0';
 // ---------- client version gate ----------
 // Only the newest game build may play online. The newest build number is read from the
 // version.json attached to the latest GitHub release (refreshed every 5 minutes).
@@ -29,7 +30,7 @@ const VERSION = '2.7.0';
 const GATE = String(process.env.VERSION_GATE || 'on').toLowerCase() !== 'off';
 const LATEST_URL = process.env.LATEST_VERSION_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest/download/version.json';
 const RELEASE_PAGE = process.env.RELEASE_PAGE_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest';
-const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 1.03', checkedAt: 0, source: 'env' };
+const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 1.04', checkedAt: 0, source: 'env' };
 async function refreshLatest() {
   if (!GATE || String(process.env.LATEST_VERSION_URL || '').toLowerCase() === 'off') return;
   try {
@@ -147,25 +148,43 @@ async function onRegister(c, msg) {
   if (pw.length < 6 || pw.length > 64) return authError(c, 'bad_password', 'Passwords must be 6 to 64 characters long.');
   const key = name.toLowerCase();
   if (accounts.users[key]) { failed(c); return authError(c, 'taken', 'That username is taken. If it is yours, sign in instead.'); }
+  const email = String(msg.email || '').trim();
+  if (email || mailer.enabled) {
+    if (!EMAIL_RE.test(email)) return authError(c, 'bad_email', 'Enter a valid email address.');
+    if (findByEmail(email)) return authError(c, 'email_taken', 'That email already belongs to an account. Sign in, or reset its password.');
+  }
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = await scrypt(pw, salt);
   if (accounts.users[key]) return authError(c, 'taken', 'That username is taken. If it is yours, sign in instead.');
-  const u = accounts.users[key] = { name, salt, hash, created: now(), lastLogin: now() };
+  // With email set up, the account is only created once the code sent to the email is entered.
+  if (mailer.enabled) return sendCode(c, { purpose: 'register', key, username: name, email, salt, hash, device: c.device });
+  const u = accounts.users[key] = { name, salt, hash, created: now(), lastLogin: now(), ...(email ? { email, emailVerified: false } : {}) };
   saveAccounts();
   log(`account created: ${name}`);
   authOk(c, u, newSession(name), true);
 }
 async function onLogin(c, msg) {
   if (limited(c)) return authError(c, 'too_many', 'Too many attempts. Wait a few minutes and try again.');
-  const name = String(msg.username || '').trim(), pw = String(msg.password || '');
-  const u = accounts.users[name.toLowerCase()];
+  // Sign in with the username or the account's email.
+  const ident = String(msg.username || msg.identifier || '').trim(), pw = String(msg.password || ''), byEmail = ident.includes('@');
+  const key = byEmail ? findByEmail(ident) : ident.toLowerCase();
+  const u = key ? accounts.users[key] : null;
   const hash = await scrypt(pw, u ? u.salt : '00'.repeat(16));
   if (!u || !crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(u.hash, 'hex'))) {
     failed(c);
-    return authError(c, 'bad_login', u ? 'Wrong password for that username.' : 'No account with that username. Create one instead.');
+    return authError(c, 'bad_login', u ? 'Wrong password.' : byEmail ? 'No account uses that email. Create one instead.' : 'No account with that username. Create one instead.');
   }
   c.device = cleanDevice(msg.device) || c.device;
   { const b = mod.checkAccount(keyOf(u.name), c.device); if (b) return refuseBanned(c, b); }
+  if (mailer.enabled) {
+    // Accounts from before emails were required add one first; everyone then confirms with a code.
+    if (!u.email || !u.emailVerified && !EMAIL_RE.test(u.email)) {
+      const id = newPendingId();
+      pendings.set(id, { id, purpose: 'add_email', key: keyOf(u.name), username: u.name, device: c.device, expires: now() + CODE_TTL, stage: 'need_email' });
+      return send(c, { type: 'auth_need_email', pending: id, username: u.name });
+    }
+    return sendCode(c, { purpose: 'login', key: keyOf(u.name), username: u.name, email: u.email, device: c.device });
+  }
   u.lastLogin = now();
   saveAccounts();
   authOk(c, u, newSession(u.name));
@@ -182,6 +201,116 @@ function onLogout(c, msg) {
   goOffline(c);
   c.account = null;
   send(c, { type: 'logged_out' });
+}
+
+// ---------- email and verification codes ----------
+// When an email service is configured (see mailer.mjs), creating an account, signing in, adding an email to an
+// older account and resetting a password each send a 6-digit code to the account's email. A code lasts 10 minutes
+// and allows 5 tries; a new one can be sent every 30 seconds, at most 6 an hour per address.
+const mailer = createMailer(process.env);
+const EMAIL_RE = /^[^\s@<>()",;:\\[\]]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,24}$/;
+const CODE_TTL = 10 * 60e3, CODE_TRIES = 5, RESEND_MS = 30e3;
+const pendings = new Map(); // id -> { id, purpose, key, username, email, salt, hash, codeHash, expires, tries, sentAt, device, stage }
+const sendsTo = new Map(); // email -> recent send times
+const newPendingId = () => crypto.randomBytes(16).toString('hex');
+function findByEmail(email) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return null;
+  for (const [k, u] of Object.entries(accounts.users)) if (u.email && u.email.toLowerCase() === e) return k;
+  return null;
+}
+function maskEmail(e) {
+  const [a = '', d = ''] = String(e).split('@');
+  return `${a.slice(0, Math.min(2, a.length))}${'•'.repeat(Math.max(2, Math.min(6, a.length - 2)))}@${d}`;
+}
+async function sendCode(c, p) {
+  p.id ||= newPendingId();
+  const recent = (sendsTo.get(p.email.toLowerCase()) || []).filter((t) => now() - t < 3600e3);
+  if (recent.length >= 6) return authError(c, 'too_many', 'Too many codes were sent to that email. Wait a while and try again.');
+  const code = String(crypto.randomInt(0, 1e6)).padStart(6, '0');
+  try {
+    await mailer.send(codeEmail(p.email, code, p.purpose, p.username));
+  } catch (e) {
+    log(`email to ${maskEmail(p.email)} failed: ${e.message}`);
+    return authError(c, 'email_failed', 'The code email could not be sent. Check the address and try again in a minute.');
+  }
+  recent.push(now()); sendsTo.set(p.email.toLowerCase(), recent);
+  Object.assign(p, { codeHash: sha(`${code}:${p.id}`), expires: now() + CODE_TTL, tries: 0, sentAt: now(), stage: 'code' });
+  pendings.set(p.id, p);
+  log(`sent a ${p.purpose} code to ${maskEmail(p.email)}${p.username ? ` (${p.username})` : ''}`);
+  send(c, { type: 'auth_code', pending: p.id, purpose: p.purpose, to: maskEmail(p.email), ttl: CODE_TTL / 1000, resendIn: RESEND_MS / 1000 });
+}
+setInterval(() => { for (const [id, p] of pendings) if (now() > p.expires + 20 * 60e3) pendings.delete(id); }, 60e3).unref?.();
+// An older account (no email yet) gives its email after the password was right.
+async function onAddEmail(c, msg) {
+  const p = pendings.get(String(msg.pending || ''));
+  if (!p || p.purpose !== 'add_email' || now() > p.expires) return authError(c, 'code_expired', 'That took too long. Sign in again.');
+  const email = String(msg.email || '').trim();
+  if (!EMAIL_RE.test(email)) return authError(c, 'bad_email', 'Enter a valid email address.');
+  const other = findByEmail(email);
+  if (other && other !== p.key) return authError(c, 'email_taken', 'That email already belongs to another account.');
+  p.email = email;
+  return sendCode(c, p);
+}
+async function onResetRequest(c, msg) {
+  if (limited(c)) return authError(c, 'too_many', 'Too many attempts. Wait a few minutes and try again.');
+  if (!mailer.enabled) return authError(c, 'no_email', 'Password reset is not available yet: the server cannot send emails.');
+  const ident = String(msg.username || msg.identifier || '').trim(), byEmail = ident.includes('@');
+  const key = byEmail ? findByEmail(ident) : ident.toLowerCase();
+  const u = key ? accounts.users[key] : null;
+  if (!u) { failed(c); return authError(c, 'bad_login', byEmail ? 'No account uses that email.' : 'No account with that username.'); }
+  if (!u.email) return authError(c, 'no_email', 'This account has no email yet. Sign in with your password to add one.');
+  return sendCode(c, { purpose: 'reset', key, username: u.name, email: u.email, device: cleanDevice(msg.device) || c.device });
+}
+async function onResendCode(c, msg) {
+  const p = pendings.get(String(msg.pending || ''));
+  if (!p || !p.email || now() > p.expires + 20 * 60e3) return authError(c, 'code_expired', 'Start again: that request has expired.');
+  if (now() - (p.sentAt || 0) < RESEND_MS) return authError(c, 'wait', `Wait ${Math.ceil((RESEND_MS - (now() - p.sentAt)) / 1000)} seconds before asking for another code.`);
+  return sendCode(c, p);
+}
+async function onVerifyCode(c, msg) {
+  if (limited(c)) return authError(c, 'too_many', 'Too many attempts. Wait a few minutes and try again.');
+  const p = pendings.get(String(msg.pending || ''));
+  if (!p || p.stage !== 'code' || now() > p.expires) return authError(c, 'code_expired', 'That code has expired. Ask for a new one.');
+  const code = String(msg.code || '').replace(/\D/g, '');
+  if (sha(`${code}:${p.id}`) !== p.codeHash) {
+    p.tries++; failed(c);
+    if (p.tries >= CODE_TRIES) { pendings.delete(p.id); return authError(c, 'code_expired', 'Too many wrong codes. Ask for a new one.'); }
+    return authError(c, 'bad_code', `That code isn't right. ${CODE_TRIES - p.tries} ${CODE_TRIES - p.tries === 1 ? 'try' : 'tries'} left.`);
+  }
+  const newPw = String(msg.newPassword || '');
+  if (p.purpose === 'reset' && (newPw.length < 6 || newPw.length > 64)) return authError(c, 'bad_password', 'Passwords must be 6 to 64 characters long.');
+  pendings.delete(p.id);
+  c.device = cleanDevice(msg.device) || p.device || c.device;
+  if (p.purpose === 'register') {
+    if (accounts.users[p.key]) return authError(c, 'taken', 'That username was taken while you were confirming. Pick another one.');
+    const other = findByEmail(p.email);
+    if (other) return authError(c, 'email_taken', 'That email already belongs to an account.');
+    { const b = mod.checkDevice(c.device); if (b) return refuseBanned(c, b); }
+    const u = accounts.users[p.key] = { name: p.username, salt: p.salt, hash: p.hash, email: p.email, emailVerified: true, created: now(), lastLogin: now() };
+    saveAccounts();
+    log(`account created: ${u.name} (email confirmed)`);
+    return authOk(c, u, newSession(u.name), true);
+  }
+  const u = accounts.users[p.key];
+  if (!u) return authError(c, 'bad_login', 'That account no longer exists.');
+  { const b = mod.checkAccount(p.key, c.device); if (b) return refuseBanned(c, b); }
+  if (p.purpose === 'add_email') {
+    const other = findByEmail(p.email);
+    if (other && other !== p.key) return authError(c, 'email_taken', 'That email already belongs to another account.');
+    u.email = p.email;
+    log(`${u.name} added an email`);
+  }
+  if (p.purpose === 'reset') {
+    u.salt = crypto.randomBytes(16).toString('hex');
+    u.hash = await scrypt(newPw, u.salt);
+    for (const [k, ses] of Object.entries(accounts.sessions)) if (ses.user === p.key) delete accounts.sessions[k]; // sign out everywhere
+    log(`${u.name} reset their password`);
+  }
+  u.emailVerified = true;
+  u.lastLogin = now();
+  saveAccounts();
+  return authOk(c, u, newSession(u.name));
 }
 
 // ---------- friends, presence and parties ----------
@@ -856,6 +985,10 @@ function handle(c, raw) {
     case 'party_invite': case 'party_accept': case 'party_decline': case 'party_leave': case 'party_kick':
       handleSocial(c, msg); break;
     case 'logout': onLogout(c, msg); break;
+    case 'verify_code': onVerifyCode(c, msg).catch((e) => { log(`verify error: ${e.message}`); authError(c, 'server', 'The server could not check the code. Try again.'); }); break;
+    case 'resend_code': onResendCode(c, msg).catch((e) => { log(`resend error: ${e.message}`); authError(c, 'server', 'The server could not send a new code. Try again.'); }); break;
+    case 'add_email': onAddEmail(c, msg).catch((e) => { log(`add email error: ${e.message}`); authError(c, 'server', 'The server could not send the code. Try again.'); }); break;
+    case 'reset_request': onResetRequest(c, msg).catch((e) => { log(`reset error: ${e.message}`); authError(c, 'server', 'The server could not send the code. Try again.'); }); break;
     case 'data_get': case 'data_put': onData(c, msg); break;
     default: break;
   }
@@ -891,7 +1024,7 @@ const server = http.createServer((req, res) => {
       ok: true, service: 'vangaurd-matchmaking', version: VERSION,
       queued: queues.tdm.length + queues.kc.length, queuedByMode: { tdm: queues.tdm.length, kc: queues.kc.length },
       matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, matches: matches.size, playersInMatches: players, connected: clients.size,
-      maps: MAPS, mapVoteSeconds: VOTE_S, versionGate: GATE, accounts: Object.keys(accounts.users).length, saves: Object.keys(saves).length, online: online.size, parties: parties.size, accountsPersistent: !!process.env.DATA_DIR, minClientBuild: latest.build, latestLabel: latest.label, latestSource: latest.source, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
+      maps: MAPS, mapVoteSeconds: VOTE_S, versionGate: GATE, accounts: Object.keys(accounts.users).length, saves: Object.keys(saves).length, email: mailer.enabled ? mailer.kind : false, online: online.size, parties: parties.size, accountsPersistent: !!process.env.DATA_DIR, minClientBuild: latest.build, latestLabel: latest.label, latestSource: latest.source, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
     });
     res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' });
     res.end(body);
@@ -923,7 +1056,7 @@ wss.on('connection', (ws, req) => {
     clients.delete(c.id);
   });
   ws.on('error', () => {});
-  send(c, { type: 'connected', playerId: c.id, version: VERSION, matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label });
+  send(c, { type: 'connected', playerId: c.id, version: VERSION, matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label, emailAuth: mailer.enabled });
 });
 setInterval(() => {
   for (const ws of wss.clients) {

@@ -45,6 +45,11 @@ export function levelOf(xp) {
   while (t >= 5000 + 1000 * (l - 1) && l < 999) { t -= 5000 + 1000 * (l - 1); l++; }
   return l;
 }
+// Moderators see a player's email partly hidden (enough to recognise it, not to copy it).
+export function maskEmail(e) {
+  const [a = '', d = ''] = String(e).split('@');
+  return `${a.slice(0, Math.min(2, a.length))}${'•'.repeat(Math.max(2, Math.min(6, a.length - 2)))}@${d}`;
+}
 export const cleanDevice = (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v) ? v : null);
 
 export function createModeration(d) {
@@ -245,6 +250,7 @@ export function createModeration(d) {
       ban: b ? { ...banView(key, b), by: d.nameOf(b.by), devices: !!b.devices } : null,
       reportsOpen: against.filter((r) => r.status === 'open').length, reportsTotal: against.length,
       reportsMade: mod.reports.filter((r) => r.reporter === key).length, devices: (u.devices || []).length, xp: xpOf(key), level: levelOf(xpOf(key)), friends: (u.friends || []).length,
+      email: u.email ? maskEmail(u.email) : null, emailVerified: !!u.emailVerified,
     };
   }
   function groups(list) {

@@ -48630,7 +48630,7 @@ function om() {
   }
 }
 /* Game version. The release build stamps the CI build number into "__VGD_BUILD__". */
-var VGD = { label: "Beta 1.03", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 1.04", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -52585,7 +52585,7 @@ function vgAuthCall(msg, ms = 9e3) {
       } catch {
         return;
       }
-      m.type === "connected" ? vgCheckBuild(m) ? fin({ error: "outdated", message: "This version of Vangaurd is out of date." }) : ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build, device: vgDevice() })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created }) : m.type === "banned" ? (vgBanned(m.ban, m.message), fin({ error: "banned", message: m.message || "This account is banned." })) : m.type === "auth_error" ? (m.code === "banned" && vgBanned(m.ban, m.message), fin({ error: m.code || "error", message: m.message || "Sign-in failed." })) : m.type === "logged_out" && fin({ ok: !0 });
+      m.type === "connected" ? vgCheckBuild(m) ? fin({ error: "outdated", message: "This version of Vangaurd is out of date." }) : ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build, device: vgDevice() })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created }) : m.type === "auth_code" ? fin({ code: !0, pending: m.pending, purpose: m.purpose, to: m.to, ttl: m.ttl, resendIn: m.resendIn }) : m.type === "auth_need_email" ? fin({ needEmail: !0, pending: m.pending, user: m.username }) : m.type === "banned" ? (vgBanned(m.ban, m.message), fin({ error: "banned", message: m.message || "This account is banned." })) : m.type === "auth_error" ? (m.code === "banned" && vgBanned(m.ban, m.message), fin({ error: m.code || "error", message: m.message || "Sign-in failed." })) : m.type === "logged_out" && fin({ ok: !0 });
     }), ws.addEventListener("error", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." })), ws.addEventListener("close", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." }));
   });
 }
@@ -52613,6 +52613,11 @@ var vgAuthCss = `
 .vg-auth .alt { margin-top: 10px; display: flex; gap: 16px; justify-content: center; font-size: 12px; }
 .vg-auth .alt button { background: none; border: 0; color: #aeb5ad; text-decoration: underline; cursor: pointer; font: inherit; padding: 0; }
 .vg-auth [hidden] { display: none !important; }
+.vg-auth h4.vh { margin: 22px 0 0; font-size: 16px; letter-spacing: .14em; text-transform: uppercase; }
+.vg-auth .lead { margin: 10px 0 18px; color: #b9bfb8; font-size: 14px; line-height: 1.5; word-break: break-word; }
+.vg-auth input.code { font-size: 28px; font-weight: 800; letter-spacing: .5em; text-align: center; padding: 12px 0 12px .5em; font-variant-numeric: tabular-nums; }
+.vg-auth form .alt { margin-top: 12px; }
+.vg-auth .alt button:disabled { opacity: .55; text-decoration: none; cursor: default; }
 .vg-who { margin-right: 18px; color: #f2c14e; letter-spacing: .12em; }
 `;
 function vgAuthUI() {
@@ -52622,37 +52627,106 @@ function vgAuthUI() {
     st.id = "vg-auth-style", st.textContent = vgAuthCss, document.head.appendChild(st);
   }
   const root = document.createElement("div");
-  root.className = "vg-auth", root.innerHTML = `<div class="card" role="dialog" aria-label="Sign in"><div class="brand">VANGAURD</div><div class="sub">${VGD.label} · Account</div><div class="tabs"><button type="button" data-t="login" class="on">Sign in</button><button type="button" data-t="register">Create account</button></div><form novalidate><label class="f"><span>Username</span><input class="t" name="u" type="text" maxlength="16" autocomplete="username" spellcheck="false" autocapitalize="off"></label><label class="f"><span>Password</span><input class="t" name="p" type="password" maxlength="64" autocomplete="current-password"></label><label class="f reg" hidden><span>Confirm password</span><input class="t" name="p2" type="password" maxlength="64" autocomplete="new-password"></label><div class="hint reg" hidden>3–16 letters, numbers, - or _. Passwords need at least 6 characters. Your username is yours alone: nobody else can use it.</div><label class="remember"><input type="checkbox" name="r" checked> Stay signed in on this device</label><button class="go" type="submit">Sign in</button></form><div class="msg" aria-live="polite"></div><div class="alt"><button type="button" data-retry hidden>Try again</button><button type="button" data-offline hidden>Play offline (singleplayer only)</button></div></div>`;
+  root.className = "vg-auth", root.innerHTML = `<div class="card" role="dialog" aria-label="Vangaurd account"><div class="brand">VANGAURD</div><div class="sub">${VGD.label} · Account</div>
+<div class="tabs"><button type="button" data-t="login" class="on">Sign in</button><button type="button" data-t="register">Create account</button></div>
+<form novalidate data-v="main"><label class="f"><span data-ul>Username or email</span><input class="t" name="u" type="text" maxlength="120" autocomplete="username" spellcheck="false" autocapitalize="off"></label><label class="f reg" hidden><span>Email</span><input class="t" name="e" type="email" maxlength="120" autocomplete="email" spellcheck="false" autocapitalize="off"></label><label class="f"><span>Password</span><input class="t" name="p" type="password" maxlength="64" autocomplete="current-password"></label><label class="f reg" hidden><span>Confirm password</span><input class="t" name="p2" type="password" maxlength="64" autocomplete="new-password"></label><div class="hint reg" hidden>Usernames are 3–16 letters, numbers, - or _ and are yours alone. Passwords need at least 6 characters. Your email gets your sign-in codes and lets you reset your password.</div><label class="remember"><input type="checkbox" name="r" checked> Stay signed in on this device</label><button class="go" type="submit">Sign in</button><div class="alt login-only"><button type="button" data-forgot>Forgot password?</button></div></form>
+<form novalidate data-v="code" hidden><h4 class="vh">Check your email</h4><p class="lead" data-info></p><label class="f"><span>6-digit code</span><input class="t code" name="c" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" spellcheck="false"></label><label class="f rst" hidden><span>New password</span><input class="t" name="np" type="password" maxlength="64" autocomplete="new-password"></label><label class="f rst" hidden><span>Confirm new password</span><input class="t" name="np2" type="password" maxlength="64" autocomplete="new-password"></label><button class="go" type="submit">Confirm</button><div class="alt"><button type="button" data-resend>Send a new code</button><button type="button" data-back>Back</button></div></form>
+<form novalidate data-v="email" hidden><h4 class="vh">Add your email</h4><p class="lead">Vangaurd accounts now need an email. A code is sent to it each time you sign in, and it lets you reset your password.</p><label class="f"><span>Email</span><input class="t" name="ae" type="email" maxlength="120" autocomplete="email" spellcheck="false" autocapitalize="off"></label><button class="go" type="submit">Send code</button><div class="alt"><button type="button" data-back>Back</button></div></form>
+<form novalidate data-v="reset" hidden><h4 class="vh">Reset your password</h4><p class="lead">Enter your username or email. A code is sent to the email on the account.</p><label class="f"><span>Username or email</span><input class="t" name="ru" type="text" maxlength="120" autocomplete="username" spellcheck="false" autocapitalize="off"></label><button class="go" type="submit">Send code</button><div class="alt"><button type="button" data-back>Back</button></div></form>
+<div class="msg" aria-live="polite"></div><div class="alt"><button type="button" data-retry hidden>Try again</button><button type="button" data-offline hidden>Play offline (singleplayer only)</button></div></div>`;
   document.body.appendChild(root);
-  const $ = (q) => root.querySelector(q), form = $("form"), u = $('[name="u"]'), pw = $('[name="p"]'), pw2 = $('[name="p2"]'), rem = $('[name="r"]'), go = $(".go"), msg = $(".msg"), retry = $("[data-retry]"), off = $("[data-offline]");
-  let mode = "login", busy = !1;
+  const $ = (q) => root.querySelector(q), forms = {}, f = (n) => root.querySelector(`[name="${n}"]`);
+  for (const x of root.querySelectorAll("form[data-v]")) forms[x.dataset.v] = x;
+  const u = f("u"), em = f("e"), pw = f("p"), pw2 = f("p2"), rem = f("r"), code = f("c"), np = f("np"), np2 = f("np2"), ae = f("ae"), ru = f("ru"), msg = $(".msg"), info = $("[data-info]"), resend = $("[data-resend]"), retry = $("[data-retry]"), off = $("[data-offline]"), tabs = $(".tabs");
+  const EMAIL = /^[^\s@<>()",;:\\[\]]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,24}$/, NAME = /^[A-Za-z0-9_-]{3,16}$/;
+  let mode = "login", view = "main", busy = !1, pending = null, purpose = null, cool = 0, coolT = 0;
   const say = (t, err = !1) => {
     msg.textContent = t || "", msg.classList.toggle("err", !!err);
-  }, setMode = (m) => {
-    mode = m, root.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === m)), root.querySelectorAll(".reg").forEach((el) => el.hidden = m !== "register"), go.textContent = m === "register" ? "Create account" : "Sign in", pw.autocomplete = m === "register" ? "new-password" : "current-password", say(""), (u.value ? pw : u).focus();
   }, offlineOpts = (on) => {
     retry.hidden = !on, off.hidden = !on;
+  }, show = (v, focus) => {
+    view = v;
+    for (const [k, x] of Object.entries(forms)) x.hidden = k !== v;
+    tabs.hidden = v !== "main", say(""), offlineOpts(!1), setTimeout(() => {
+      // leave the cursor alone if the player is already typing in this screen
+      const a = document.activeElement;
+      a && a.tagName === "INPUT" && root.contains(a) && a.offsetParent || focus?.focus();
+    }, 20);
+  }, setMode = (m) => {
+    mode = m, root.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === m)), root.querySelectorAll(".reg").forEach((el) => el.hidden = m !== "register"), root.querySelectorAll(".login-only").forEach((el) => el.hidden = m === "register"), $("[data-ul]").textContent = m === "register" ? "Username" : "Username or email", u.maxLength = m === "register" ? 16 : 120, u.autocomplete = "username", forms.main.querySelector(".go").textContent = m === "register" ? "Create account" : "Sign in", pw.autocomplete = m === "register" ? "new-password" : "current-password", show("main", u.value ? pw : u);
+  }, tick = () => {
+    clearInterval(coolT), resend.disabled = cool > 0, resend.textContent = cool > 0 ? `Send a new code (${cool})` : "Send a new code", cool > 0 && (coolT = setInterval(() => {
+      cool--, resend.disabled = cool > 0, resend.textContent = cool > 0 ? `Send a new code (${cool})` : "Send a new code", cool <= 0 && clearInterval(coolT);
+    }, 1e3));
+  }, lock = (on, label) => {
+    busy = on;
+    for (const b of root.querySelectorAll(".go")) b.disabled = on;
+    label && say(label);
   };
-  root.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => busy || setMode(b.dataset.t)));
-  root.addEventListener("keydown", (ev) => ev.stopPropagation()), root.addEventListener("keyup", (ev) => ev.stopPropagation()), root.addEventListener("mousedown", (ev) => ev.stopPropagation()), root.addEventListener("pointerdown", (ev) => ev.stopPropagation());
-  form.addEventListener("submit", async (ev) => {
-    if (ev.preventDefault(), busy) return;
-    const name = u.value.trim(), pass = pw.value;
-    if (!/^[A-Za-z0-9_-]{3,16}$/.test(name)) return say("Usernames are 3 to 16 letters, numbers, - or _.", !0), u.focus();
-    if (pass.length < 6) return say("Passwords need at least 6 characters.", !0), pw.focus();
-    if (mode === "register" && pass !== pw2.value) return say("The passwords do not match.", !0), pw2.focus();
-    busy = !0, go.disabled = !0, offlineOpts(!1), say(mode === "register" ? "Creating your account…" : "Signing in…");
-    const r = await vgAuthCall({ type: mode === "register" ? "register" : "login", username: name, password: pass });
-    if (busy = !1, go.disabled = !1, r.ok) {
-      pw.value = pw2.value = "", vgAuthSet(r.user, r.token, rem.checked), ui.hide();
+  const WHAT = { register: "to finish creating your account", login: "to sign in", add_email: "to add it to your account", reset: "to reset your password" };
+  // One answer from the server moves the screen on: signed in, enter a code, add an email, or an error.
+  function handle(r) {
+    if (lock(!1), r.ok) {
+      pw.value = pw2.value = np.value = np2.value = code.value = "", pending = null, vgAuthSet(r.user, r.token, rem.checked), ui.hide();
       try {
-        pgCtx?.services.hud?.notify?.(r.created ? `Welcome to Vangaurd, ${r.user}` : `Signed in as ${r.user}`, { kind: "info", duration: 2.6 });
+        pgCtx?.services.hud?.notify?.(r.created ? `Welcome to Vangaurd, ${r.user}` : purpose === "reset" ? `Password changed. Signed in as ${r.user}` : `Signed in as ${r.user}`, { kind: "info", duration: 2.6 });
       } catch {
       }
       return;
     }
-    say(r.error === "taken" ? r.message : r.message || "Sign-in failed.", !0), r.error === "offline" && offlineOpts(!0), r.error === "taken" ? (u.focus(), u.select()) : r.error === "bad_login" && pw.focus();
-  }), retry.addEventListener("click", () => ui.boot()), off.addEventListener("click", () => {
+    if (r.code) {
+      pending = r.pending, purpose = r.purpose, code.value = "", root.querySelectorAll(".rst").forEach((el) => el.hidden = purpose !== "reset"), forms.code.querySelector(".go").textContent = purpose === "reset" ? "Set new password" : purpose === "login" ? "Sign in" : "Verify email", forms.code.querySelector(".vh").textContent = purpose === "reset" ? "Reset your password" : purpose === "login" ? "Check your email" : "Verify your email";
+      show("code", code), info.textContent = `We sent a 6-digit code to ${r.to} ${WHAT[purpose] || ""}. It expires in ${Math.round((r.ttl || 600) / 60)} minutes. Check your spam folder if it isn't there.`, cool = Math.round(r.resendIn || 30), tick();
+      return;
+    }
+    if (r.needEmail) return pending = r.pending, show("email", ae);
+    say(r.message || "Sign-in failed.", !0), r.error === "offline" && offlineOpts(!0), r.error === "taken" ? (u.focus(), u.select()) : r.error === "bad_login" ? pw.focus() : /email/.test(r.error || "") && view === "main" && em.focus();
+    r.error === "code_expired" && view === "code" && (pending = null);
+  }
+  root.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => busy || setMode(b.dataset.t)));
+  root.addEventListener("keydown", (ev) => ev.stopPropagation()), root.addEventListener("keyup", (ev) => ev.stopPropagation()), root.addEventListener("mousedown", (ev) => ev.stopPropagation()), root.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+  forms.main.addEventListener("submit", async (ev) => {
+    if (ev.preventDefault(), busy) return;
+    const ident = u.value.trim(), pass = pw.value;
+    if (mode === "register") {
+      if (!NAME.test(ident)) return say("Usernames are 3 to 16 letters, numbers, - or _.", !0), u.focus();
+      if (!EMAIL.test(em.value.trim())) return say("Enter a valid email address.", !0), em.focus();
+      if (pass.length < 6) return say("Passwords need at least 6 characters.", !0), pw.focus();
+      if (pass !== pw2.value) return say("The passwords do not match.", !0), pw2.focus();
+    } else {
+      if (!(ident.includes("@") ? EMAIL.test(ident) : NAME.test(ident))) return say("Enter your username or the email on your account.", !0), u.focus();
+      if (pass.length < 6) return say("Passwords need at least 6 characters.", !0), pw.focus();
+    }
+    lock(!0, mode === "register" ? "Creating your account…" : "Signing in…"), purpose = mode;
+    handle(await vgAuthCall(mode === "register" ? { type: "register", username: ident, password: pass, email: em.value.trim() } : { type: "login", username: ident, password: pass }, 25e3));
+  }), forms.code.addEventListener("submit", async (ev) => {
+    if (ev.preventDefault(), busy || !pending) return;
+    const c = code.value.replace(/\D/g, "");
+    if (c.length !== 6) return say("Enter the 6-digit code from the email.", !0), code.focus();
+    if (purpose === "reset") {
+      if (np.value.length < 6) return say("New passwords need at least 6 characters.", !0), np.focus();
+      if (np.value !== np2.value) return say("The new passwords do not match.", !0), np2.focus();
+    }
+    lock(!0, "Checking the code…"), handle(await vgAuthCall({ type: "verify_code", pending, code: c, ...purpose === "reset" ? { newPassword: np.value } : {} }, 15e3));
+  }), code.addEventListener("input", () => {
+    code.value = code.value.replace(/\D/g, "").slice(0, 6), code.value.length === 6 && purpose !== "reset" && !busy && forms.code.requestSubmit();
+  }), resend.addEventListener("click", async () => {
+    if (busy || !pending || cool > 0) return;
+    lock(!0, "Sending a new code…"), handle(await vgAuthCall({ type: "resend_code", pending }, 25e3));
+  }), forms.email.addEventListener("submit", async (ev) => {
+    if (ev.preventDefault(), busy || !pending) return;
+    if (!EMAIL.test(ae.value.trim())) return say("Enter a valid email address.", !0), ae.focus();
+    lock(!0, "Sending the code…"), purpose = "add_email", handle(await vgAuthCall({ type: "add_email", pending, email: ae.value.trim() }, 25e3));
+  }), forms.reset.addEventListener("submit", async (ev) => {
+    if (ev.preventDefault(), busy) return;
+    const ident = ru.value.trim();
+    if (!(ident.includes("@") ? EMAIL.test(ident) : NAME.test(ident))) return say("Enter your username or the email on your account.", !0), ru.focus();
+    lock(!0, "Sending the code…"), purpose = "reset", handle(await vgAuthCall({ type: "reset_request", username: ident }, 25e3));
+  }), $("[data-forgot]").addEventListener("click", () => {
+    ru.value = u.value.trim(), show("reset", ru);
+  }), root.querySelectorAll("[data-back]").forEach((b) => b.addEventListener("click", () => {
+    busy || (pending = null, clearInterval(coolT), setMode(mode));
+  })), retry.addEventListener("click", () => ui.boot()), off.addEventListener("click", () => {
     vgAuthSet(null, null, !1), ui.hide();
   });
   const ui = vgAuth.ui = {
@@ -52673,9 +52747,9 @@ function vgAuthUI() {
     async boot() {
       const sv = vgAuthSaved();
       if (!sv) return ui.show();
-      vgAuth.open = !0, root.classList.add("on"), u.value = sv.user, setMode("login"), go.disabled = !0, offlineOpts(!1), say(`Signing in as ${sv.user}…`);
+      vgAuth.open = !0, root.classList.add("on"), u.value = sv.user, setMode("login"), lock(!0), offlineOpts(!1), say(`Signing in as ${sv.user}…`);
       const r = await vgAuthCall({ type: "resume", token: sv.token });
-      if (go.disabled = !1, r.ok) return vgAuthSet(r.user, sv.token, !!localStorage.getItem(VG_AUTH_KEY)), ui.hide();
+      if (lock(!1), r.ok) return vgAuthSet(r.user, sv.token, !!localStorage.getItem(VG_AUTH_KEY)), ui.hide();
       r.error === "offline" ? (say("Can't reach the Vangaurd server. Check your connection and try again, or play offline.", !0), offlineOpts(!0)) : (say(r.message || "Please sign in again.", !0), pw.focus());
     }
   };

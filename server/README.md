@@ -1,6 +1,6 @@
-# Vangaurd matchmaking server 2.4
+# Vangaurd matchmaking server 2.8
 
-This is the online server for Vangaurd Beta 1.03. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
+This is the online server for Vangaurd Beta 1.04. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
 
 What it does:
 
@@ -11,6 +11,7 @@ What it does:
 - **Only the newest game build can play online.** The game sends its build number when it queues. The server reads the newest build from `version.json` on the latest GitHub release (every 5 minutes) and turns older builds away with an "update to play online" message. Builds from before Beta 0.9 send no build number and are always turned away.
 - **Ping marks** (middle mouse in the game) are relayed to the player's teammates.
 - **Accounts.** The game asks players to sign in (or create an account) before the main menu. Usernames are unique (case-insensitive): a taken name can only be used by signing in to that account, and online play needs a signed-in account (the in-match name is always the account name). Passwords are stored only as salted scrypt hashes; the game keeps a sign-in token, never the password. Ten failed attempts from one address pause sign-in for ten minutes.
+- **Email codes.** Once email is set up (see [Email codes](#email-codes)), creating an account needs an email address and the 6-digit code sent to it, and every sign-in (with the username or the email, plus the password) asks for a fresh code sent to the account's email. Accounts made before email existed are asked to add one the next time they sign in. **Forgot password?** in the game sends a code to the account's email and sets a new password (and signs the account out everywhere else). Codes last 10 minutes and allow 5 tries; at most 6 codes an hour go to one address.
 - **Friends and parties.** Players add friends by username (requests are accepted or declined), see who is online, searching or in a match, and invite online friends to a party of up to 6. When the party leader queues, the others are brought into the same match on the same team. Friends are saved with the accounts; parties last while their members are online.
 - **Cloud saves.** Each account's game data (XP and level, loadouts, camos, perks, weapon stats, singleplayer records and settings other than graphics) is uploaded by the game a few seconds after it changes and downloaded when the player signs in on another device. Saves are kept in `saves.json` next to the accounts, up to 256 KB each; every upload bumps a revision number, and an upload based on an older revision is refused with the current save so the game can pick the newer one.
 - **Anti-cheat console and bans.** `/admin` on this server is the moderation console (see below). Moderators review player reports and ban accounts, optionally together with the devices they played on. Bans are checked here on sign-in, resume and queueing, so they apply to every game version; from Beta 1.0 on the game shows a ban screen whose only button closes the game. Reports come from the **Report player** button on the end-of-match screen and only work for players who were in a match together in the last few hours. Moderation data lives in `moderation.json` next to the accounts.
@@ -25,11 +26,37 @@ The game points at `https://opus-of-duty-production-f963.up.railway.app` by defa
 
 ## Check that it worked
 
-Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.7.0"`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
+Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.8.0"`, `"email"` (`"smtp"` or `"brevo"` once email is set up, `false` before), `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
 
 ## Anti-cheat console (`/admin`)
 
 Open `https://opus-of-duty-production-f963.up.railway.app/admin/`. The first time, the server log shows a one-time line `moderation console is not set up yet: … setup code XXXX-XXXX-XXXX`; enter that code with your game account's username and password and that account becomes the owner. After that, sign in with your game account. The owner can add moderators by username (they sign in with their own game accounts), and on a player's page can set their level or copy another account's progress onto them (for fixing progress that ended up on the wrong account). The console only talks to this server, so it works with every game version.
+
+## Email codes
+
+Email sign-in codes stay **off** until the server can send email, so accounts keep working as before until you set this up. Set **one** of these as Railway service variables (the service redeploys by itself), then check `/health` shows `"email":"smtp"` or `"email":"brevo"`.
+
+**Gmail** (Railway only allows outgoing SMTP on the Pro plan and above):
+
+1. Turn on 2-Step Verification for the Gmail account (Google Account → Security).
+2. Create an app password: Google Account → Security → 2-Step Verification → **App passwords**. Name it "Vangaurd" and copy the 16 letters.
+3. Set the variables:
+
+| Variable | Value |
+| --- | --- |
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `465` |
+| `SMTP_USER` | the Gmail address |
+| `SMTP_PASS` | the 16-letter app password (no spaces) |
+
+**Brevo** (free, works on every Railway plan because it sends over HTTPS): make a free account at brevo.com, add and verify a sender (your Gmail works), create an API key under **SMTP & API → API keys**, then set:
+
+| Variable | Value |
+| --- | --- |
+| `BREVO_API_KEY` | the API key |
+| `MAIL_FROM` | the verified sender address |
+
+Optional for both: `MAIL_FROM_NAME` (the sender name, default `Vangaurd`). If sending fails, the game says so and the server log shows the mail server's answer.
 
 ## Optional settings
 

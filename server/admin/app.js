@@ -175,7 +175,7 @@
     const p = d.player, open = d.reportsAgainst.filter((r) => r.status === 'open').length;
     box.innerHTML = `<div class="detail">
       <div class="head"><div><h2>${dot(p.status)}${esc(p.name)}${playerTags(p)}</h2>
-        <div class="facts"><span>${esc(STATUS[p.status] || p.status)}</span><span>Level ${p.level} · ${Number(p.xp).toLocaleString()} XP</span><span>Joined ${esc(fmt(p.created))}</span><span>Last sign-in ${esc(ago(p.lastLogin))}</span><span>${plural(p.devices, 'device')}</span></div></div>
+        <div class="facts"><span>${esc(STATUS[p.status] || p.status)}</span><span>Level ${p.level} · ${Number(p.xp).toLocaleString()} XP</span><span>Joined ${esc(fmt(p.created))}</span><span>Last sign-in ${esc(ago(p.lastLogin))}</span><span>${plural(p.devices, 'device')}</span><span>${p.email ? `Email ${esc(p.email)}${p.emailVerified ? ' (confirmed)' : ' (not confirmed)'}` : 'No email yet'}</span></div></div>
         <div class="acts">${p.ban ? '<button class="btn" data-act="unban">Unban</button>' : p.role ? '' : '<button class="btn danger" data-act="ban">Ban</button>'}
           ${p.status !== 'offline' ? '<button class="btn" data-act="kick">Disconnect</button>' : ''}
           ${open ? `<button class="btn" data-act="dismiss-all">Dismiss ${plural(open, 'open report')}</button>` : ''}</div></div>
