@@ -2,6 +2,7 @@
 // Speaks the same WebSocket protocol as the game client (path /ws).
 // Railway: root directory /server, start command `npm start`; it listens on $PORT.
 import http from 'node:http';
+import { createModeration, cleanDevice } from './moderation.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import pathMod from 'node:path';
@@ -20,7 +21,7 @@ const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
 };
-const VERSION = '2.5.0';
+const VERSION = '2.6.0';
 // ---------- client version gate ----------
 // Only the newest game build may play online. The newest build number is read from the
 // version.json attached to the latest GitHub release (refreshed every 5 minutes).
@@ -28,7 +29,7 @@ const VERSION = '2.5.0';
 const GATE = String(process.env.VERSION_GATE || 'on').toLowerCase() !== 'off';
 const LATEST_URL = process.env.LATEST_VERSION_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest/download/version.json';
 const RELEASE_PAGE = process.env.RELEASE_PAGE_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest';
-const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 0.92', checkedAt: 0, source: 'env' };
+const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 1.0', checkedAt: 0, source: 'env' };
 async function refreshLatest() {
   if (!GATE || String(process.env.LATEST_VERSION_URL || '').toLowerCase() === 'off') return;
   try {
@@ -90,7 +91,7 @@ function saveAccounts(urgent = true) {
   if (urgent) return writeAccounts();
   if (!saveTimer) saveTimer = setTimeout(writeAccounts, 5000);
 }
-for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { if (saveTimer) writeAccounts(); if (savesTimer) writeSaves(); process.exit(0); });
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { if (saveTimer) writeAccounts(); if (savesTimer) writeSaves(); mod.flush(); process.exit(0); });
 const NAME_RE = /^[A-Za-z0-9_-]{3,16}$/;
 const RESERVED = new Set(['player', 'admin', 'administrator', 'moderator', 'server', 'vangaurd', 'system', 'bot', 'guest']);
 const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
@@ -126,11 +127,20 @@ function authOk(c, u, token, created = false) {
   c.account = u.name;
   c.name = u.name;
   send(c, { type: 'auth_ok', username: u.name, token, created });
+  mod.noteDevice(u, c.device);
   goOnline(c);
 }
 function authError(c, code, message) { send(c, { type: 'auth_error', code, message }); }
+// Banned: refuse (every game version shows the auth_error message; Beta 0.95+ also shows the ban screen).
+function refuseBanned(c, v) {
+  const message = mod.banMessage(v);
+  send(c, { type: 'auth_error', code: 'banned', message, ban: v });
+  send(c, { type: 'banned', ban: v, message });
+}
 async function onRegister(c, msg) {
   if (limited(c)) return authError(c, 'too_many', 'Too many attempts. Wait a few minutes and try again.');
+  c.device = cleanDevice(msg.device) || c.device;
+  { const b = mod.checkDevice(c.device); if (b) return refuseBanned(c, b); }
   const name = String(msg.username || '').trim(), pw = String(msg.password || '');
   if (!NAME_RE.test(name)) return authError(c, 'bad_name', 'Usernames are 3 to 16 letters, numbers, - or _.');
   if (RESERVED.has(name.toLowerCase())) return authError(c, 'taken', 'That username is taken. Pick another one.');
@@ -154,6 +164,8 @@ async function onLogin(c, msg) {
     failed(c);
     return authError(c, 'bad_login', u ? 'Wrong password for that username.' : 'No account with that username. Create one instead.');
   }
+  c.device = cleanDevice(msg.device) || c.device;
+  { const b = mod.checkAccount(keyOf(u.name), c.device); if (b) return refuseBanned(c, b); }
   u.lastLogin = now();
   saveAccounts();
   authOk(c, u, newSession(u.name));
@@ -161,6 +173,8 @@ async function onLogin(c, msg) {
 function onResume(c, msg) {
   const u = sessionUser(msg.token);
   if (!u) return authError(c, 'session_expired', 'Your sign-in has expired. Please sign in again.');
+  c.device = cleanDevice(msg.device) || c.device;
+  { const b = mod.checkAccount(keyOf(u.name), c.device); if (b) return refuseBanned(c, b); }
   authOk(c, u, msg.token);
 }
 function onLogout(c, msg) {
@@ -513,7 +527,9 @@ function openMatchFor(mode, c = null) {
 }
 function joinQueue(c, msg) {
   if (clientOutdated(c, msg)) return;
-  if (!c.account && msg.token) { const u = sessionUser(msg.token); if (u) { c.account = u.name; goOnline(c); } }
+  c.device = cleanDevice(msg.device) || c.device;
+  if (!c.account && msg.token) { const u = sessionUser(msg.token); if (u) { const b = mod.checkAccount(keyOf(u.name), c.device); if (b) return refuseBanned(c, b); c.account = u.name; goOnline(c); } }
+  if (c.account) { const b = mod.checkAccount(keyOf(c.account), c.device); if (b) return mod.kickNow(c, b); }
   if (!c.account) {
     send(c, { type: 'error', code: 'login_required', message: 'Sign in to your Vangaurd account to play online.' });
     return;
@@ -585,9 +601,10 @@ function sendMatchFound(match, c) {
 }
 function addToMatch(match, c, inProgress) {
   removeFromQueue(c);
-  const p = { id: c.id, name: c.name, team: pickTeam(match, c), health: 100, alive: true, kills: 0, deaths: 0, score: 0, state: null, pos: null, joinedAt: now(), spawnedAt: now() + (match.phase === 'vote' ? LOAD_GRACE_MS : 0), diedAt: 0 };
+  const p = { id: c.id, key: c.accountKey || keyOf(c.account), name: c.name, team: pickTeam(match, c), health: 100, alive: true, kills: 0, deaths: 0, score: 0, state: null, pos: null, joinedAt: now(), spawnedAt: now() + (match.phase === 'vote' ? LOAD_GRACE_MS : 0), diedAt: 0 };
   match.players.set(c.id, p);
   c.matchId = match.id;
+  mod.matchSeen(match);
   if (inProgress) {
     sendMatchFound(match, c);
     broadcast(match, { type: 'player_joined', matchId: match.id, player: { id: p.id, name: p.name, team: p.team } }, c.id);
@@ -601,6 +618,7 @@ function leaveMatch(c, notify = true) {
   c.matchId = null;
   if (c.accountKey) setTimeout(() => pushAround(c.accountKey), 0);
   if (!match) return;
+  mod.matchSeen(match);
   match.players.delete(c.id);
   if (notify) send(c, { type: 'match_left', matchId: match.id });
   broadcast(match, { type: 'player_left', matchId: match.id, playerId: c.id });
@@ -610,6 +628,7 @@ function leaveMatch(c, notify = true) {
 function endMatch(match, winner) {
   if (match.ended) return;
   match.ended = true;
+  mod.matchSeen(match);
   const msg = { type: 'match_ended', matchId: match.id, winner, score: { ...match.score } };
   if (match.ffa) { msg.ffa = true; msg.players = boardOf(match); msg.winnerName = match.players.get(winner)?.name || null; msg.scoreLimit = match.scoreLimit; }
   broadcast(match, msg);
@@ -767,6 +786,21 @@ function onData(c, msg) {
   if (!savesTimer) savesTimer = setTimeout(writeSaves, 1500);
   send(c, { type: 'data_saved', rev: saves[key].rev, at: t });
 }
+// ---------- moderation (bans, reports, /admin console) ----------
+// A banned player is told why, taken out of their queue or match and disconnected.
+function kickClient(c, msg) {
+  send(c, msg);
+  removeFromQueue(c);
+  if (c.matchId) leaveMatch(c, false);
+  goOffline(c);
+  c.account = null;
+  setTimeout(() => { try { c.ws.close(4003, msg.type || 'kicked'); } catch { /* gone */ } }, 400);
+}
+const mod = createModeration({
+  DATA_DIR, accounts, saveAccounts, online, clients, statusOf, keyOf, userOf, nameOf, scrypt, now, log, send,
+  kick: kickClient, saveOf: (key) => saves[key]?.blob || null,
+});
+mod.kickNow = (c, b) => kickClient(c, mod.bannedMsg(b));
 function handle(c, raw) {
   let msg;
   try { msg = JSON.parse(raw); } catch { return; }
@@ -798,7 +832,13 @@ function handle(c, raw) {
     }
     case 'ping': send(c, { type: 'pong', t: msg.t, seq: msg.seq, serverTime: now() }); break;
     case 'mark': onMark(c, msg); break;
-    case 'hello': c.build = Math.floor(num(msg.clientBuild, 0)); break;
+    case 'hello': {
+      c.build = Math.floor(num(msg.clientBuild, 0));
+      const dev = cleanDevice(msg.device);
+      if (dev) { c.device = dev; const b = mod.checkDevice(dev); send(c, b ? mod.bannedMsg(b) : { type: 'device_ok' }); }
+      break;
+    }
+    case 'report': mod.onReport(c, msg); break;
     case 'register': onRegister(c, msg).catch((e) => { log(`register error: ${e.message}`); authError(c, 'server', 'The server could not create the account. Try again.'); }); break;
     case 'login': onLogin(c, msg).catch((e) => { log(`login error: ${e.message}`); authError(c, 'server', 'The server could not sign you in. Try again.'); }); break;
     case 'resume': onResume(c, msg); break;
@@ -829,6 +869,11 @@ function log(s) { console.log(`[${new Date().toISOString()}] ${s}`); }
 
 const server = http.createServer((req, res) => {
   const path = (req.url || '/').split('?')[0];
+  if (path === '/admin' || path.startsWith('/admin/')) {
+    mod.http(req, res, path).then((done) => { if (!done) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('not found'); } })
+      .catch((e) => { log(`admin error: ${e.message}`); try { res.writeHead(500, { 'content-type': 'application/json' }); res.end('{"error":"Server error."}'); } catch { /* sent */ } });
+    return;
+  }
   if (path === '/' || path === '/health' || path === '/status') {
     let players = 0;
     for (const m of matches.values()) players += m.players.size;

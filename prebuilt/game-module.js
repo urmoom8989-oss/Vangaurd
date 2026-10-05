@@ -44637,6 +44637,7 @@ function R9(A, e) {
     <div class="sum-actions" data-r="sList">
       <button class="btn primary" data-a="restart">Restart mission</button>
       <button class="btn hide" data-a="endless">Continue · Endless</button>
+      <button class="btn hide" data-a="report" data-r="sReport">Report player</button>
       <button class="btn" data-a="menu">Main menu</button>
     </div>
     <div class="footer"><div class="keys"><span><span class="kbd">←</span><span class="kbd">→</span>Navigate</span><span><span class="kbd">Enter</span>Select</span></div><div data-r="sFoot">Hold Vardanek</div></div>
@@ -44723,7 +44724,7 @@ function R9(A, e) {
     else if (Z === "pause")
       nA === "resume" ? e.resume() : nA === "settings" ? f("settings") : nA === "controls" ? f("controls") : nA === "restart" ? p("Restart mission?", "All progress in this deployment will be lost.", () => e.restart()) : nA === "quit" && p("Quit to main menu?", "All progress in this deployment will be lost.", () => e.quitToMenu());
     else if (Z === "summary")
-      nA === "restart" ? e.restart() : nA === "menu" ? e.quitToMenu() : nA === "endless" && e.continueEndless();
+      nA === "restart" ? e.restart() : nA === "menu" ? e.quitToMenu() : nA === "report" ? vgReportOpen() : nA === "endless" && e.continueEndless();
     else if (Z === "confirm") {
       const j = c;
       E(), nA === "yes" && j && j();
@@ -44988,6 +44989,7 @@ function R9(A, e) {
     }
     if (FA === "summary") {
       const xA = Z.summary, hA = un(z, 0, 0.8, 1e9, 0);
+      s.sReport && Ca(s.sReport, vgReportable());
       Fa(s.summary, Math.max(1e-3, hA)), ur(s.sMain, "transform", `translateY(${((1 - go(z / 0.9)) * 14).toFixed(1)}px)`), hf(s.sKick, "red", !xA.victory);
       const qA = j.matchType === "tdm";
       xt(s.sKick, qA ? xA.victory ? "Victory" : "Defeat" : xA.victory ? Z.endless ? "Endless assault ended" : "Mission successful" : "Mission failed"), xt(s.sHead, qA ? `${j.winner || "Winning team"} wins` : xA.victory ? "Vardanek secured" : "Plaza overrun"), dE(s.sSub, qA ? `Team Deathmatch · <em>Final score: Blue ${j.score.blue || 0} — Red ${j.score.red || 0}</em>` : `${p2} · <em>${bc(Z.diffKey).label}</em> · ${xA.victory && !Z.endless ? "All 10 waves survived" : `Reached wave ${Math.max(1, j.wave)}`}`);
@@ -48625,7 +48627,7 @@ function om() {
   }
 }
 /* Game version. The release build stamps the CI build number into "__VGD_BUILD__". */
-var VGD = { label: "Beta 0.94", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 1.0", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -51722,11 +51724,14 @@ function vgNetStart() {
         vgNet.stopped = !0, ws.close();
         return;
       }
-      ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build }));
+      ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build, device: vgDevice() }));
     }
     else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, ws.send(JSON.stringify({ type: "social_state" })), vgSyncBegin();
-    else if (m.type === "auth_error") {
-      vgNet.stopped = !0, ws.close();
+    else if (m.type === "banned" || m.type === "auth_error") {
+      vgNet.stopped = !0, ws.close(), (m.type === "banned" || m.code === "banned") && vgBanned(m.ban, m.message);
+      return;
+    } else if (m.type === "kicked") {
+      vgToast(m.message || "A moderator disconnected you."), vgNet.retry = Math.max(vgNet.retry, 4);
       return;
     } else if (m.type === "pong" && vgNet.sent.has(m.seq)) {
       const t0 = vgNet.sent.get(m.seq);
@@ -51985,6 +51990,9 @@ var vgFrCss = `
 .vg-burger i { display: block; height: 2px; background: #e9ece6; }
 .vg-burger b { position: absolute; right: -7px; top: -7px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #f2c14e; color: #111; font: 800 11px/18px ui-sans-serif, system-ui, sans-serif; text-align: center; }
 .vg-burger b:empty { display: none; }
+.vg-power { position: absolute; left: calc(var(--u) * 84); top: calc(var(--u) * 22); z-index: 30; width: calc(var(--u) * 46); height: calc(var(--u) * 40); display: grid; place-items: center; padding: 0; background: rgba(10,13,15,.6); border: 1px solid rgba(236,240,234,.18); color: #e9ece6; cursor: pointer; }
+.vg-power:hover, .vg-power:focus-visible { border-color: #ff6b5b; color: #ff6b5b; outline: none; }
+.vg-power svg { width: calc(var(--u) * 20); height: calc(var(--u) * 20); }
 .vg-fr { position: fixed; left: 0; top: 0; bottom: 0; z-index: 380; width: min(380px, 92vw); display: flex; flex-direction: column; background: rgba(10,13,15,.97); border-right: 1px solid rgba(236,240,234,.14); box-shadow: 20px 0 60px rgba(0,0,0,.5); color: #e9ece6; transform: translateX(-102%); transition: transform .22s ease; font-size: 13px; }
 .vg-fr.on { transform: none; }
 .vg-fr header { display: flex; align-items: center; padding: 20px 20px 14px; border-bottom: 1px solid rgba(236,240,234,.1); }
@@ -52018,8 +52026,21 @@ function vgFriendsMount(host, opts = {}) {
     const st = document.createElement("style");
     st.id = "vg-fr-style", st.textContent = vgFrCss, document.head.appendChild(st);
   }
-  const burger = document.createElement("button");
-  burger.type = "button", burger.className = "vg-burger", burger.title = "Friends and party", burger.setAttribute("aria-label", "Friends and party"), burger.innerHTML = "<i></i><i></i><i></i><b></b>", host.appendChild(burger);
+  // The three-line friends button and, next to it, the power button (quit the game). Added to each menu screen.
+  const burgers = [];
+  function addButtons(h) {
+    const b = document.createElement("button");
+    b.type = "button", b.className = "vg-burger", b.title = "Friends and party", b.setAttribute("aria-label", "Friends and party"), b.innerHTML = "<i></i><i></i><i></i><b></b>", h.appendChild(b), burgers.push(b);
+    b.addEventListener("click", (ev) => {
+      ev.stopPropagation(), ui.toggle();
+    });
+    const pw = document.createElement("button");
+    pw.type = "button", pw.className = "vg-power", pw.title = "Quit game", pw.setAttribute("aria-label", "Quit game"), pw.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M12 3.2v8.3M6.3 6.4a8 8 0 1 0 11.4 0"/></svg>', h.appendChild(pw);
+    pw.addEventListener("click", (ev) => {
+      ev.stopPropagation(), vgQuitAsk();
+    });
+    render();
+  }
   const panel = document.createElement("aside");
   panel.className = "vg-fr", panel.innerHTML = '<header><div><h3>Friends</h3><small class="me"></small></div><button type="button" data-close aria-label="Close">×</button></header><form class="add"><input name="n" maxlength="16" placeholder="Add a friend by username" autocomplete="off" spellcheck="false"><button class="btn pri" type="submit">Add</button></form><div class="msg"></div><div class="list"></div>', document.body.appendChild(panel);
   const list = panel.querySelector(".list"), msg = panel.querySelector(".msg"), input = panel.querySelector("input"), me = panel.querySelector(".me");
@@ -52035,12 +52056,13 @@ function vgFriendsMount(host, opts = {}) {
     },
     close() {
       ui.toggle(!1);
-    }
+    },
+    addButtons
   };
   function render() {
     msg.textContent = msg.dataset.keep ? msg.textContent : "";
     const sn = vgNet.social, n = sn ? sn.incoming.length + sn.invites.length : 0;
-    if (burger.querySelector("b").textContent = n ? String(n) : "", me.textContent = vgAuth.user ? `${vgAuth.user}${vgNet.open ? "" : " · connecting…"}` : "Not signed in", !vgAuth.user) {
+    if (burgers.forEach((x) => x.querySelector("b").textContent = n ? String(n) : ""), me.textContent = vgAuth.user ? `${vgAuth.user}${vgNet.open ? "" : " · connecting…"}` : "Not signed in", !vgAuth.user) {
       list.innerHTML = '<div class="empty">Sign in to your Vangaurd account to add friends and play together.</div><div class="row"><button class="btn pri" data-signin>Sign in</button></div>';
       return;
     }
@@ -52081,13 +52103,12 @@ function vgFriendsMount(host, opts = {}) {
     vgNetSend({ type: "friend_add", username: nm }) ? (input.value = "", msg.textContent = "") : msg.textContent = "Not connected to the server yet. Try again in a moment.";
   }), panel.addEventListener("keydown", (ev) => {
     ev.stopPropagation(), ev.key === "Escape" && ui.close();
-  }), burger.addEventListener("click", (ev) => {
-    ev.stopPropagation(), ui.toggle();
   }), window.addEventListener("keydown", (ev) => {
     open && ev.key === "Escape" && (ui.close(), ev.preventDefault());
   });
+  addButtons(host);
   vgNet.listeners.push((m) => {
-    m.type === "social_error" ? (msg.textContent = m.message, panel.classList.contains("on") || vgToast(m.message)) : m.type === "social_note" && (vgToast(m.text), m.kind === "friend_request" || m.kind === "party_invite") && (burger.animate?.([{ transform: "scale(1)" }, { transform: "scale(1.15)" }, { transform: "scale(1)" }], { duration: 500, iterations: 2 })), (m.type === "social" || m.type === "_closed") && render(), opts.onMessage?.(m);
+    m.type === "social_error" ? (msg.textContent = m.message, panel.classList.contains("on") || vgToast(m.message)) : m.type === "social_note" && (vgToast(m.text), m.kind === "friend_request" || m.kind === "party_invite") && burgers.forEach((x) => x.animate?.([{ transform: "scale(1)" }, { transform: "scale(1.15)" }, { transform: "scale(1)" }], { duration: 500, iterations: 2 })), (m.type === "social" || m.type === "_closed") && render(), opts.onMessage?.(m);
   }), vgAuth.listeners.push(() => render()), render();
   return ui;
 }
@@ -52129,6 +52150,195 @@ function vgQuitAsk() {
     }, 400);
   };
   d.querySelector("[data-q]").addEventListener("click", go), d.querySelector("[data-c]").addEventListener("click", close), window.addEventListener("keydown", key, !0), d.querySelector("[data-q]").focus();
+}
+/* ------------------------------------------------------------------ device id, bans, reports */
+// A random id for this install, sent when signing in. A moderator can block the devices a banned account
+// played on, so the player can't simply make a new account there.
+function vgDevice() {
+  try {
+    let d = localStorage.getItem("vangaurd.device.v1");
+    if (!d || !/^[A-Za-z0-9-]{8,64}$/.test(d)) {
+      d = globalThis.crypto?.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+      localStorage.setItem("vangaurd.device.v1", d);
+    }
+    return d;
+  } catch {
+    return null;
+  }
+}
+var vgBan = { open: !1 }, VG_BAN_KEY = "vangaurd.ban.v1";
+var vgBanCss = `
+.vg-upd.ban .card { border-top-color: #ff5d4d; }
+.vg-upd.ban .tag { color: #ff6b5b; }
+.vg-upd .reason { margin: 0 0 14px; padding: 10px 12px; border-left: 3px solid #ff5d4d; background: rgba(255,93,77,.09); color: #e9ece6; font-size: 14px; line-height: 1.45; word-break: break-word; }
+.vg-upd .reason span { display: block; margin-bottom: 2px; color: #ff8a7d; font-size: 11px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; }
+.vg-upd.ban .go { background: #ff5d4d; color: #1a0705; }
+`;
+const vgEsc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+// The server says this account (or this device) is banned: nothing behind this screen works, and its only
+// button closes the game. Remembered on the device so the game can't be played offline either.
+function vgBanned(ban, message = "", offline = !1) {
+  if (typeof document > "u" || vgBan.open) return;
+  const b = ban && typeof ban == "object" ? ban : {}, permanent = !!b.permanent || !b.until;
+  if (!permanent && b.until <= Date.now()) return vgBanClear();
+  vgBan.open = !0, vgUpd.open = !0;
+  try {
+    localStorage.setItem(VG_BAN_KEY, JSON.stringify({ account: b.account || null, reason: b.reason || "", until: b.until || null, permanent, device: !!b.device, at: b.at || Date.now() }));
+  } catch {
+  }
+  for (const id of ["vg-upd-style", "vg-ban-style"]) if (!document.getElementById(id)) {
+    const st = document.createElement("style");
+    st.id = id, st.textContent = id === "vg-upd-style" ? vgUpdCss : vgBanCss, document.head.appendChild(st);
+  }
+  document.querySelectorAll(".vg-upd, .vg-rep, .vg-quit").forEach((x) => x.remove()), vgQuitOpen = !1;
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  try {
+    window.__GAME__?.pause?.();
+  } catch {
+  }
+  try {
+    vgNetStop();
+  } catch {
+  }
+  const when = permanent ? "This ban is permanent." : `This ban ends ${new Date(b.until).toLocaleString(void 0, { dateStyle: "medium", timeStyle: "short" })}.`;
+  const who = b.device ? "This device is banned" : "Your account is banned";
+  const d = document.createElement("div");
+  d.className = "vg-upd ban", d.innerHTML = `<div class="card" role="alertdialog" aria-modal="true" aria-labelledby="vg-ban-h" aria-describedby="vg-ban-p"><div class="tag">Banned</div><h3 id="vg-ban-h">${who}</h3><p id="vg-ban-p">${b.account ? `The account <b>${vgEsc(b.account)}</b>${b.device ? ", which played on this device," : ""} is` : "You are"} banned from Vangaurd by the moderators. ${when}</p>${b.reason ? `<div class="reason"><span>Reason</span>${vgEsc(b.reason)}</div>` : ""}${offline ? '<p class="note" style="margin:0 0 14px">You are offline; this is the last ban the server reported for this device.</p>' : ""}<button type="button" class="go" data-q>Close game</button></div>`, document.body.appendChild(d);
+  const btn = d.querySelector("[data-q]");
+  btn.addEventListener("click", () => {
+    if (window.vangaurdDesktop?.quit) return btn.disabled = !0, btn.textContent = "Closing…", window.vangaurdDesktop.quit();
+    try {
+      window.close();
+    } catch {
+    }
+    setTimeout(() => vgShutdownPage(null, `The game has closed. ${b.device ? "This device" : "This account"} is banned from Vangaurd.`), 300);
+  });
+  const block = (ev) => {
+    ev.stopImmediatePropagation(), d.contains(ev.target) && ev.key !== "Escape" || ev.preventDefault();
+  };
+  for (const t of ["keydown", "keyup"]) window.addEventListener(t, block, !0);
+  for (const t of ["mousedown", "pointerdown", "wheel", "contextmenu"]) d.addEventListener(t, (ev) => {
+    ev.stopPropagation(), t === "mousedown" && !ev.target.closest("button") && ev.preventDefault();
+  });
+  document.addEventListener("focusin", (ev) => {
+    d.isConnected && !d.contains(ev.target) && btn.focus();
+  }, !0), setTimeout(() => btn.focus(), 30);
+}
+function vgBanClear() {
+  try {
+    localStorage.removeItem(VG_BAN_KEY);
+  } catch {
+  }
+}
+// Offline (the server can't be reached): keep showing the last ban the server reported for this device.
+function vgBanOffline() {
+  let m = null;
+  try {
+    m = JSON.parse(localStorage.getItem(VG_BAN_KEY) || "null");
+  } catch {
+  }
+  if (!m || typeof m != "object") return;
+  if (!m.permanent && !(m.until > Date.now())) return vgBanClear();
+  vgBanned(m, "", !0);
+}
+/* Report a player: from the end-of-match screen, about someone from the online match that just finished. */
+var vgLastMatch = null;
+function vgTrackMatch(m) {
+  if (!m || typeof m != "object" || !m.matchId || !/^(match_found|match_update|match_ended|player_joined)$/.test(m.type)) return;
+  (!vgLastMatch || vgLastMatch.id !== m.matchId) && (vgLastMatch = { id: m.matchId, names: /* @__PURE__ */ new Set(), reported: /* @__PURE__ */ new Set(), ended: !1, endedAt: 0 });
+  for (const r of [...m.roster || [], ...m.players || [], ...m.player ? [m.player] : []]) r?.name && vgLastMatch.names.add(String(r.name).slice(0, 20));
+  m.type === "match_ended" && vgMatchOver();
+}
+// The online match is over (the server said so, or the game reached the score limit first): offer reporting.
+function vgMatchOver() {
+  vgLastMatch && !vgLastMatch.ended && (vgLastMatch.ended = !0, vgLastMatch.endedAt = Date.now());
+  for (const t of [60, 600, 1500]) setTimeout(vgReportRefresh, t);
+}
+function vgReportRefresh() {
+  if (typeof document > "u") return;
+  const on = vgReportable();
+  for (const b of document.querySelectorAll('[data-a="report"]')) b._s !== on && (b._s = on, b.classList.toggle("hide", !on));
+}
+function vgReportable() {
+  const me = String(vgAuth.user || "").toLowerCase();
+  return !!(vgAuth.user && vgLastMatch?.ended && Date.now() - vgLastMatch.endedAt < 15 * 60e3 && [...vgLastMatch.names].some((n) => n.toLowerCase() !== me));
+}
+var vgRepCss = `
+.vg-rep { position: fixed; inset: 0; z-index: 415; display: grid; place-items: center; padding: 16px; background: rgba(4,6,8,.78); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #e9ece6; }
+.vg-rep .card { width: min(500px, 94vw); max-height: 92vh; overflow-y: auto; box-sizing: border-box; padding: 24px 26px 22px; background: rgba(12,15,17,.98); border: 1px solid rgba(236,240,234,.14); border-top: 3px solid #f2c14e; box-shadow: 0 30px 90px rgba(0,0,0,.65); }
+.vg-rep h3 { margin: 0 0 4px; font-size: 20px; letter-spacing: .1em; text-transform: uppercase; }
+.vg-rep p.sub { margin: 0 0 16px; color: #b9bfb8; font-size: 13px; line-height: 1.45; }
+.vg-rep .lbl { display: block; margin: 0 0 7px; color: #949c95; font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
+.vg-rep .who, .vg-rep .why { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.vg-rep .who button, .vg-rep .why button { padding: 8px 11px; background: rgba(255,255,255,.05); border: 1px solid rgba(236,240,234,.2); color: #e9ece6; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.vg-rep .who button:hover, .vg-rep .why button:hover { border-color: #f2c14e; }
+.vg-rep .who button.on, .vg-rep .why button.on { border-color: #f2c14e; background: rgba(242,193,78,.15); color: #f2c14e; }
+.vg-rep .who button:disabled { opacity: .45; cursor: default; }
+.vg-rep textarea { width: 100%; min-height: 70px; box-sizing: border-box; padding: 10px 11px; background: rgba(255,255,255,.04); border: 1px solid rgba(236,240,234,.2); color: #fff; font: 14px/1.4 inherit; font-family: inherit; resize: vertical; outline: none; }
+.vg-rep textarea:focus { border-color: #f2c14e; }
+.vg-rep .msg { min-height: 18px; margin: 10px 0 0; font-size: 13px; color: #c3c9c2; }
+.vg-rep .msg.err { color: #ff8070; }
+.vg-rep .msg.ok { color: #7fe08c; }
+.vg-rep .acts { display: flex; gap: 10px; margin-top: 14px; }
+.vg-rep .acts button { flex: 1; padding: 12px; border: 1px solid rgba(236,240,234,.24); background: rgba(255,255,255,.06); color: #e9ece6; font-family: inherit; font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; cursor: pointer; }
+.vg-rep .acts button.pri { background: #f2c14e; border-color: #f2c14e; color: #111; }
+.vg-rep .acts button:disabled { opacity: .5; cursor: default; }
+`;
+var VG_REPORT_REASONS = [["cheating", "Cheating"], ["exploit", "Exploiting a bug"], ["name", "Offensive name"], ["abuse", "Abusive behaviour"], ["other", "Other"]];
+function vgReportOpen() {
+  if (typeof document > "u" || document.querySelector(".vg-rep") || !vgLastMatch) return;
+  if (!document.getElementById("vg-rep-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-rep-style", st.textContent = vgRepCss, document.head.appendChild(st);
+  }
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  const me = String(vgAuth.user || "").toLowerCase(), M = vgLastMatch, names = [...M.names].filter((n) => n.toLowerCase() !== me).sort((a, b) => a.localeCompare(b));
+  const d = document.createElement("div");
+  d.className = "vg-rep", d.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-rep-h"><h3 id="vg-rep-h">Report a player</h3><p class="sub">From the match you just played. Reports go to the Vangaurd moderators, who can ban cheaters and abusive players.</p><span class="lbl">Player</span><div class="who">${names.map((n) => `<button type="button" data-n="${vgEsc(n)}"${M.reported.has(n) ? " disabled" : ""}>${vgEsc(n)}${M.reported.has(n) ? " \xB7 reported" : ""}</button>`).join("")}</div><span class="lbl">Reason</span><div class="why">${VG_REPORT_REASONS.map(([k, t]) => `<button type="button" data-r="${k}">${t}</button>`).join("")}</div><span class="lbl">What happened? (optional)</span><textarea maxlength="300" placeholder="For example: always knew where everyone was through walls"></textarea><div class="msg" aria-live="polite"></div><div class="acts"><button type="button" data-c>Cancel</button><button type="button" class="pri" data-s disabled>Send report</button></div></div>`, document.body.appendChild(d);
+  const $ = (q) => d.querySelector(q), send = $("[data-s]"), msg = $(".msg"), note = $("textarea");
+  let who = names.length === 1 && !M.reported.has(names[0]) ? names[0] : null, why = null, busy = !1;
+  const sync = () => {
+    d.querySelectorAll("[data-n]").forEach((b) => b.classList.toggle("on", b.dataset.n === who)), d.querySelectorAll("[data-r]").forEach((b) => b.classList.toggle("on", b.dataset.r === why)), send.disabled = busy || !who || !why;
+  }, say = (t, kind = "") => {
+    msg.textContent = t || "", msg.className = `msg ${kind}`;
+  }, close = () => {
+    d.remove(), window.removeEventListener("keydown", key, !0), window.removeEventListener("keyup", key, !0), vgNet.listeners = vgNet.listeners.filter((f) => f !== onMsg);
+  }, key = (ev) => {
+    ev.stopImmediatePropagation(), ev.key === "Escape" && (ev.preventDefault(), close());
+  };
+  let done = null;
+  const onMsg = (m) => {
+    (m.type === "report_ok" || m.type === "report_error") && done?.(m);
+  };
+  vgNet.listeners.push(onMsg);
+  d.querySelectorAll("[data-n]").forEach((b) => b.addEventListener("click", () => {
+    who = b.dataset.n, sync();
+  })), d.querySelectorAll("[data-r]").forEach((b) => b.addEventListener("click", () => {
+    why = b.dataset.r, sync();
+  })), $("[data-c]").addEventListener("click", close), d.addEventListener("mousedown", (ev) => {
+    ev.stopPropagation(), ev.target === d && close();
+  });
+  for (const t of ["keydown", "keyup"]) window.addEventListener(t, key, !0);
+  send.addEventListener("click", async () => {
+    if (!who || !why || busy) return;
+    if (!vgNet.open) return say("Not connected to the Vangaurd server. Try again in a moment.", "err");
+    busy = !0, sync(), say("Sending…");
+    const r = await new Promise((res) => {
+      const to = setTimeout(() => res({ type: "report_error", message: "The server did not answer. Try again." }), 8e3);
+      done = (m) => (clearTimeout(to), res(m)), vgNetSend({ type: "report", target: who, reason: why, note: note.value.trim().slice(0, 300), matchId: M.id }) || (clearTimeout(to), res({ type: "report_error", message: "Not connected to the server." }));
+    });
+    if (busy = !1, r.type === "report_ok") {
+      M.reported.add(who), say(`Thanks. The moderators will review your report on ${who}.`, "ok"), send.textContent = "Sent", send.disabled = !0;
+      const b = d.querySelector(`[data-n="${CSS.escape(who)}"]`);
+      b && (b.disabled = !0, b.textContent = `${who} \xB7 reported`), who = null, setTimeout(() => d.isConnected && close(), 1800);
+    } else say(r.message || "The report could not be sent.", "err"), sync();
+  }), sync(), setTimeout(() => (d.querySelector("[data-n]:not(:disabled)") || $("[data-c]")).focus(), 30);
 }
 /* ------------------------------------------------------------------ update required */
 // Shown when the Vangaurd server says this build is too old: when the game connects (launch, sign-in) or
@@ -52244,7 +52454,7 @@ function vgUpdateRequired(info = {}) {
   }, !0), setTimeout(() => btn.focus(), 30);
 }
 // Browsers only let a page close a tab it opened, so when they refuse, stop the game and say so instead.
-function vgShutdownPage(url) {
+function vgShutdownPage(url, text = "The game has closed because this version is out of date.") {
   try {
     window.__GAME__?.pause?.();
   } catch {
@@ -52261,33 +52471,42 @@ function vgShutdownPage(url) {
   const st = document.createElement("style");
   st.textContent = vgUpdCss, document.body.replaceChildren(st);
   const box = document.createElement("div");
-  box.className = "vg-closed", box.innerHTML = `<div><b>VANGAURD</b><p>The game has closed because this version is out of date.</p><a href="${url}" target="_blank" rel="noopener">Download the new version</a><small>You can close this tab.</small></div>`, document.body.appendChild(box);
+  box.className = "vg-closed", box.innerHTML = `<div><b>VANGAURD</b><p>${vgEsc(text)}</p>${url ? `<a href="${url}" target="_blank" rel="noopener">Download the new version</a>` : ""}<small>You can close this tab.</small></div>`, document.body.appendChild(box);
 }
 // At launch: ask the server which build it needs, so an old build is stopped before the menus.
 function vgBuildProbe() {
   if (typeof WebSocket > "u") return;
-  let ws;
+  let ws, got = !1, fin = !1, to = 0;
+  const done = () => {
+    fin = !0, clearTimeout(to);
+    try {
+      ws?.close();
+    } catch {
+    }
+  }, offline = () => {
+    fin || (done(), got || vgBanOffline());
+  };
   try {
     ws = new WebSocket(vgServerWs());
   } catch {
-    return;
+    return vgBanOffline();
   }
-  const done = () => {
-    clearTimeout(to);
-    try {
-      ws.close();
-    } catch {
-    }
-  }, to = setTimeout(done, 8e3);
-  ws.addEventListener("message", (ev) => {
+  to = setTimeout(offline, 8e3), ws.addEventListener("message", (ev) => {
     let m;
     try {
       m = JSON.parse(ev.data);
     } catch {
       return;
     }
-    m.type === "connected" && (done(), vgCheckBuild(m));
-  }), ws.addEventListener("error", done);
+    if (m.type === "connected") {
+      if (got = !0, vgCheckBuild(m)) return done();
+      try {
+        ws.send(JSON.stringify({ type: "hello", clientBuild: VGD.build, device: vgDevice() }));
+      } catch {
+      }
+      clearTimeout(to), to = setTimeout(done, 5e3);
+    } else m.type === "banned" ? (done(), vgBanned(m.ban, m.message)) : m.type === "device_ok" && done();
+  }), ws.addEventListener("error", offline), ws.addEventListener("close", offline);
 }
 /* ------------------------------------------------------------------ accounts (sign in before the main menu) */
 // Usernames and passwords live on the Vangaurd server; the game only keeps a sign-in token on this device
@@ -52301,7 +52520,7 @@ function vgAuthSet(user, token, remember) {
     !user && sessionStorage.removeItem(VG_AUTH_KEY);
   } catch {
   }
-  user && oJ(user), user && token ? (vgNet.stopped = !1, vgNetStart()) : vgNetStop();
+  user && oJ(user), user && token && vgBanClear(), user && token ? (vgNet.stopped = !1, vgNetStart()) : vgNetStop();
   for (const el of document.querySelectorAll(".vg-who")) el.textContent = user ? `● ${user}` : "Offline";
   for (const f of vgAuth.listeners) try {
     f(vgAuth);
@@ -52347,7 +52566,7 @@ function vgAuthCall(msg, ms = 9e3) {
       } catch {
         return;
       }
-      m.type === "connected" ? vgCheckBuild(m) ? fin({ error: "outdated", message: "This version of Vangaurd is out of date." }) : ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created }) : m.type === "auth_error" ? fin({ error: m.code || "error", message: m.message || "Sign-in failed." }) : m.type === "logged_out" && fin({ ok: !0 });
+      m.type === "connected" ? vgCheckBuild(m) ? fin({ error: "outdated", message: "This version of Vangaurd is out of date." }) : ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build, device: vgDevice() })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created }) : m.type === "banned" ? (vgBanned(m.ban, m.message), fin({ error: "banned", message: m.message || "This account is banned." })) : m.type === "auth_error" ? (m.code === "banned" && vgBanned(m.ban, m.message), fin({ error: m.code || "error", message: m.message || "Sign-in failed." })) : m.type === "logged_out" && fin({ ok: !0 });
     }), ws.addEventListener("error", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." })), ws.addEventListener("close", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." }));
   });
 }
@@ -52971,7 +53190,7 @@ function cJ(A) {
   NA("div", "od-scrim", n), NA("div", "od-scan", n);
   const o = NA("div", "od-title", n);
   NA("div", "emb", o, R2), NA("div", "op", o).textContent = "Vangaurd", NA("h1", "", o, "<span>VANGAURD</span>"), NA("div", "sub", o).textContent = "Choose your deployment";
-  const r = NA("div", "od-menu od-entry-menu", n), c = [de(r, "Singleplayer", "Play immediately against AI", se), de(r, "Multiplayer", "Open the deployment menu, then queue for a match", Qe), de(r, "Quit Game", "Close Vangaurd", vgQuitAsk)], l = NA("div", "od-foot", n);
+  const r = NA("div", "od-menu od-entry-menu", n), c = [de(r, "Singleplayer", "Play immediately against AI", se), de(r, "Multiplayer", "Open the deployment menu, then queue for a match", Qe)], l = NA("div", "od-foot", n);
   l.innerHTML = `<span class="hint"><span class="od-key">↑↓</span>Navigate</span><span class="hint"><span class="od-key">ENTER</span>Select</span><span class="sp"></span><span class="vg-who"></span><span class="ver">${VGD.text}</span>`;
   const g = s("loading", "od-loading");
   NA("div", "od-scrim dark", g);
@@ -52994,6 +53213,7 @@ function cJ(A) {
       } else m.type === "party_cancel" && F.waitingForPlayers && !F.multiplayerMatch && (vgToast(`${m.leader} cancelled the queue.`), ye());
     }
   }) : null, vgLobNet = NA("div", "vg-lobnet", u);
+  vgFr?.addButtons(n);
   typeof window < "u" && setInterval(() => {
     const on = F.sessionType === "multiplayer" && !!vgAuth.user, st = vgNetStats();
     vgLobNet.style.display = on ? "" : "none", on && (vgLobNet.innerHTML = st.open ? `<span class="${st.ping == null ? "" : st.ping < 70 ? "g" : st.ping < 130 ? "y" : "r"}">●</span> PING ${st.ping == null ? "--" : Math.round(st.ping)} ms · LOSS ${st.loss.toFixed(0)}%` : '<span class="r">●</span> Connecting…');
@@ -53040,8 +53260,7 @@ function cJ(A) {
       F.armoryPage !== "armory" && (F.armoryPage = "level"), F.armoryFrom = "main", z(), tt("armory");
     }),
     de(d, "Settings", "Graphics, mouse, audio and interface", () => Ct("graphics")),
-    de(d, "Back", "Return to deployment selection", () => tt("entry")),
-    de(d, "Quit Game", "Close Vangaurd", vgQuitAsk)
+    de(d, "Back", "Return to deployment selection", () => tt("entry"))
   ], C = NA("div", "od-card", u), y = NA("div", "od-card-head", C), w = NA("div", "k", y), m = NA("div", "t", C), D = NA("div", "p", C), M = NA("div", "map", C), x = NA("canvas", "", M), S = NA("div", "stats", C), U = NA("div", "od-mp-status", u);
   U.setAttribute("role", "status"), U.setAttribute("aria-live", "polite");
   const G = NA("div", "", U), P = NA("button", "od-btn", U);
@@ -53259,6 +53478,7 @@ function cJ(A) {
   const pgTag = (yA = {}) => {
     yA.byPlayer && yA.confirmed && pgAddXp(50, "Kill confirmed", !1);
   }, pgEnd = (yA = {}) => {
+    e.services.network?.state?.active && vgMatchOver();
     const VA = e.services.gamemode?.state;
     VA && ["tdm", "domination"].includes(VA.matchType) && pgAddXp(yA.winner === VA.playerTeam ? 500 : 150, yA.winner === VA.playerTeam ? "Match victory" : "Match complete");
   }, pgWave = (yA = {}) => {
@@ -53520,7 +53740,9 @@ function cJ(A) {
         } catch {
           return;
         }
-        if (e.events.emit("network:message", it), it.type === "connected") F.multiplayerPlayerId = it.playerId ?? it.id ?? it.clientId ?? null, vgCheckBuild(it);
+        if (e.events.emit("network:message", it), vgTrackMatch(it), it.type === "banned" || it.type === "auth_error" && it.code === "banned") F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgBanned(it.ban, it.message);
+        else if (it.type === "kicked") he(it.message || "A moderator disconnected you.", 8);
+        else if (it.type === "connected") F.multiplayerPlayerId = it.playerId ?? it.id ?? it.clientId ?? null, vgCheckBuild(it);
         else if (it.type === "queue_status") {
           F.waitingForPlayers = !0;
           const ot = Number.isFinite(it.queued) ? it.queued : 1, ht = Number.isFinite(it.maximum) ? it.maximum : 12, Ot = Number.isFinite(it.startsIn) ? it.startsIn : null, mn2 = Number.isFinite(it.minimum) ? it.minimum : null, Gs = Ot === null ? mn2 && ot < mn2 ? `${gmName()} · ${ot} in queue · waiting for ${mn2 - ot} more player${mn2 - ot === 1 ? "" : "s"} to start.` : `Searching ${gmName()} · ${ot}/${ht} players (12 max).` : Ot > 0 ? `${gmName()} · ${ot} players · match starts in ${Ot}s.` : `${gmName()} starting…`;
@@ -53600,7 +53822,8 @@ function cJ(A) {
           name: vgAuth.user || Uc(),
           token: vgAuth.token,
           clientBuild: VGD.build,
-          clientLabel: VGD.label
+          clientLabel: VGD.label,
+          device: vgDevice()
         })), F.waitingForPlayers = !0, G.textContent = `Searching for ${gmName()} players…`, e.events.emit("gamemode:queue-status", {
           queued: 1,
           minimum: null,

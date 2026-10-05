@@ -1,6 +1,6 @@
 # Vangaurd matchmaking server 2.4
 
-This is the online server for Vangaurd Beta 0.94. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
+This is the online server for Vangaurd Beta 1.0. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
 
 What it does:
 
@@ -13,6 +13,7 @@ What it does:
 - **Accounts.** The game asks players to sign in (or create an account) before the main menu. Usernames are unique (case-insensitive): a taken name can only be used by signing in to that account, and online play needs a signed-in account (the in-match name is always the account name). Passwords are stored only as salted scrypt hashes; the game keeps a sign-in token, never the password. Ten failed attempts from one address pause sign-in for ten minutes.
 - **Friends and parties.** Players add friends by username (requests are accepted or declined), see who is online, searching or in a match, and invite online friends to a party of up to 6. When the party leader queues, the others are brought into the same match on the same team. Friends are saved with the accounts; parties last while their members are online.
 - **Cloud saves.** Each account's game data (XP and level, loadouts, camos, perks, weapon stats, singleplayer records and settings other than graphics) is uploaded by the game a few seconds after it changes and downloaded when the player signs in on another device. Saves are kept in `saves.json` next to the accounts, up to 256 KB each; every upload bumps a revision number, and an upload based on an older revision is refused with the current save so the game can pick the newer one.
+- **Anti-cheat console and bans.** `/admin` on this server is the moderation console (see below). Moderators review player reports and ban accounts, optionally together with the devices they played on. Bans are checked here on sign-in, resume and queueing, so they apply to every game version; from Beta 1.0 on the game shows a ban screen whose only button closes the game. Reports come from the **Report player** button on the end-of-match screen and only work for players who were in a match together in the last few hours. Moderation data lives in `moderation.json` next to the accounts.
 
 This build of the game needs this server for online play. An older server still runs matches, but there is no map vote and Kill Confirmed stays team-based.
 
@@ -24,7 +25,11 @@ The game points at `https://opus-of-duty-production-f963.up.railway.app` by defa
 
 ## Check that it worked
 
-Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.5.0"`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
+Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.6.0"`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
+
+## Anti-cheat console (`/admin`)
+
+Open `https://opus-of-duty-production-f963.up.railway.app/admin/`. The first time, the server log shows a one-time line `moderation console is not set up yet: … setup code XXXX-XXXX-XXXX`; enter that code with your game account's username and password and that account becomes the owner. After that, sign in with your game account. The owner can add moderators by username (they sign in with their own game accounts). The console only talks to this server, so it works with every game version.
 
 ## Optional settings
 
@@ -41,7 +46,7 @@ Set these as Railway service variables if you want to change the defaults.
 | `VERSION_GATE` | `on` | `off` lets every game build play online |
 | `MIN_CLIENT_BUILD` | `1` | Lowest game build allowed. Used when GitHub cannot be reached, and as a floor otherwise |
 | `LATEST_VERSION_URL` | latest release `version.json` | Where the newest build number is read from (`off` to only use `MIN_CLIENT_BUILD`) |
-| `DATA_DIR` | `./data` | Where `accounts.json` and `saves.json` are kept. **Must be on a volume** or accounts and saves are lost on every deploy (Railway: volume mounted at `/data`, `DATA_DIR=/data`) |
+| `DATA_DIR` | `./data` | Where `accounts.json`, `saves.json` and `moderation.json` are kept. **Must be on a volume** or accounts and saves are lost on every deploy (Railway: volume mounted at `/data`, `DATA_DIR=/data`) |
 | `SESSION_DAYS` | `60` | Days a "Stay signed in" token lasts without being used |
 | `ALLOWED_ORIGINS` | unset | Optional comma-separated WebSocket Origin allowlist. Leave unset for the standalone and desktop builds |
 
