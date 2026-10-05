@@ -1,6 +1,6 @@
 # Vangaurd matchmaking server 2.4
 
-This is the online server for Vangaurd Beta 0.92. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
+This is the online server for Vangaurd Beta 0.94. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
 
 What it does:
 
@@ -12,18 +12,19 @@ What it does:
 - **Ping marks** (middle mouse in the game) are relayed to the player's teammates.
 - **Accounts.** The game asks players to sign in (or create an account) before the main menu. Usernames are unique (case-insensitive): a taken name can only be used by signing in to that account, and online play needs a signed-in account (the in-match name is always the account name). Passwords are stored only as salted scrypt hashes; the game keeps a sign-in token, never the password. Ten failed attempts from one address pause sign-in for ten minutes.
 - **Friends and parties.** Players add friends by username (requests are accepted or declined), see who is online, searching or in a match, and invite online friends to a party of up to 6. When the party leader queues, the others are brought into the same match on the same team. Friends are saved with the accounts; parties last while their members are online.
+- **Cloud saves.** Each account's game data (XP and level, loadouts, camos, perks, weapon stats, singleplayer records and settings other than graphics) is uploaded by the game a few seconds after it changes and downloaded when the player signs in on another device. Saves are kept in `saves.json` next to the accounts, up to 256 KB each; every upload bumps a revision number, and an upload based on an older revision is refused with the current save so the game can pick the newer one.
 
 This build of the game needs this server for online play. An older server still runs matches, but there is no map vote and Kill Confirmed stays team-based.
 
 ## Deploy on Railway
 
-The Railway service `opus-of-duty` (project Vangaurd) deploys this folder automatically: its **Root Directory** is `/server` and it follows the `main` branch, so pushing a change here redeploys the server. `railway.json` supplies the start command (`npm start`), the `/health` check and the restart policy. Railway provides `PORT`; route the public domain to port `8080`. Accounts are stored on the volume `vangaurd-accounts`, mounted at `/data` (`DATA_DIR=/data`).
+The Railway service `opus-of-duty` (project Vangaurd) deploys this folder automatically: its **Root Directory** is `/server` and it follows the `main` branch, so pushing a change here redeploys the server. `railway.json` supplies the start command (`npm start`), the `/health` check and the restart policy. Railway provides `PORT`; route the public domain to port `8080`. Accounts and cloud saves are stored on the volume `vangaurd-accounts`, mounted at `/data` (`DATA_DIR=/data`).
 
 The game points at `https://opus-of-duty-production-f963.up.railway.app` by default.
 
 ## Check that it worked
 
-Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.4.0"`, `"accountsPersistent":true`, `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
+Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.5.0"`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
 
 ## Optional settings
 
@@ -40,7 +41,7 @@ Set these as Railway service variables if you want to change the defaults.
 | `VERSION_GATE` | `on` | `off` lets every game build play online |
 | `MIN_CLIENT_BUILD` | `1` | Lowest game build allowed. Used when GitHub cannot be reached, and as a floor otherwise |
 | `LATEST_VERSION_URL` | latest release `version.json` | Where the newest build number is read from (`off` to only use `MIN_CLIENT_BUILD`) |
-| `DATA_DIR` | `./data` | Where `accounts.json` is kept. **Must be on a volume** or accounts are lost on every deploy (Railway: volume mounted at `/data`, `DATA_DIR=/data`) |
+| `DATA_DIR` | `./data` | Where `accounts.json` and `saves.json` are kept. **Must be on a volume** or accounts and saves are lost on every deploy (Railway: volume mounted at `/data`, `DATA_DIR=/data`) |
 | `SESSION_DAYS` | `60` | Days a "Stay signed in" token lasts without being used |
 | `ALLOWED_ORIGINS` | unset | Optional comma-separated WebSocket Origin allowlist. Leave unset for the standalone and desktop builds |
 

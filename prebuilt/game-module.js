@@ -45351,6 +45351,11 @@ function H9(A) {
       } catch {
       }
   }
+  A && typeof vgSync == "object" && vgSync && (vgSync.records = {
+    set(x) {
+      e = x && typeof x == "object" && x.best && typeof x.best == "object" ? { v: 1, best: x.best, runs: x.runs | 0 } : { v: 1, best: {}, runs: 0 }, t();
+    }
+  });
   return {
     enabled: A,
     bestFor(i) {
@@ -48620,7 +48625,7 @@ function om() {
   }
 }
 /* Game version. The release build stamps the CI build number into "__VGD_BUILD__". */
-var VGD = { label: "Beta 0.93", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 0.94", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -51719,7 +51724,7 @@ function vgNetStart() {
       }
       ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build }));
     }
-    else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, ws.send(JSON.stringify({ type: "social_state" }));
+    else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, ws.send(JSON.stringify({ type: "social_state" })), vgSyncBegin();
     else if (m.type === "auth_error") {
       vgNet.stopped = !0, ws.close();
       return;
@@ -51756,6 +51761,207 @@ typeof window < "u" && setInterval(() => {
   for (const [k, t0] of vgNet.sent) now - t0 > 4e3 && (vgNet.sent.delete(k), vgNet.loss.push(1), vgNet.loss.length > 30 && vgNet.loss.shift());
   vgNet.sent.set(++vgNet.seq, now), vgNetSend({ type: "ping", t: Math.round(now), seq: vgNet.seq });
 }, 2e3);
+/* ------------------------------------------------------------------ cloud save (your data follows your account) */
+// Progression (XP, levels, loadouts, camos, perks, weapon stats), singleplayer records and settings are saved to the
+// signed-in account on the Vangaurd server, so signing in on another device brings everything along. Graphics and
+// display settings stay on each device (a laptop and a desktop need different ones). The game keeps writing to
+// this device as before; every change is uploaded a few seconds later, and on sign-in the newer copy wins.
+var VG_SYNC_META = "vangaurd.sync.v1", VG_SYNC_PROG = "vangaurd.progression.experimental.v1", VG_SYNC_REC = "opus-of-duty.gamemode.v1", VG_SYNC_SET = "opus-of-duty.settings.v1";
+var VG_SYNC_GROUPS = ["controls", "audio", "gameplay", "pad", "hud", "combat", "player"];
+var vgSync = { ready: !1, user: null, timer: 0, retry: 0, inflight: !1, sentHash: "", applying: !1, records: null, at: 0, listeners: [] };
+function vgSyncHash(t) {
+  let h = 2166136261;
+  for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619);
+  return `${(h >>> 0).toString(36)}:${t.length}`;
+}
+function vgSyncRead(k) {
+  try {
+    const v = JSON.parse(localStorage.getItem(k) || "null");
+    return v && typeof v == "object" && !Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+function vgSyncMeta() {
+  return vgSyncRead(VG_SYNC_META) || {};
+}
+function vgSyncSetMeta(m) {
+  try {
+    localStorage.setItem(VG_SYNC_META, JSON.stringify(m));
+  } catch {
+  }
+}
+function vgSyncSnapshot() {
+  const st = vgSyncRead(VG_SYNC_SET) || {}, settings = {};
+  for (const g of VG_SYNC_GROUPS) st[g] && typeof st[g] == "object" && (settings[g] = st[g]);
+  return Number.isFinite(st.graphics?.fov) && (settings.graphics = { fov: st.graphics.fov }), { v: 1, progression: vgSyncRead(VG_SYNC_PROG), records: vgSyncRead(VG_SYNC_REC), settings };
+}
+const vgSyncJson = () => JSON.stringify(vgSyncSnapshot());
+const vgSyncXp = (snap) => Math.max(0, Number(snap?.progression?.xp) || 0);
+function vgSyncNotify() {
+  for (const f of vgSync.listeners) try {
+    f(vgSync);
+  } catch {
+  }
+}
+// Put a downloaded save into the running game: the same paths the menus use, so everything picks it up.
+function vgSyncApply(snap) {
+  vgSync.applying = !0;
+  try {
+    const prog = snap?.progression && typeof snap.progression == "object" ? snap.progression : null;
+    try {
+      prog ? localStorage.setItem(VG_SYNC_PROG, JSON.stringify(prog)) : localStorage.removeItem(VG_SYNC_PROG);
+    } catch {
+    }
+    try {
+      Za = tJ(), pgSlots(), perkRefresh();
+    } catch (e) {
+      console.error("cloud save: progression", e);
+    }
+    const rec = snap?.records && typeof snap.records == "object" ? snap.records : null;
+    try {
+      vgSync.records ? vgSync.records.set(rec) : rec ? localStorage.setItem(VG_SYNC_REC, JSON.stringify(rec)) : localStorage.removeItem(VG_SYNC_REC);
+    } catch {
+    }
+    const src = snap?.settings && typeof snap.settings == "object" ? snap.settings : null;
+    if (src) {
+      const leaves = [], walk = (o, path) => {
+        for (const [k, v] of Object.entries(o)) {
+          const q = `${path}.${k}`;
+          v && typeof v == "object" && !Array.isArray(v) && q !== "controls.bindings" ? walk(v, q) : leaves.push([q, v]);
+        }
+      };
+      for (const g of VG_SYNC_GROUPS) src[g] && typeof src[g] == "object" && walk(src[g], g);
+      Number.isFinite(src.graphics?.fov) && leaves.push(["graphics.fov", src.graphics.fov]);
+      const S = pgCtx?.settings || pgCtx?.services?.settings;
+      if (S?.set) for (const [q, v] of leaves) JSON.stringify(S.get(q)) !== JSON.stringify(v) && S.set(q, v);
+      else {
+        const st = vgSyncRead(VG_SYNC_SET) || {};
+        for (const [q, v] of leaves) {
+          const ks = q.split(".");
+          let o = st;
+          for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]] && typeof o[ks[i]] == "object" ? o[ks[i]] : o[ks[i]] = {};
+          o[ks[ks.length - 1]] = v;
+        }
+        try {
+          localStorage.setItem(VG_SYNC_SET, JSON.stringify(st));
+        } catch {
+        }
+      }
+      const b = src.controls?.bindings;
+      try {
+        b && typeof b == "object" && pgCtx?.input?._applyBindings?.({ ...Gw, ...b });
+      } catch {
+      }
+    }
+    try {
+      const W = pgCtx?.services?.weapons;
+      W?.state && (W.state.grenadeType = q3()), pgCtx?.events?.emit("loadout:changed", lwGet()), pgCtx?.events?.emit("progress:xp", { amount: 0, reason: "sync", level: pgLevel().level, levelUp: !1 });
+    } catch (e) {
+      console.error("cloud save: refresh", e);
+    }
+  } finally {
+    vgSync.applying = !1;
+  }
+}
+function vgSyncPut(baseRev, force = !1) {
+  if (!vgNet.open) return !1;
+  const json = vgSyncJson();
+  return vgSync.sentHash = vgSyncHash(json), vgSync.inflight = vgNetSend({ type: "data_put", blob: json, baseRev: baseRev | 0, force: !!force }), vgSync.inflight;
+}
+// Upload a few seconds after the game saves something (XP, a loadout change, a setting).
+function vgSyncKick(delay = 3e3) {
+  !vgSync.ready || !vgNet.open || (clearTimeout(vgSync.timer), vgSync.timer = setTimeout(() => {
+    if (!vgSync.ready || !vgNet.open) return;
+    if (vgSync.inflight) return vgSyncKick(1500);
+    const meta = vgSyncMeta();
+    vgSyncHash(vgSyncJson()) !== meta.hash && vgSyncPut(meta.rev | 0);
+  }, delay));
+}
+// Signing out or closing: send what is not uploaded yet straight away.
+function vgSyncFlush() {
+  if (!vgSync.ready || !vgNet.open) return;
+  clearTimeout(vgSync.timer);
+  const meta = vgSyncMeta();
+  vgSyncHash(vgSyncJson()) !== meta.hash && vgSyncPut(meta.rev | 0);
+}
+const vgSyncInMatch = () => {
+  const st = pgCtx?.services?.gamemode?.state?.stage;
+  return !!st && st !== "menu" && st !== "boot";
+};
+// The server's copy arrived (on sign-in, or because an upload was based on an older copy): decide which to keep.
+function vgSyncResolve(m, conflict) {
+  const user = vgSync.user || vgAuth.user;
+  if (!user) return;
+  const meta = vgSyncMeta(), same = !!meta.user && meta.user.toLowerCase() === user.toLowerCase();
+  const localJson = vgSyncJson(), localHash = vgSyncHash(localJson), local = JSON.parse(localJson);
+  let server = null;
+  try {
+    server = m.blob ? JSON.parse(m.blob) : null;
+  } catch {
+  }
+  const rev = Math.max(0, Math.floor(Number(m.rev) || 0));
+  // Data on this device that was never uploaded (from before cloud saves) counts as new.
+  const localChanged = same ? localHash !== meta.hash : !meta.user;
+  let act;
+  if (!server || !rev) act = same || !meta.user ? "upload" : "fresh";
+  else if (same && meta.rev === rev && !conflict) act = localChanged ? "upload" : "none";
+  else if (!localChanged || meta.user && !same) act = "apply";
+  else act = vgSyncXp(local) > vgSyncXp(server) ? "force" : "apply";
+  if ((act === "apply" || act === "fresh") && vgSyncInMatch()) {
+    // Not in the middle of a match: try again once back in the menus.
+    vgSync.ready = !1, clearTimeout(vgSync.timer), vgSync.timer = setTimeout(() => vgNet.open && vgNetSend({ type: "data_get" }), 4e3);
+    return;
+  }
+  if (act === "apply") {
+    vgSyncApply(server), vgSyncSetMeta({ user, rev, hash: vgSyncHash(vgSyncJson()) }), vgSync.at = Date.now();
+    localHash !== vgSyncHash(vgSyncJson()) && vgToast(`Loaded your progress and settings from your account (${user}).`);
+  } else if (act === "fresh") {
+    // A different account used this device last: this account starts with its own (new) progress.
+    vgSyncApply({ v: 1, progression: null, records: null, settings: null }), vgSyncSetMeta({ user, rev, hash: "" }), vgSyncPut(rev);
+  } else if (act === "upload" || act === "force") {
+    !meta.user && vgToast("Your progress, loadouts and settings are now saved to your account."), vgSyncSetMeta({ user, rev, hash: same ? meta.hash : "" }), vgSyncPut(rev, act === "force");
+  } else vgSync.at = vgSync.at || Date.now();
+  vgSync.ready = !0, vgSyncNotify();
+}
+function vgSyncOn(m) {
+  if (m.type === "_closed") return vgSync.ready = !1, vgSync.inflight = !1, clearTimeout(vgSync.timer), vgSyncNotify();
+  if (m.type === "data") return vgSyncResolve(m, !1);
+  if (m.type === "data_conflict") return vgSync.inflight = !1, vgSyncResolve(m, !0);
+  if (m.type === "data_saved") {
+    vgSync.inflight = !1, vgSyncSetMeta({ user: vgSync.user || vgAuth.user, rev: m.rev | 0, hash: vgSync.sentHash }), vgSync.at = Date.now(), vgSync.ready = !0, vgSyncNotify(), vgSyncKick();
+    return;
+  }
+  m.type === "data_error" && (vgSync.inflight = !1, console.warn("cloud save:", m.message));
+}
+// Called when the account connection signs in.
+function vgSyncBegin() {
+  vgSync.ready = !1, vgSync.inflight = !1, vgSync.user = vgAuth.user, vgNetSend({ type: "data_get" });
+}
+vgNet.listeners.push(vgSyncOn);
+// Every save the game makes goes through localStorage; watch the keys that belong to the account.
+(function() {
+  try {
+    const P = Storage.prototype, set0 = P.setItem, rm0 = P.removeItem, mine = (st, k) => (k === VG_SYNC_PROG || k === VG_SYNC_REC || k === VG_SYNC_SET) && st === globalThis.localStorage;
+    P.setItem = function(k, v) {
+      const r = set0.call(this, k, v);
+      try {
+        mine(this, k) && !vgSync.applying && vgSyncKick();
+      } catch {
+      }
+      return r;
+    }, P.removeItem = function(k) {
+      const r = rm0.call(this, k);
+      try {
+        mine(this, k) && !vgSync.applying && vgSyncKick();
+      } catch {
+      }
+      return r;
+    };
+  } catch {
+  }
+  typeof window < "u" && window.addEventListener("pagehide", () => vgSyncFlush());
+})();
 var vgToastCss = `
 .vg-toasts { position: fixed; left: 24px; bottom: 70px; z-index: 395; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
 .vg-toast { min-width: 240px; max-width: 360px; padding: 11px 14px; background: rgba(12,15,17,.95); border: 1px solid rgba(236,240,234,.16); border-left: 3px solid #f2c14e; color: #e9ece6; font-size: 13px; line-height: 1.35; box-shadow: 0 10px 30px rgba(0,0,0,.45); transition: opacity .3s, transform .3s; }
@@ -51904,13 +52110,16 @@ function vgQuitAsk() {
   }
   vgQuitOpen = !0;
   const d = document.createElement("div");
-  d.className = "vg-quit", d.innerHTML = '<div class="card" role="dialog" aria-label="Quit"><h3>Quit Vangaurd?</h3><p>Your progress and loadouts are saved on this device.</p><div class="acts"><button type="button" class="pri" data-q>Quit game</button><button type="button" data-c>Cancel</button></div></div>', document.body.appendChild(d);
+  d.className = "vg-quit", d.innerHTML = `<div class="card" role="dialog" aria-label="Quit"><h3>Quit Vangaurd?</h3><p>${vgAuth.user ? "Your progress, loadouts and settings are saved to your account." : "Your progress and loadouts are saved on this device."}</p><div class="acts"><button type="button" class="pri" data-q>Quit game</button><button type="button" data-c>Cancel</button></div></div>`, document.body.appendChild(d);
   const close = () => {
     vgQuitOpen = !1, d.remove(), window.removeEventListener("keydown", key, !0);
   }, key = (ev) => {
     ev.key === "Escape" ? (close(), ev.preventDefault(), ev.stopPropagation()) : ev.key === "Enter" && (go(), ev.preventDefault(), ev.stopPropagation());
   }, go = () => {
-    if (window.vangaurdDesktop?.quit) return window.vangaurdDesktop.quit();
+    // Send anything not yet saved to the account, give it a moment to leave, then close.
+    const wait = vgNet.open ? (vgSyncFlush(), 300) : 0;
+    if (go.busy) return;
+    if (go.busy = !0, window.vangaurdDesktop?.quit) return setTimeout(() => window.vangaurdDesktop.quit(), wait);
     try {
       window.close();
     } catch {
@@ -53095,12 +53304,12 @@ function cJ(A) {
   };
   const vgAcct = () => {
     const k0 = wA.querySelector(".od-account-kicker"), h3 = wA.querySelector("h3"), cp = wA.querySelector(".od-account-copy");
-    k0 && (k0.textContent = "Account"), h3 && (h3.textContent = vgAuth.user ? `Signed in as ${vgAuth.user}` : "Playing offline"), cp && (cp.textContent = vgAuth.user ? "Your username is your Vangaurd account, so nobody else can play under it. Your progress and loadouts are saved on this device." : "Sign in to play online and keep your username to yourself."), H.hidden = !0, rA.textContent = vgAuth.user ? "Sign out" : "Sign in", RA.textContent = "";
+    k0 && (k0.textContent = "Account"), h3 && (h3.textContent = vgAuth.user ? `Signed in as ${vgAuth.user}` : "Playing offline"), cp && (cp.textContent = vgAuth.user ? "Your username is your Vangaurd account, so nobody else can play under it. Your progress, loadouts, camos, perks and settings are saved to your account, so they follow you to any device you sign in on (graphics settings stay on each device)." : "Sign in to play online and keep your username to yourself."), H.hidden = !0, rA.textContent = vgAuth.user ? "Sign out" : "Sign in", RA.textContent = "";
   };
   vgAuth.listeners.push(vgAcct), rA.addEventListener("click", async (yA) => {
     if (yA.stopImmediatePropagation(), vgAuth.user) {
       const tk = vgAuth.token;
-      vgAuthSet(null, null, !1), tk && vgAuthCall({ type: "logout", token: tk }, 4e3), vgAuthShow("You have signed out.");
+      vgSyncFlush(), vgAuthSet(null, null, !1), tk && vgAuthCall({ type: "logout", token: tk }, 4e3), vgAuthShow("You have signed out.");
     } else vgAuthShow();
   }, !0), vgAcct();
   sA.value = Uc(), rA.addEventListener("click", dA), sA.addEventListener("keydown", (yA) => {

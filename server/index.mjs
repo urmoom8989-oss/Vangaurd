@@ -20,7 +20,7 @@ const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
 };
-const VERSION = '2.4.1';
+const VERSION = '2.5.0';
 // ---------- client version gate ----------
 // Only the newest game build may play online. The newest build number is read from the
 // version.json attached to the latest GitHub release (refreshed every 5 minutes).
@@ -90,7 +90,7 @@ function saveAccounts(urgent = true) {
   if (urgent) return writeAccounts();
   if (!saveTimer) saveTimer = setTimeout(writeAccounts, 5000);
 }
-for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { if (saveTimer) writeAccounts(); process.exit(0); });
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { if (saveTimer) writeAccounts(); if (savesTimer) writeSaves(); process.exit(0); });
 const NAME_RE = /^[A-Za-z0-9_-]{3,16}$/;
 const RESERVED = new Set(['player', 'admin', 'administrator', 'moderator', 'server', 'vangaurd', 'system', 'bot', 'guest']);
 const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
@@ -728,6 +728,45 @@ function onMark(c, msg) {
   const out = { type: 'mark', matchId: match.id, playerId: p.id, name: p.name, team: p.team, kind, x, y, z, id: typeof msg.id === 'string' ? msg.id.slice(0, 24) : null, targetId };
   for (const q of match.players.values()) if (q.id !== p.id && (match.ffa ? false : q.team === p.team)) send(clients.get(q.id), out);
 }
+// ---------- cloud saves ----------
+// Each account's game data (progression, loadouts, camos, perks, settings, records) exactly as the game sends it,
+// so signing in on another device brings everything along. Kept in DATA_DIR/saves.json (same persistent volume as
+// the accounts). Every upload bumps "rev"; an upload made from an older rev is refused with the current save
+// (data_conflict) so the game can decide which one to keep.
+const SAVES_FILE = pathMod.join(DATA_DIR, 'saves.json');
+const SAVE_MAX = 256 * 1024;
+let saves = {};
+try {
+  const raw = JSON.parse(fs.readFileSync(SAVES_FILE, 'utf8'));
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) saves = raw;
+} catch (e) { if (e.code !== 'ENOENT') console.error('could not read saves:', e.message); }
+let savesTimer = null;
+function writeSaves() {
+  if (savesTimer) { clearTimeout(savesTimer); savesTimer = null; }
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = `${SAVES_FILE}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(saves));
+    fs.renameSync(tmp, SAVES_FILE);
+  } catch (e) { console.error('could not save game data:', e.message); }
+}
+function onData(c, msg) {
+  const key = c.account ? keyOf(c.account) : null;
+  if (!key || !userOf(key)) return send(c, { type: 'data_error', code: 'login_required', message: 'Sign in to save your progress to your account.' });
+  const cur = saves[key] || { rev: 0, at: 0, blob: null };
+  if (msg.type === 'data_get') return send(c, { type: 'data', rev: cur.rev, at: cur.at, blob: cur.blob });
+  const blob = msg.blob;
+  if (typeof blob !== 'string' || !blob.length || blob.length > SAVE_MAX) return send(c, { type: 'data_error', code: 'bad_data', message: 'That save is empty or too large.' });
+  try {
+    const o = JSON.parse(blob);
+    if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('not an object');
+  } catch { return send(c, { type: 'data_error', code: 'bad_data', message: 'That save could not be read.' }); }
+  if (!msg.force && Math.floor(num(msg.baseRev, -1)) !== cur.rev) return send(c, { type: 'data_conflict', rev: cur.rev, at: cur.at, blob: cur.blob });
+  const t = now();
+  saves[key] = { rev: cur.rev + 1, at: t, blob };
+  if (!savesTimer) savesTimer = setTimeout(writeSaves, 1500);
+  send(c, { type: 'data_saved', rev: saves[key].rev, at: t });
+}
 function handle(c, raw) {
   let msg;
   try { msg = JSON.parse(raw); } catch { return; }
@@ -767,6 +806,7 @@ function handle(c, raw) {
     case 'party_invite': case 'party_accept': case 'party_decline': case 'party_leave': case 'party_kick':
       handleSocial(c, msg); break;
     case 'logout': onLogout(c, msg); break;
+    case 'data_get': case 'data_put': onData(c, msg); break;
     default: break;
   }
 }
@@ -796,7 +836,7 @@ const server = http.createServer((req, res) => {
       ok: true, service: 'vangaurd-matchmaking', version: VERSION,
       queued: queues.tdm.length + queues.kc.length, queuedByMode: { tdm: queues.tdm.length, kc: queues.kc.length },
       matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, matches: matches.size, playersInMatches: players, connected: clients.size,
-      maps: MAPS, mapVoteSeconds: VOTE_S, versionGate: GATE, accounts: Object.keys(accounts.users).length, online: online.size, parties: parties.size, accountsPersistent: !!process.env.DATA_DIR, minClientBuild: latest.build, latestLabel: latest.label, latestSource: latest.source, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
+      maps: MAPS, mapVoteSeconds: VOTE_S, versionGate: GATE, accounts: Object.keys(accounts.users).length, saves: Object.keys(saves).length, online: online.size, parties: parties.size, accountsPersistent: !!process.env.DATA_DIR, minClientBuild: latest.build, latestLabel: latest.label, latestSource: latest.source, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
     });
     res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' });
     res.end(body);
@@ -811,7 +851,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? new Set(process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean))
   : null;
 const wss = new WebSocketServer({
-  server, maxPayload: 16 * 1024,
+  server, maxPayload: 320 * 1024, // cloud saves (up to 256 KB) are the largest messages
   verifyClient: ({ origin }) => !allowedOrigins || !origin || origin === 'null' || allowedOrigins.has(origin),
 });
 wss.on('connection', (ws, req) => {
