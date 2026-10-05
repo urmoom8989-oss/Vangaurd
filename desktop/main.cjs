@@ -78,7 +78,19 @@ function applyDisplayMode(win, mode) {
   log(`Display mode: ${displayMode}`);
   return true;
 }
-ipcMain.handle('vangaurd:display-mode', (event, mode) => applyDisplayMode(BrowserWindow.fromWebContents(event.sender), String(mode || 'windowed')));
+// While the game loads behind the launch window, a display mode it asks for (fullscreen / borderless) is kept
+// and applied when the game window appears, so the game can't cover the launch window.
+let gameRevealed = false;
+let pendingDisplayMode = null;
+ipcMain.handle('vangaurd:display-mode', (event, mode) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && win === gameWindow && !gameRevealed) {
+    pendingDisplayMode = String(mode || 'windowed');
+    log(`Display mode ${pendingDisplayMode} will apply when the game window opens`);
+    return true;
+  }
+  return applyDisplayMode(win, String(mode || 'windowed'));
+});
 
 // Auto-update: checked shortly after launch, and again when the multiplayer server reports this build is outdated.
 let updater = null;
@@ -100,7 +112,8 @@ function log(message) {
 // games show). Its bar follows the real start-up: app checks first, then the game's own loading progress
 // (window.__VGD_BOOT__). The game window loads behind it, invisible, and appears when the game is ready.
 const SPLASH_MIN_MS = 5000;
-const SPLASH_APP_SHARE = 0.15; // the bar's first 15 % is the app starting; the rest is the game loading
+const SPLASH_APP_SHARE = 0.15;
+const SPLASH_GAP_MS = 1000; // pause between the launch window closing and the game window opening // the bar's first 15 % is the app starting; the rest is the game loading
 let splash = null;
 let splashAt = 0;
 function createSplash() {
@@ -131,8 +144,10 @@ function closeSplash(delay = 300) {
   const win = splash;
   splash = null;
   if (!win || win.isDestroyed()) return;
-  win.webContents.executeJavaScript('window.setStatus && setStatus("Ready", 1)').catch(() => {});
-  setTimeout(() => { if (!win.isDestroyed()) win.destroy(); }, delay);
+  if (delay > 0) {
+    win.webContents.executeJavaScript('window.setStatus && setStatus("Ready", 1)').catch(() => {});
+    setTimeout(() => { if (!win.isDestroyed()) win.destroy(); }, delay);
+  } else win.destroy();
 }
 
 function showLaunchError(message) {
@@ -274,19 +289,25 @@ function createWindow() {
       if (!window.isVisible()) window.showInactive();
     };
     let revealing = false;
+    const openGame = () => {
+      if (window.isDestroyed()) return;
+      unveil();
+      window.show();
+      window.focus();
+      gameRevealed = true;
+      if (pendingDisplayMode) { applyDisplayMode(window, pendingDisplayMode); pendingDisplayMode = null; }
+    };
     const reveal = () => {
       if (window.isDestroyed() || revealing) return;
       revealing = true;
-      // Let the bar reach 100 % on screen, then bring up the game window and close the launch window.
-      const hadSplash = !!(splash && !splash.isDestroyed());
+      if (!(splash && !splash.isDestroyed())) return openGame();
+      // The launch window finishes first: the bar fills to 100 %, the window closes, and one second later
+      // the game window opens.
       splashStatus('Ready', 1);
       setTimeout(() => {
-        if (window.isDestroyed()) return;
-        unveil();
-        window.show();
-        window.focus();
-        closeSplash(150);
-      }, hadSplash ? 650 : 0);
+        closeSplash(0);
+        setTimeout(openGame, SPLASH_GAP_MS);
+      }, 700);
     };
     const revealWhenReady = async () => {
       if (window.isDestroyed()) return;
@@ -299,7 +320,7 @@ function createWindow() {
         }
         // Some systems only draw frames for a visible window: if loading stops moving, show the game
         // window behind the launch window so it can finish.
-        if (!ready && !unveiled && Date.now() - lastMove > 8000) { log('Start-up paused while hidden; showing the game window behind the launch window.'); unveil(); if (splash && !splash.isDestroyed()) splash.setAlwaysOnTop(true); }
+        if (!ready && !unveiled && Date.now() - lastMove > 8000) { log('Start-up paused while hidden; showing the game window behind the launch window.'); if (splash && !splash.isDestroyed()) { splash.setAlwaysOnTop(true, 'screen-saver'); splash.moveTop?.(); } unveil(); if (splash && !splash.isDestroyed()) splash.moveTop?.(); }
         if ((ready && Date.now() - splashAt >= SPLASH_MIN_MS) || Date.now() - startedAt >= 120_000) {
           reveal();
           return;

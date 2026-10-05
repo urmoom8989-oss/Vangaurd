@@ -46833,7 +46833,7 @@ function T9(A) {
             r.respawnIn = 0, GA("match-live"), FA(!0);
           }
       }
-      r.kc && !c.paused && (c.stage === "match-live" || c.stage === "match-dead") ? kcS.update(O) : kcS.size() && c.stage !== "match-live" && c.stage !== "match-dead" && kcS.clear(), padS.poll(), c.stage === "menu" || c.stage === "boot" || c.stage === "matchmaking" || c.stage === "vote" ? (amS.size() && amS.clear(), pmS.size() && pmS.clear(), svS.clear(), nsS.clear()) : (c.paused || amS.update(O), pmS.update(!c.paused && !c.scoreboard), svS.update(!c.paused), nsS.update(!!tA, (fA) => e.emit("network:send", fA))), lA(), BA && BA.update(c, fA);
+      r.kc && !c.paused && (c.stage === "match-live" || c.stage === "match-dead") ? kcS.update(O) : kcS.size() && c.stage !== "match-live" && c.stage !== "match-dead" && kcS.clear(), c.stage === "menu" || c.stage === "boot" || c.stage === "matchmaking" || c.stage === "vote" ? (amS.size() && amS.clear(), pmS.size() && pmS.clear(), svS.clear(), nsS.clear()) : (c.paused || amS.update(O), pmS.update(!c.paused && !c.scoreboard), svS.update(!c.paused), nsS.update(!!tA, (fA) => e.emit("network:send", fA))), lA(), BA && BA.update(c, fA);
     }
   }
   const gt = {
@@ -48630,7 +48630,7 @@ function om() {
   }
 }
 /* Game version. The release build stamps the CI build number into "__VGD_BUILD__". */
-var VGD = { label: "Beta 1.02", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 1.03", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -49820,6 +49820,20 @@ function padSystem(A, H) {
     }, !0), window.addEventListener("mousedown", (ev) => {
       st.active && ev.isTrusted && (deactivate(), H.inPlay() && !document.pointerLockElement && inp.lock?.());
     }, !0), pads().length && start();
+  }
+  // Read the controller right after each frame's input is cleared, so a button press counts for the whole next
+  // frame, the same as a key press. (Reading it in the middle of a frame lost "just pressed" buttons: jump,
+  // crouch, prone, reload, sprint, swap weapon.)
+  if (typeof inp?.endFrame == "function" && !inp.__vgPadHook) {
+    const end0 = inp.endFrame.bind(inp);
+    inp.__vgPadHook = !0, inp.endFrame = function() {
+      end0();
+      try {
+        st.on && poll();
+      } catch (e) {
+        console.error("[pad]", e);
+      }
+    };
   }
   return { poll, rumble, active: () => st.active, start, layout: padLayout };
 }
