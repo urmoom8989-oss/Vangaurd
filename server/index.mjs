@@ -22,7 +22,7 @@ const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
 };
-const VERSION = '2.8.0';
+const VERSION = '2.9.0';
 // ---------- client version gate ----------
 // Only the newest game build may play online. The newest build number is read from the
 // version.json attached to the latest GitHub release (refreshed every 5 minutes).
@@ -149,9 +149,14 @@ async function onRegister(c, msg) {
   const key = name.toLowerCase();
   if (accounts.users[key]) { failed(c); return authError(c, 'taken', 'That username is taken. If it is yours, sign in instead.'); }
   const email = String(msg.email || '').trim();
-  if (email || mailer.enabled) {
+  if (email || mailer.enabled || EMAIL_REQUIRED) {
     if (!EMAIL_RE.test(email)) return authError(c, 'bad_email', 'Enter a valid email address.');
     if (findByEmail(email)) return authError(c, 'email_taken', 'That email already belongs to an account. Sign in, or reset its password.');
+  }
+  // New accounts always confirm their email with a code; without a working sender, sign-up waits.
+  if (!mailer.enabled && EMAIL_REQUIRED) {
+    log(`sign-up refused for ${name}: no email sender is set up`);
+    return authError(c, 'email_unavailable', "New accounts can't be created right now because the Vangaurd server can't send verification emails yet. Try again later.");
   }
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = await scrypt(pw, salt);
@@ -176,7 +181,10 @@ async function onLogin(c, msg) {
   }
   c.device = cleanDevice(msg.device) || c.device;
   { const b = mod.checkAccount(keyOf(u.name), c.device); if (b) return refuseBanned(c, b); }
-  if (mailer.enabled) {
+  // (If the start-up check found the email sender broken, sign-in goes on without a code rather than locking
+  // every player out; the log says so. Sign-up still needs a working sender.)
+  if (mailer.enabled && emailState.checked === false) log(`${u.name} signed in without a code: the email sender is not working (${emailState.detail})`);
+  if (mailer.enabled && emailState.checked !== false) {
     // Accounts from before emails were required add one first; everyone then confirms with a code.
     if (!u.email || !u.emailVerified && !EMAIL_RE.test(u.email)) {
       const id = newPendingId();
@@ -208,6 +216,15 @@ function onLogout(c, msg) {
 // older account and resetting a password each send a 6-digit code to the account's email. A code lasts 10 minutes
 // and allows 5 tries; a new one can be sent every 30 seconds, at most 6 an hour per address.
 const mailer = createMailer(process.env);
+// EMAIL_REQUIRED=off lets accounts be created without a code while no email sender is set up.
+const EMAIL_REQUIRED = !/^(0|off|false|no)$/i.test(String(process.env.EMAIL_REQUIRED || 'on').trim());
+const emailState = { ok: mailer.enabled ? null : false, detail: mailer.enabled ? 'checking the email sender' : 'no email sender is set up' };
+if (mailer.enabled) {
+  mailer.check().then((r) => {
+    Object.assign(emailState, r, { checked: r.ok });
+    log(r.ok ? `email: ${r.detail}` : `email is NOT working: ${r.detail}`);
+  });
+} else log(`email: no sender set up (GMAIL_SCRIPT_URL, BREVO_API_KEY or SMTP_*), so ${EMAIL_REQUIRED ? 'new accounts are paused' : 'accounts are created without a code'} and sign-in needs no code`);
 const EMAIL_RE = /^[^\s@<>()",;:\\[\]]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,24}$/;
 const CODE_TTL = 10 * 60e3, CODE_TRIES = 5, RESEND_MS = 30e3;
 const pendings = new Map(); // id -> { id, purpose, key, username, email, salt, hash, codeHash, expires, tries, sentAt, device, stage }
@@ -232,9 +249,11 @@ async function sendCode(c, p) {
     await mailer.send(codeEmail(p.email, code, p.purpose, p.username));
   } catch (e) {
     log(`email to ${maskEmail(p.email)} failed: ${e.message}`);
+    Object.assign(emailState, { ok: false, detail: e.message });
     return authError(c, 'email_failed', 'The code email could not be sent. Check the address and try again in a minute.');
   }
   recent.push(now()); sendsTo.set(p.email.toLowerCase(), recent);
+  if (!emailState.ok) Object.assign(emailState, { ok: true, checked: true, detail: `${mailer.kind}: sent a code` });
   Object.assign(p, { codeHash: sha(`${code}:${p.id}`), expires: now() + CODE_TTL, tries: 0, sentAt: now(), stage: 'code' });
   pendings.set(p.id, p);
   log(`sent a ${p.purpose} code to ${maskEmail(p.email)}${p.username ? ` (${p.username})` : ''}`);
@@ -1024,7 +1043,7 @@ const server = http.createServer((req, res) => {
       ok: true, service: 'vangaurd-matchmaking', version: VERSION,
       queued: queues.tdm.length + queues.kc.length, queuedByMode: { tdm: queues.tdm.length, kc: queues.kc.length },
       matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, matches: matches.size, playersInMatches: players, connected: clients.size,
-      maps: MAPS, mapVoteSeconds: VOTE_S, versionGate: GATE, accounts: Object.keys(accounts.users).length, saves: Object.keys(saves).length, email: mailer.enabled ? mailer.kind : false, online: online.size, parties: parties.size, accountsPersistent: !!process.env.DATA_DIR, minClientBuild: latest.build, latestLabel: latest.label, latestSource: latest.source, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
+      maps: MAPS, mapVoteSeconds: VOTE_S, versionGate: GATE, accounts: Object.keys(accounts.users).length, saves: Object.keys(saves).length, email: mailer.enabled ? mailer.kind : false, emailReady: emailState.ok, emailStatus: emailState.detail, emailRequired: EMAIL_REQUIRED, online: online.size, parties: parties.size, accountsPersistent: !!process.env.DATA_DIR, minClientBuild: latest.build, latestLabel: latest.label, latestSource: latest.source, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
     });
     res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' });
     res.end(body);

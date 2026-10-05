@@ -1,5 +1,5 @@
 // Protocol test for the matchmaking server using plain ws clients.
-// Run the server with MATCH_COUNTDOWN=2 MAP_VOTE_SECONDS=2 KC_SCORE_LIMIT=3 PORT=8099 DATA_DIR=/tmp/vg-test LATEST_VERSION_URL=off, then: node test-protocol.mjs
+// Run the server with EMAIL_REQUIRED=off MATCH_COUNTDOWN=2 MAP_VOTE_SECONDS=2 KC_SCORE_LIMIT=3 PORT=8099 DATA_DIR=/tmp/vg-test LATEST_VERSION_URL=off, then: node test-protocol.mjs
 // Every test client creates an account first (online play needs a signed-in account).
 import { WebSocket } from 'ws';
 const URL = process.argv[2] || 'ws://127.0.0.1:8099/ws';

@@ -1,6 +1,8 @@
 // Sends Vangaurd's verification-code emails. Configure ONE of these on the server (Railway variables):
 //
-//   Gmail (needs a Railway plan that allows outbound SMTP, i.e. Pro):
+//   Gmail through a Google Apps Script web app (free, works on every Railway plan; see gmail-script.gs):
+//     GMAIL_SCRIPT_URL=<the web app URL ending in /exec>  GMAIL_SCRIPT_KEY=<the KEY written in the script>
+//   Gmail over SMTP (Railway only allows outbound SMTP on the Pro plan and above):
 //     SMTP_HOST=smtp.gmail.com  SMTP_PORT=465  SMTP_USER=you@gmail.com  SMTP_PASS=<16-letter app password>
 //   Brevo (free, works on every Railway plan; sends over HTTPS):
 //     BREVO_API_KEY=<key>  MAIL_FROM=<a sender address verified in Brevo>
@@ -8,7 +10,7 @@
 //   Optional: MAIL_FROM (defaults to SMTP_USER), MAIL_FROM_NAME (defaults to "Vangaurd").
 //   Tests: MAIL_CAPTURE_FILE=<path> writes each email as a JSON line instead of sending it.
 //
-// With nothing configured, email verification is off and accounts work as before.
+// check() tests the configured sender without sending anything (the server runs it at start).
 import tls from 'node:tls';
 import net from 'node:net';
 import fs from 'node:fs';
@@ -19,11 +21,23 @@ export function createMailer(env = process.env) {
   const fromName = String(env.MAIL_FROM_NAME || 'Vangaurd').replace(/["\r\n]/g, '').slice(0, 60);
   let kind = null;
   if (env.MAIL_CAPTURE_FILE) kind = 'capture';
+  else if (env.GMAIL_SCRIPT_URL) kind = 'gmail';
   else if (env.BREVO_API_KEY && from) kind = 'brevo';
   else if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS && from) kind = 'smtp';
 
-  async function send({ to, subject, text, html }) {
+  const scriptUrl = String(env.GMAIL_SCRIPT_URL || '').trim(), scriptKey = String(env.GMAIL_SCRIPT_KEY || '').trim();
+  async function send({ to, subject, text, html, code, purpose, username }) {
     if (!kind) throw new Error('email is not configured');
+    if (kind === 'gmail') {
+      // The script writes the email itself from these fields, so a leaked URL can only send Vangaurd codes.
+      const r = await fetch(scriptUrl, {
+        method: 'POST', redirect: 'follow', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key: scriptKey, to, code, purpose, username }), signal: AbortSignal.timeout(20000),
+      });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.ok) throw new Error(`Gmail script ${r.status}: ${j?.error || 'no answer (is it deployed as a web app with access "Anyone"?)'}`);
+      return { ok: true, quota: j.quota };
+    }
     if (kind === 'capture') {
       fs.appendFileSync(env.MAIL_CAPTURE_FILE, JSON.stringify({ at: Date.now(), from, to, subject, text }) + '\n');
       return { ok: true };
@@ -44,7 +58,32 @@ export function createMailer(env = process.env) {
       user: env.SMTP_USER, pass: env.SMTP_PASS, from, fromName, to, subject, text, html,
     });
   }
-  return { enabled: !!kind, kind, from, send };
+  // Is the sender set up right? Sends nothing.
+  async function check() {
+    if (!kind) return { ok: false, detail: 'no email sender is set up' };
+    try {
+      if (kind === 'capture') return { ok: true, detail: 'test capture file' };
+      if (kind === 'gmail') {
+        const u = new URL(scriptUrl); u.searchParams.set('key', scriptKey);
+        const r = await fetch(u, { redirect: 'follow', signal: AbortSignal.timeout(20000) });
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j?.ok) return { ok: false, detail: `Gmail script ${r.status}: ${j?.error || 'no answer (deploy it as a web app, Execute as: Me, Who has access: Anyone, and use the URL ending in /exec)'}` };
+        return { ok: true, detail: `Gmail script ready${j.quota != null ? `, ${j.quota} emails left today` : ''}` };
+      }
+      if (kind === 'brevo') {
+        const r = await fetch(env.BREVO_ACCOUNT_URL || 'https://api.brevo.com/v3/account', { headers: { 'api-key': env.BREVO_API_KEY, accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+        if (!r.ok) return { ok: false, detail: `Brevo ${r.status}: ${(await r.text().catch(() => '')).slice(0, 160)}` };
+        return { ok: true, detail: `Brevo ready, sending as ${from}` };
+      }
+      const port = Number(env.SMTP_PORT) || 465;
+      await smtpSend({ host: env.SMTP_HOST, port, secure: env.SMTP_SECURE ? env.SMTP_SECURE !== 'false' : port === 465, user: env.SMTP_USER, pass: env.SMTP_PASS, verifyOnly: true, timeoutMs: 15000 });
+      return { ok: true, detail: `SMTP ready (${env.SMTP_HOST}), sending as ${from}` };
+    } catch (e) {
+      const blocked = kind === 'smtp' && /did not answer|ETIMEDOUT|ECONNREFUSED|ENETUNREACH|EHOSTUNREACH/.test(`${e.code || ''} ${e.message}`);
+      return { ok: false, detail: `${kind}: ${e.message}${blocked ? ' (Railway only allows SMTP on the Pro plan: use the Gmail script, GMAIL_SCRIPT_URL, instead)' : ''}` };
+    }
+  }
+  return { enabled: !!kind, kind, from, send, check };
 }
 
 const b64 = (s) => Buffer.from(String(s), 'utf8').toString('base64');
@@ -124,6 +163,12 @@ export function smtpSend(o) {
         await cmd(b64(o.user), [334]);
         await cmd(b64(o.pass), [235]);
       }
+      if (o.verifyOnly) {
+        try { await cmd('QUIT', [221]); } catch { /* fine */ }
+        done = true; clearTimeout(timer);
+        try { sock.end(); } catch { /* closed */ }
+        return resolve({ ok: true });
+      }
       await cmd(`MAIL FROM:<${o.from}>`, [250]);
       await cmd(`RCPT TO:<${o.to}>`, [250, 251]);
       await cmd('DATA', [354]);
@@ -154,5 +199,5 @@ export function codeEmail(to, code, purpose, username = '') {
 <div style="font-size:34px;font-weight:800;letter-spacing:.32em;color:#ffffff;background:#0b0e10;border:1px solid #2c343a;padding:14px 0;text-align:center">${code}</div>
 <p style="margin:16px 0 0;color:#8e968f;font-size:12px;line-height:1.5">It expires in 10 minutes. If you didn't ask for this code, ignore this email. Nobody can get into the account without it.</p>
 </div></body></html>`;
-  return { to, subject: `Your Vangaurd code: ${code}`, text, html };
+  return { to, subject: `Your Vangaurd code: ${code}`, text, html, code, purpose, username };
 }

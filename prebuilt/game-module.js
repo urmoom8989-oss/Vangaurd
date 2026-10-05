@@ -48630,7 +48630,7 @@ function om() {
   }
 }
 /* Game version. The release build stamps the CI build number into "__VGD_BUILD__". */
-var VGD = { label: "Beta 1.04", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 1.05", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -52680,7 +52680,7 @@ function vgAuthUI() {
       return;
     }
     if (r.needEmail) return pending = r.pending, show("email", ae);
-    say(r.message || "Sign-in failed.", !0), r.error === "offline" && offlineOpts(!0), r.error === "taken" ? (u.focus(), u.select()) : r.error === "bad_login" ? pw.focus() : /email/.test(r.error || "") && view === "main" && em.focus();
+    say(r.message || "Sign-in failed.", !0), r.error === "offline" && offlineOpts(!0), r.error === "taken" ? (u.focus(), u.select()) : r.error === "bad_login" ? pw.focus() : /^(bad_email|email_taken)$/.test(r.error || "") && view === "main" && em.focus();
     r.error === "code_expired" && view === "code" && (pending = null);
   }
   root.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => busy || setMode(b.dataset.t)));
