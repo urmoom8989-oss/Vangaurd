@@ -20,9 +20,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUILD_LABEL: "Beta 0.91"
-  FILE_LABEL: "Beta-0.91"
-  RELEASE_TAG: "beta-0.91"
+  BUILD_LABEL: "Beta 0.92"
+  FILE_LABEL: "Beta-0.92"
+  RELEASE_TAG: "beta-0.92"
   # Every run gets a new build number. The game, the desktop apps and the server compare build numbers:
   # the desktop app offers to update, and the server only lets the newest build play online.
   BUILD_NUMBER: ${{ github.run_number }}
@@ -53,8 +53,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
-      - name: Stamp the app version (0.91.<build>)
-        run: npm pkg set version="0.91.${BUILD_NUMBER}"
+      - name: Stamp the app version (0.92.<build>)
+        run: npm pkg set version="0.92.${BUILD_NUMBER}"
       - name: Build Mac app (Apple Silicon + Intel)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -77,9 +77,9 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
-      - name: Stamp the app version (0.91.<build>)
+      - name: Stamp the app version (0.92.<build>)
         shell: bash
-        run: npm pkg set version="0.91.${BUILD_NUMBER}"
+        run: npm pkg set version="0.92.${BUILD_NUMBER}"
       - name: Build Windows app
         run: npx electron-builder --win nsis zip --x64 --publish never
       - uses: actions/upload-artifact@v4
@@ -104,7 +104,7 @@ jobs:
           cat > out/version.json <<JSON
           {
             "label": "${BUILD_LABEL}",
-            "version": "0.91.${BUILD_NUMBER}",
+            "version": "0.92.${BUILD_NUMBER}",
             "build": ${BUILD_NUMBER},
             "tag": "${RELEASE_TAG}",
             "commit": "${GITHUB_SHA::7}",
@@ -125,12 +125,12 @@ jobs:
         run: |
           gh release delete "$RELEASE_TAG" --yes --cleanup-tag || true
           cat > notes.md <<NOTES
-          Vangaurd ${BUILD_LABEL} · build ${BUILD_NUMBER} (commit ${GITHUB_SHA::7}).
+          Vangaurd ${BUILD_LABEL}.
 
           - **Windows**: \`Vangaurd-${FILE_LABEL}-Setup.exe\` installs the game; \`Vangaurd-${FILE_LABEL}-win.zip\` runs without installing. If SmartScreen appears, choose **More info → Run anyway**.
           - **Mac**: \`Vangaurd-${FILE_LABEL}-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-${FILE_LABEL}-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
           - **Browser**: \`Vangaurd-${FILE_LABEL}.html\` is the whole game in one file. Open it in Chrome or Edge.
 
-          The desktop apps check for a newer build when they start and offer to install it. Online play needs the newest build.
+          This version is required: older versions ask to update when they start and close if you do not.
           NOTES
-          gh release create "$RELEASE_TAG" out/* --target "$GITHUB_SHA" --latest --title "Vangaurd ${BUILD_LABEL} (build ${BUILD_NUMBER})" --notes-file notes.md
+          gh release create "$RELEASE_TAG" out/* --target "$GITHUB_SHA" --latest --title "Vangaurd ${BUILD_LABEL}" --notes-file notes.md

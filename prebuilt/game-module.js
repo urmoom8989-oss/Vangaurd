@@ -48620,8 +48620,9 @@ function om() {
   }
 }
 /* Game version. The release build stamps the CI build number into "__VGD_BUILD__". */
-var VGD = { label: "Beta 0.91", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
-VGD.text = `Vangaurd · ${VGD.label}${VGD.build ? ` · build ${VGD.build}` : ""}`;
+var VGD = { label: "Beta 0.92", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+// The build number stays internal (update checks); players only see the version.
+VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
 /* ------------------------------------------------------------------ weapon camos (procedural, tileable) */
 var camoDefs = [
@@ -51711,7 +51712,13 @@ function vgNetStart() {
     } catch {
       return;
     }
-    if (m.type === "connected") ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build }));
+    if (m.type === "connected") {
+      if (vgCheckBuild(m)) {
+        vgNet.stopped = !0, ws.close();
+        return;
+      }
+      ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build }));
+    }
     else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, ws.send(JSON.stringify({ type: "social_state" }));
     else if (m.type === "auth_error") {
       vgNet.stopped = !0, ws.close();
@@ -51914,6 +51921,165 @@ function vgQuitAsk() {
   };
   d.querySelector("[data-q]").addEventListener("click", go), d.querySelector("[data-c]").addEventListener("click", close), window.addEventListener("keydown", key, !0), d.querySelector("[data-q]").focus();
 }
+/* ------------------------------------------------------------------ update required */
+// Shown when the Vangaurd server says this build is too old: when the game connects (launch, sign-in) or
+// when searching for a match. There is no "later": update now, or close it and the game quits.
+var vgUpd = { open: !1 }, VG_RELEASE_PAGE = "https://github.com/urmoom8989-oss/opus-of-duty/releases/latest";
+var vgUpdCss = `
+.vg-upd { position: fixed; inset: 0; z-index: 420; display: grid; place-items: center; background: rgba(4,6,8,.84); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #e9ece6; }
+.vg-upd .card { position: relative; width: min(460px, 92vw); box-sizing: border-box; padding: 28px 30px 24px; background: rgba(12,15,17,.98); border: 1px solid rgba(236,240,234,.14); border-top: 3px solid #f2c14e; box-shadow: 0 30px 90px rgba(0,0,0,.65); }
+.vg-upd .x { position: absolute; right: 12px; top: 12px; width: 34px; height: 34px; padding: 0; background: none; border: 1px solid rgba(236,240,234,.22); color: #e9ece6; font-size: 20px; line-height: 1; font-family: inherit; cursor: pointer; }
+.vg-upd .x:hover, .vg-upd .x:focus-visible { border-color: #ff8070; color: #ff8070; outline: none; }
+.vg-upd .tag { color: #f2c14e; font-size: 11px; font-weight: 800; letter-spacing: .26em; text-transform: uppercase; }
+.vg-upd h3 { margin: 8px 44px 12px 0; font-size: 21px; line-height: 1.2; letter-spacing: .08em; text-transform: uppercase; }
+.vg-upd p { margin: 0 0 14px; color: #b9bfb8; font-size: 14px; line-height: 1.5; }
+.vg-upd p b { color: #e9ece6; }
+.vg-upd .note { color: #8e968f; font-size: 12px; }
+.vg-upd .msg { margin: 0 0 14px; color: #e9ece6; font-size: 13px; line-height: 1.45; }
+.vg-upd .msg:empty { display: none; }
+.vg-upd .msg.err { color: #ff8070; }
+.vg-upd .bar { height: 6px; margin: 0 0 16px; background: rgba(255,255,255,.08); overflow: hidden; }
+.vg-upd .bar[hidden] { display: none; }
+.vg-upd .bar i { display: block; height: 100%; width: 0; background: #f2c14e; transition: width .2s; }
+.vg-upd .bar.ind i { width: 30%; animation: vgUpdInd 1.1s linear infinite; }
+@keyframes vgUpdInd { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.vg-upd .go { width: 100%; padding: 14px; background: #f2c14e; color: #111; border: 0; font-family: inherit; font-size: 13px; font-weight: 800; line-height: 1; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
+.vg-upd .go:hover { filter: brightness(1.06); }
+.vg-upd .go:disabled { opacity: .6; cursor: default; filter: none; }
+.vg-closed { position: fixed; inset: 0; display: grid; place-items: center; background: #07090a; color: #e9ece6; font: 14px/1.5 system-ui, sans-serif; text-align: center; }
+.vg-closed b { display: block; font-size: 26px; letter-spacing: .34em; margin-bottom: 10px; }
+.vg-closed p { margin: 0 0 18px; color: #b9bfb8; }
+.vg-closed a { display: inline-block; padding: 12px 18px; background: #f2c14e; color: #111; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; text-decoration: none; }
+.vg-closed small { display: block; margin-top: 16px; color: #7d857e; }
+`;
+// m: the server's "connected" message, or its "outdated" refusal. Returns true when this build is too old.
+function vgCheckBuild(m) {
+  if (!m) return !1;
+  const refused = m.type === "error" && m.code === "outdated";
+  const need = Math.floor(Number(refused ? m.latestBuild : m.minClientBuild) || 0);
+  if (!refused && !(need > 0 && VGD.build < need)) return !1;
+  return vgUpdateRequired({ build: need || null, label: m.latestLabel, url: m.downloadUrl }), !0;
+}
+function vgUpdateRequired(info = {}) {
+  if (typeof document > "u" || vgUpd.open) return;
+  if (!document.getElementById("vg-upd-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-upd-style", st.textContent = vgUpdCss, document.head.appendChild(st);
+  }
+  vgUpd.open = !0;
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  try {
+    window.__GAME__?.pause?.();
+  } catch {
+  }
+  const clean = (t) => String(t || "").replace(/[^\w .()-]/g, "").trim().slice(0, 40);
+  const url = /^https:\/\/github\.com\//.test(String(info.url || "")) ? String(info.url) : VG_RELEASE_PAGE;
+  const desk = typeof window < "u" ? window.vangaurdDesktop : null, auto = !!desk?.checkForUpdate;
+  const newer = clean(info.label), mine = clean(VGD.label);
+  const what = newer && newer !== mine ? `<b>Vangaurd ${newer}</b> is out. You have ${mine || "an older version"}, which can no longer be played.` : "<b>A new version of Vangaurd</b> is out. This version can no longer be played.";
+  const d = document.createElement("div");
+  d.className = "vg-upd", d.innerHTML = `<div class="card" role="alertdialog" aria-modal="true" aria-labelledby="vg-upd-h" aria-describedby="vg-upd-p"><button type="button" class="x" data-x title="Close and quit Vangaurd" aria-label="Close and quit Vangaurd">\xD7</button><div class="tag">Update required</div><h3 id="vg-upd-h">New version available</h3><p id="vg-upd-p">${what} Update to keep playing.</p><div class="msg" aria-live="polite"></div><div class="bar" hidden><i></i></div><button type="button" class="go" data-u>${auto ? "Update now" : "Download update"}</button><p class="note" style="margin:14px 0 0">Closing this window quits the game.</p></div>`, document.body.appendChild(d);
+  const $ = (q) => d.querySelector(q), btn = $("[data-u]"), msg = $(".msg"), bar = $(".bar"), fill = $(".bar i");
+  let busy = !1, pageOnly = !auto;
+  const say = (t, err = !1) => {
+    msg.textContent = t || "", msg.classList.toggle("err", !!err);
+  };
+  const openPage = () => {
+    try {
+      window.open(url, "_blank", "noopener");
+    } catch {
+    }
+    say(auto ? "The download page opened in your browser. Install the new version, then open Vangaurd again." : "The download page opened in a new tab. Get the new version there, then open it to play.");
+  };
+  desk?.onUpdateProgress?.((f) => {
+    vgUpd.open && busy && (bar.hidden = !1, bar.classList.toggle("ind", !(f >= 0)), f >= 0 && (fill.style.width = `${Math.round(Math.min(1, f) * 100)}%`, say(`Downloading the update… ${Math.round(Math.min(1, f) * 100)}%`)));
+  });
+  const update = async () => {
+    if (busy) return;
+    if (pageOnly) return openPage();
+    busy = !0, btn.disabled = !0, btn.textContent = "Updating…", bar.hidden = !1, bar.classList.add("ind"), say("Downloading the update…");
+    let r;
+    try {
+      r = await desk.checkForUpdate("required");
+    } catch (e) {
+      r = { error: String(e?.message || e) };
+    }
+    if (r?.installing) return bar.hidden = !0, say("Installing the update. Vangaurd restarts by itself when it is done.");
+    if (r?.opened) return bar.hidden = !0, say("Finish the update in the window that opened, then open Vangaurd again.");
+    busy = !1, bar.hidden = !0, btn.disabled = !1, pageOnly = !0, btn.textContent = "Open download page";
+    say(r?.error ? `The update could not be downloaded (${String(r.error).slice(0, 80)}). Get it from the download page instead.` : "This computer has to get the update from the download page.", !!r?.error);
+  };
+  const quit = () => {
+    if (desk?.quit) return say("Closing Vangaurd…"), desk.quit();
+    try {
+      window.close();
+    } catch {
+    }
+    setTimeout(() => vgShutdownPage(url), 300);
+  };
+  btn.addEventListener("click", update), $("[data-x]").addEventListener("click", quit);
+  // Nothing behind the prompt reacts while it is up; Enter / Space still press the focused button.
+  const block = (ev) => {
+    ev.stopImmediatePropagation(), d.contains(ev.target) && ev.key !== "Escape" || ev.preventDefault();
+  };
+  for (const t of ["keydown", "keyup"]) window.addEventListener(t, block, !0);
+  for (const t of ["mousedown", "pointerdown", "wheel", "contextmenu"]) d.addEventListener(t, (ev) => {
+    ev.stopPropagation(), t === "mousedown" && !ev.target.closest("button") && ev.preventDefault();
+  });
+  // Keep keyboard focus on the prompt (the sign-in form behind it must not take it).
+  document.addEventListener("focusin", (ev) => {
+    vgUpd.open && d.isConnected && !d.contains(ev.target) && btn.focus();
+  }, !0), setTimeout(() => btn.focus(), 30);
+}
+// Browsers only let a page close a tab it opened, so when they refuse, stop the game and say so instead.
+function vgShutdownPage(url) {
+  try {
+    window.__GAME__?.pause?.();
+  } catch {
+  }
+  try {
+    pgCtx?.services?.audio?.context?.close?.();
+  } catch {
+  }
+  try {
+    vgNetStop();
+  } catch {
+  }
+  vgUpd.open = !1, document.title = "Vangaurd";
+  const st = document.createElement("style");
+  st.textContent = vgUpdCss, document.body.replaceChildren(st);
+  const box = document.createElement("div");
+  box.className = "vg-closed", box.innerHTML = `<div><b>VANGAURD</b><p>The game has closed because this version is out of date.</p><a href="${url}" target="_blank" rel="noopener">Download the new version</a><small>You can close this tab.</small></div>`, document.body.appendChild(box);
+}
+// At launch: ask the server which build it needs, so an old build is stopped before the menus.
+function vgBuildProbe() {
+  if (typeof WebSocket > "u") return;
+  let ws;
+  try {
+    ws = new WebSocket(vgServerWs());
+  } catch {
+    return;
+  }
+  const done = () => {
+    clearTimeout(to);
+    try {
+      ws.close();
+    } catch {
+    }
+  }, to = setTimeout(done, 8e3);
+  ws.addEventListener("message", (ev) => {
+    let m;
+    try {
+      m = JSON.parse(ev.data);
+    } catch {
+      return;
+    }
+    m.type === "connected" && (done(), vgCheckBuild(m));
+  }), ws.addEventListener("error", done);
+}
 /* ------------------------------------------------------------------ accounts (sign in before the main menu) */
 // Usernames and passwords live on the Vangaurd server; the game only keeps a sign-in token on this device
 // ("Stay signed in"). A username that is taken can only be used by signing in to that account.
@@ -51972,7 +52138,7 @@ function vgAuthCall(msg, ms = 9e3) {
       } catch {
         return;
       }
-      m.type === "connected" ? ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created }) : m.type === "auth_error" ? fin({ error: m.code || "error", message: m.message || "Sign-in failed." }) : m.type === "logged_out" && fin({ ok: !0 });
+      m.type === "connected" ? vgCheckBuild(m) ? fin({ error: "outdated", message: "This version of Vangaurd is out of date." }) : ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created }) : m.type === "auth_error" ? fin({ error: m.code || "error", message: m.message || "Sign-in failed." }) : m.type === "logged_out" && fin({ ok: !0 });
     }), ws.addEventListener("error", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." })), ws.addEventListener("close", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." }));
   });
 }
@@ -52079,7 +52245,7 @@ function vgAuthStart() {
     if (localStorage.getItem("vangaurd.auth.offline") === "1") return vgAuthSet(null, null, !1);
   } catch {
   }
-  vgAuthUI().boot();
+  vgBuildProbe(), vgAuthUI().boot();
 }
 function Uc() {
   try {
@@ -53145,7 +53311,7 @@ function cJ(A) {
         } catch {
           return;
         }
-        if (e.events.emit("network:message", it), it.type === "connected") F.multiplayerPlayerId = it.playerId ?? it.id ?? it.clientId ?? null;
+        if (e.events.emit("network:message", it), it.type === "connected") F.multiplayerPlayerId = it.playerId ?? it.id ?? it.clientId ?? null, vgCheckBuild(it);
         else if (it.type === "queue_status") {
           F.waitingForPlayers = !0;
           const ot = Number.isFinite(it.queued) ? it.queued : 1, ht = Number.isFinite(it.maximum) ? it.maximum : 12, Ot = Number.isFinite(it.startsIn) ? it.startsIn : null, mn2 = Number.isFinite(it.minimum) ? it.minimum : null, Gs = Ot === null ? mn2 && ot < mn2 ? `${gmName()} · ${ot} in queue · waiting for ${mn2 - ot} more player${mn2 - ot === 1 ? "" : "s"} to start.` : `Searching ${gmName()} · ${ot}/${ht} players (12 max).` : Ot > 0 ? `${gmName()} · ${ot} players · match starts in ${Ot}s.` : `${gmName()} starting…`;
@@ -53166,7 +53332,7 @@ function cJ(A) {
           });
           const ot = it.roster.map((ht) => ht?.name || "Player").join(", ");
           G.textContent = `Match ready · ${it.roster.length} players: ${ot}. Deploying into the match…`, he(`Match found · deploying into ${it.mode === "kc" ? "Kill Confirmed" : "Team Deathmatch"}`, 5), JA();
-        } else it.type === "match_left" ? (F.multiplayerMatch = null, e.events.emit("network:clear"), G.textContent = "Left matchmaking room.", JA()) : it.type === "player_left" ? G.textContent = "A player left the reserved room." : it.type === "error" && (it.code === "login_required" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgAuthShow("Sign in to play online.")), it.code === "outdated" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), window.vangaurdDesktop?.checkForUpdate?.("outdated")), G.textContent = it.message || "Matchmaking service error.", he(G.textContent, it.code === "outdated" ? 12 : 8));
+        } else it.type === "match_left" ? (F.multiplayerMatch = null, e.events.emit("network:clear"), G.textContent = "Left matchmaking room.", JA()) : it.type === "player_left" ? G.textContent = "A player left the reserved room." : it.type === "error" && (it.code === "login_required" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgAuthShow("Sign in to play online.")), it.code === "outdated" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgCheckBuild(it)), G.textContent = it.message || "Matchmaking service error.", it.code !== "outdated" && he(G.textContent, 8));
       }), Se.addEventListener("error", () => {
         clearTimeout(lt);
         const $e = `Could not connect to ${VA}. Check the matchmaking service deployment and Railway domain target port.`;
@@ -53510,7 +53676,7 @@ function cJ(A) {
     F.screen === "replay" && (F.killReplaySkipped = !0, e.services.player.state.alive === !1 ? tt("death") : (A.mode = "play", ni(), e.input.locked || A.requestResume()));
   }
   const th = (yA) => {
-    if (F.screen === "none" || e.flags.shotMode || vgAuth.open || vgQuitOpen || vgFr?.open) return;
+    if (F.screen === "none" || e.flags.shotMode || vgAuth.open || vgQuitOpen || vgFr?.open || vgUpd.open) return;
     const tgt = yA.target;
     if (tgt && tgt !== document.body && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable) && yA.code !== "Escape") return;
     if (F.screen === "main" && Y.classList.contains("on")) {
