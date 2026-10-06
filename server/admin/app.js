@@ -96,12 +96,13 @@
   }
 
   // ---------- shell ----------
-  const TABS = [['reports', 'Reports'], ['players', 'Players'], ['bans', 'Bans'], ['activity', 'Activity'], ['mods', 'Moderators']];
+  const TABS = [['reports', 'Reports'], ['players', 'Players'], ['bugs', 'Bugs'], ['bans', 'Bans'], ['news', 'News'], ['activity', 'Activity'], ['mods', 'Moderators']];
+  const BUGCAT = { gameplay: 'Gameplay', graphics: 'Graphics', controls: 'Controls', online: 'Online', menus: 'Menus', performance: 'Performance', other: 'Other' };
   function shell() {
     app.innerHTML = `<header class="top"><div class="brand">${SHIELD}<div><b>VANGAURD</b><small>Anti-Cheat</small></div></div>
       <div class="me">Signed in as <b>${esc(ui.me)}</b><span class="role">${esc(ui.role)}</span><button class="btn sm" id="signout">Sign out</button></div></header>
       <section class="stats" id="stats"></section>
-      <nav class="tabs" role="tablist">${TABS.map(([k, t]) => `<button class="tab" role="tab" data-tab="${k}">${t}${k === 'reports' ? '<span class="n" id="nrep"></span>' : ''}</button>`).join('')}</nav>
+      <nav class="tabs" role="tablist">${TABS.map(([k, t]) => `<button class="tab" role="tab" data-tab="${k}">${t}${k === 'reports' ? '<span class="n" id="nrep"></span>' : k === 'bugs' ? '<span class="n" id="nbug"></span>' : ''}</button>`).join('')}</nav>
       <main id="view"></main>`;
     $('#signout').onclick = async () => { try { await api('logout', { body: {} }); } catch { /* ignore */ } setToken(null); boot(); };
     $$('.tab').forEach((b) => { b.onclick = () => show(b.dataset.tab); });
@@ -115,12 +116,13 @@
       $('#stats').innerHTML = [['Open reports', c.openReports, c.openReports > 0], ['Reported players', c.reportedPlayers], ['Active bans', c.bans], ['Players online', c.online], ['Accounts', c.accounts]]
         .map(([k, v, hot]) => `<div class="stat${hot ? ' hot' : ''}"><span class="k">${k}</span><b>${Number(v).toLocaleString()}</b></div>`).join('');
       $('#nrep').textContent = c.openReports ? String(c.openReports) : '';
+      $('#nbug').textContent = c.openBugs ? String(c.openBugs) : '';
     } catch { /* handled by api() */ }
   }
   function show(tab) {
     ui.tab = tab;
     $$('.tab').forEach((b) => { const on = b.dataset.tab === tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-    ({ reports: viewReports, players: viewPlayers, bans: viewBans, activity: viewActivity, mods: viewMods })[tab]();
+    ({ reports: viewReports, players: viewPlayers, bugs: viewBugs, bans: viewBans, news: viewNews, activity: viewActivity, mods: viewMods })[tab]();
   }
 
   // ---------- reports ----------
@@ -177,6 +179,7 @@
       <div class="head"><div><h2>${dot(p.status)}${esc(p.name)}${playerTags(p)}</h2>
         <div class="facts"><span>${esc(STATUS[p.status] || p.status)}</span><span>Level ${p.level} · ${Number(p.xp).toLocaleString()} XP</span><span>Joined ${esc(fmt(p.created))}</span><span>Last sign-in ${esc(ago(p.lastLogin))}</span><span>${plural(p.devices, 'device')}</span><span>${p.email ? `Email ${esc(p.email)}${p.emailVerified ? ' (confirmed)' : ' (not confirmed)'}` : 'No email yet'}</span></div></div>
         <div class="acts">${p.ban ? '<button class="btn" data-act="unban">Unban</button>' : p.role ? '' : '<button class="btn danger" data-act="ban">Ban</button>'}
+          ${p.inMatch ? '<button class="btn pri" data-act="spectate" title="Watch their match from inside your game">Spectate</button>' : ''}
           ${p.status !== 'offline' ? '<button class="btn" data-act="kick">Disconnect</button>' : ''}
           ${open ? `<button class="btn" data-act="dismiss-all">Dismiss ${plural(open, 'open report')}</button>` : ''}</div></div>
       ${p.ban ? `<div class="banbox"><b>Banned</b> by ${esc(p.ban.by)} · ${esc(ago(p.ban.at))} · ${esc(banEnds(p.ban))}${p.ban.devices ? ' · devices blocked' : ''}<div class="mt4">Reason: ${esc(p.ban.reason)}</div></div>` : ''}
@@ -209,6 +212,7 @@
         try {
           if (act === 'unban') { if (!confirm(`Unban ${p.name}? They can sign in and play again right away.`)) return; await api('unban', { body: { name: p.name } }); toast(`${p.name} is unbanned.`); }
           if (act === 'kick') { const r = await api('kick', { body: { name: p.name } }); toast(r.kicked ? `Disconnected ${p.name}.` : `${p.name} is not connected.`); }
+          if (act === 'spectate') { const r = await api('spectate', { body: { name: p.name } }); toast(`Sent to your game: accept "Spectate ${p.name}" there to watch their match (${plural(r.players, 'player')}).`); return; }
           if (act === 'dismiss-all') { const r = await api('reports/dismiss', { body: { target: p.name } }); toast(`Dismissed ${plural(r.changed, 'report')}.`); }
           again();
         } catch (e) { fail(e); }
@@ -286,6 +290,56 @@
     } catch (e) { if (!quiet) fail(e); }
   }
 
+  // ---------- bug reports ----------
+  async function viewBugs() {
+    const v = $('#view');
+    ui.bugSt ||= 'open';
+    v.innerHTML = `<div class="pane"><header><span class="k">Bug reports from the game's pause menu</span><span class="sp"></span>
+      <div class="seg" role="group" aria-label="Bug status">${[['open', 'Open'], ['closed', 'Fixed / closed'], ['all', 'All']].map(([k, t]) => `<button data-bst="${k}" class="${ui.bugSt === k ? 'on' : ''}">${t}</button>`).join('')}</div></header><div id="bugs"><div class="empty">Loading…</div></div></div>`;
+    $$('[data-bst]', v).forEach((b) => { b.onclick = () => { ui.bugSt = b.dataset.bst; viewBugs(); }; });
+    try {
+      const { bugs } = await api('bugs', { query: { status: ui.bugSt } });
+      const box = $('#bugs');
+      if (!bugs.length) { box.innerHTML = `<div class="empty"><b>${ui.bugSt === 'open' ? 'No open bug reports' : 'Nothing here'}</b>Players send these from Report → Report a bug in the pause menu.</div>`; return; }
+      box.innerHTML = bugs.map((b) => {
+        const m = b.meta || {};
+        const where = [m.version, m.build ? `build ${m.build}` : null, m.mode, MAPS[m.map] || m.map, m.screen ? `on ${m.screen}` : null, m.fps ? `${m.fps} fps` : null, m.platform].filter(Boolean).map(esc).join(' · ');
+        return `<article class="report${b.status !== 'open' ? ' handled' : ''}">
+          <div class="top-line"><span class="tag">${esc(BUGCAT[b.category] || b.category)}</span><span>from <b>${esc(b.from)}</b></span>${b.status !== 'open' ? `<span class="tag">Closed${b.handledBy ? ` by ${esc(b.handledBy)}` : ''}</span>` : ''}<span class="when" title="${esc(fmt(b.at))}">${ago(b.at)}</span></div>
+          <p class="note">${esc(b.text)}</p>
+          <div class="meta"><span>${where || 'no details'}</span>
+            ${b.status === 'open' ? `<button class="btn sm" data-bug="close" data-id="${esc(b.id)}">Mark fixed</button>` : `<button class="btn sm" data-bug="reopen" data-id="${esc(b.id)}">Reopen</button>`}
+            <button class="btn sm ghost-danger" data-bug="delete" data-id="${esc(b.id)}">Delete</button></div></article>`;
+      }).join('');
+      $$('[data-bug]', box).forEach((b) => {
+        b.onclick = async () => {
+          if (b.dataset.bug === 'delete' && !confirm('Delete this bug report?')) return;
+          try { await api(`bugs/${b.dataset.bug}`, { body: { ids: [b.dataset.id] } }); summary(); viewBugs(); } catch (e) { fail(e); }
+        };
+      });
+    } catch (e) { fail(e); }
+  }
+
+  // ---------- news (shown in the game after sign-in) ----------
+  async function viewNews() {
+    const v = $('#view');
+    try {
+      const { news } = await api('news');
+      v.innerHTML = `<div class="pane narrow"><header><span class="k">Post news</span></header>
+        <form id="newsf" class="newsform"><input class="input" name="title" maxlength="80" placeholder="Title, e.g. Double XP this weekend" autocomplete="off">
+        <textarea class="input" name="body" maxlength="2000" placeholder="What players see under the title in the game's News screen"></textarea>
+        <button class="btn pri" type="submit">Post to the game</button></form>
+        <header><span class="k">Posted (${news.length}) · newest first · players see the latest 20</span></header>
+        ${news.length ? news.map((n) => `<article class="report"><div class="top-line"><b>${esc(n.title)}</b><span class="when" title="${esc(fmt(n.at))}">${ago(n.at)} · ${esc(n.by)}</span></div><p class="note">${esc(n.body)}</p><div class="meta"><span></span><button class="btn sm ghost-danger" data-del="${esc(n.id)}">Delete</button></div></article>`).join('') : '<div class="empty">No news yet. Posts appear in the News screen players see after signing in.</div>'}</div>`;
+      $('#newsf').onsubmit = async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        try { await api('news/add', { body: { title: f.title.value, body: f.body.value } }); toast('Posted. Players see it next time they sign in.'); viewNews(); } catch (e) { fail(e); }
+      };
+      $$('[data-del]', v).forEach((b) => { b.onclick = async () => { if (!confirm('Delete this post?')) return; try { await api('news/delete', { body: { id: b.dataset.del } }); viewNews(); } catch (e) { fail(e); } }; });
+    } catch (e) { fail(e); }
+  }
+
   // ---------- bans ----------
   async function viewBans() {
     const v = $('#view');
@@ -306,7 +360,7 @@
   }
 
   // ---------- activity ----------
-  const ACT = { progress: 'changed the progress of', ban: 'banned', unban: 'unbanned', kick: 'disconnected', dismiss: 'dismissed reports against', reopen: 'reopened reports against', mod_add: 'made a moderator:', mod_remove: 'removed moderator', setup: 'set up the console', ban_expired: 'ban ended for' };
+  const ACT = { spectate: 'spectated', news_add: 'posted news', news_delete: 'deleted a news post', bugs_close: 'closed', bugs_reopen: 'reopened', bugs_delete: 'deleted', progress: 'changed the progress of', ban: 'banned', unban: 'unbanned', kick: 'disconnected', dismiss: 'dismissed reports against', reopen: 'reopened reports against', mod_add: 'made a moderator:', mod_remove: 'removed moderator', setup: 'set up the console', ban_expired: 'ban ended for' };
   const logItem = (l) => `<div class="item"><time title="${esc(fmt(l.at))}">${esc(fmt(l.at))}</time><div><b>${esc(l.by)}</b> ${esc(ACT[l.action] || l.action)} ${l.action === 'setup' ? '' : `<b>${esc(l.target || '')}</b>`}${l.detail && l.action !== 'setup' ? ` <span class="muted">· ${esc(l.detail)}</span>` : ''}</div></div>`;
   async function viewActivity() {
     const v = $('#view');

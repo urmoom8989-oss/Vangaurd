@@ -1,6 +1,6 @@
-# Vangaurd matchmaking server 2.9
+# Vangaurd matchmaking server 3.0
 
-This is the online server for Vangaurd Beta 1.1. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
+This is the online server for Vangaurd Beta 1.2. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
 
 What it does:
 
@@ -14,6 +14,10 @@ What it does:
 - **Email codes.** Creating an account needs an email address and the 6-digit code sent to it; until an email sender is set up (see [Email codes](#email-codes)) new accounts are paused and the game says so. Every sign-in (with the username or the email, plus the password) asks for a fresh code sent to the account's email. Accounts made before email existed are asked to add one the next time they sign in. **Forgot password?** in the game sends a code to the account's email and sets a new password (and signs the account out everywhere else). Codes last 10 minutes and allow 5 tries; at most 6 codes an hour go to one address.
 - **Friends and parties.** Players add friends by username (requests are accepted or declined), see who is online, searching or in a match, and invite online friends to a party of up to 6. When the party leader queues, the others are brought into the same match on the same team. Friends are saved with the accounts; parties last while their members are online.
 - **Cloud saves.** Each account's game data (XP and level, loadouts, camos, perks, weapon stats, singleplayer records and settings other than graphics) is uploaded by the game a few seconds after it changes and downloaded when the player signs in on another device. Saves are kept in `saves.json` next to the accounts, up to 256 KB each; every upload bumps a revision number, and an upload based on an older revision is refused with the current save so the game can pick the newer one.
+- **Party ready check.** When a party leader starts a match search, every member who is not already in a match gets a ready check (20 seconds). The search starts once everyone is ready; anyone answering "Not ready" (or not answering) stops it.
+- **Recently played.** The friends panel lists the players from your recent online matches (kept in memory for a few hours) with an Add friend button.
+- **Bug reports and news.** The game's pause menu sends bug reports (with version, mode, map and match) that appear in the console's **Bugs** tab. News posts written in the console's **News** tab are served at `/news` and shown in the game after sign-in, next to the patch notes.
+- **Spectating (moderators).** On a player's page in the console, **Spectate** (shown while they are in a match) sends an offer to the moderator's own signed-in game. Accepting joins that match as an invisible spectator: the moderator watches from the player's eyes (or a chase camera), can switch between players, and sees their kills, headshots and shots. Players never see spectators.
 - **Anti-cheat console and bans.** `/admin` on this server is the moderation console (see below). Moderators review player reports and ban accounts, optionally together with the devices they played on. Bans are checked here on sign-in, resume and queueing, so they apply to every game version; from Beta 1.0 on the game shows a ban screen whose only button closes the game. Reports come from the **Report player** button on the end-of-match screen and only work for players who were in a match together in the last few hours. Moderation data lives in `moderation.json` next to the accounts.
 
 This build of the game needs this server for online play. An older server still runs matches, but there is no map vote and Kill Confirmed stays team-based.
@@ -26,7 +30,7 @@ The game points at `https://opus-of-duty-production-f963.up.railway.app` by defa
 
 ## Check that it worked
 
-Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"2.9.0"`, `"email"` (`"gmail"`, `"smtp"` or `"brevo"` once email is set up, `false` before) with `"emailReady":true` and `"emailStatus"` saying why not if it is `false`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
+Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"3.0.0"`, `"email"` (`"gmail"`, `"smtp"` or `"brevo"` once email is set up, `false` before) with `"emailReady":true` and `"emailStatus"` saying why not if it is `false`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
 
 ## Anti-cheat console (`/admin`)
 

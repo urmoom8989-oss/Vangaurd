@@ -56,7 +56,7 @@ export const cleanDevice = (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,64
 export function createModeration(d) {
   // d: { DATA_DIR, accounts, saveAccounts, online, clients, statusOf, keyOf, userOf, nameOf, scrypt, now, log, send, kick, saveOf }
   const FILE = pathMod.join(d.DATA_DIR, 'moderation.json');
-  const mod = { owner: null, admins: [], setup: null, sessions: {}, bans: {}, deviceBans: {}, reports: [], log: [] };
+  const mod = { owner: null, admins: [], setup: null, sessions: {}, bans: {}, deviceBans: {}, reports: [], log: [], bugs: [], news: [] };
   try {
     const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     if (raw && typeof raw === 'object') for (const k of Object.keys(mod)) if (raw[k] !== undefined) mod[k] = raw[k];
@@ -211,6 +211,42 @@ export function createModeration(d) {
     d.send(c, { type: 'report_ok', target: d.nameOf(target) });
   }
 
+  // Players someone was recently in a match with (newest first), for the friends panel's "Recently played".
+  function recentWith(key, limit = 12) {
+    const out = new Map();
+    for (const r of [...recent.values()].reverse()) {
+      if (!r.players.has(key)) continue;
+      for (const [k] of r.players) if (k !== key && !out.has(k) && userOf(k)) out.set(k, { key: k, name: d.nameOf(k), at: r.end || r.start, mode: r.mode, map: r.map });
+      if (out.size >= limit) break;
+    }
+    return [...out.values()].slice(0, limit);
+  }
+
+  // ---------- bug reports (from the game's pause menu) ----------
+  function onBug(c, msg) {
+    const fail = (message) => d.send(c, { type: 'bug_error', message });
+    if (!c.account) return fail('Sign in to send bug reports.');
+    const me = d.keyOf(c.account);
+    const text = String(msg.text || '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]+/g, ' ').trim().slice(0, 1500);
+    if (text.length < 8) return fail('Describe the bug in a few words (at least 8 characters).');
+    if (mod.bugs.filter((x) => x.from === me && now() - x.at < 3600e3).length >= 8) return fail('You have sent a lot of bug reports in the last hour. Try again later.');
+    const str = (v, n = 40) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, n) : null);
+    const m = msg.meta && typeof msg.meta === 'object' ? msg.meta : {};
+    const category = ['gameplay', 'graphics', 'controls', 'online', 'menus', 'performance', 'other'].includes(msg.category) ? msg.category : 'other';
+    mod.bugs.unshift({
+      id: crypto.randomBytes(6).toString('hex'), at: now(), from: me, text, category, status: 'open',
+      meta: { version: str(m.version, 24), build: Math.floor(Number(m.build)) || c.build || null, mode: str(m.mode, 24), map: str(m.map, 24), matchId: str(m.matchId, 40), screen: str(m.screen, 24), platform: str(m.platform, 60), fps: Number.isFinite(+m.fps) ? Math.round(+m.fps) : null },
+    });
+    if (mod.bugs.length > MAX_REPORTS) mod.bugs.length = MAX_REPORTS;
+    save(false);
+    d.log(`bug report from ${d.nameOf(me)} (${category}): ${text.slice(0, 80)}`);
+    d.send(c, { type: 'bug_ok' });
+  }
+  const bugView = (b) => ({ ...b, from: d.nameOf(b.from), handledBy: b.handledBy ? d.nameOf(b.handledBy) : null });
+
+  // ---------- news (shown in the game after sign-in; written in the console) ----------
+  const newsPublic = () => mod.news.slice(0, 20).map((n) => ({ id: n.id, title: n.title, body: n.body, at: n.at, by: d.nameOf(n.by) }));
+
   // ---------- console sign-in ----------
   const roleOf = (key) => (key && key === mod.owner ? 'owner' : key && mod.admins.includes(key) ? 'moderator' : null);
   const fails = new Map();
@@ -250,7 +286,7 @@ export function createModeration(d) {
       name: u.name, created: u.created || null, lastLogin: u.lastLogin || null, status: d.statusOf(key), role: roleOf(key),
       ban: b ? { ...banView(key, b), by: d.nameOf(b.by), devices: !!b.devices } : null,
       reportsOpen: against.filter((r) => r.status === 'open').length, reportsTotal: against.length,
-      reportsMade: mod.reports.filter((r) => r.reporter === key).length, devices: (u.devices || []).length, xp: xpOf(key), level: levelOf(xpOf(key)), friends: (u.friends || []).length,
+      reportsMade: mod.reports.filter((r) => r.reporter === key).length, inMatch: d.statusOf(key) === 'match', devices: (u.devices || []).length, xp: xpOf(key), level: levelOf(xpOf(key)), friends: (u.friends || []).length,
       email: u.email ? maskEmail(u.email) : null, emailVerified: !!u.emailVerified,
     };
   }
@@ -338,7 +374,7 @@ export function createModeration(d) {
         const open = mod.reports.filter((r) => r.status === 'open');
         send(res, 200, {
           me: d.nameOf(by), role: s.role, owner: d.nameOf(mod.owner),
-          counts: { openReports: open.length, reportedPlayers: new Set(open.map((r) => r.target)).size, bans: Object.keys(mod.bans).filter((k) => activeBan(k)).length, online: d.online.size, accounts: Object.keys(d.accounts.users).length, reports: mod.reports.length },
+          counts: { openBugs: mod.bugs.filter((b) => b.status === 'open').length, news: mod.news.length, openReports: open.length, reportedPlayers: new Set(open.map((r) => r.target)).size, bans: Object.keys(mod.bans).filter((k) => activeBan(k)).length, online: d.online.size, accounts: Object.keys(d.accounts.users).length, reports: mod.reports.length },
         });
         return true;
       }
@@ -455,6 +491,58 @@ export function createModeration(d) {
         send(res, 200, { ok: true, player: playerView(key) });
         return true;
       }
+      case 'bugs': {
+        const status = q.get('status') || 'open';
+        const list = status === 'all' ? mod.bugs : mod.bugs.filter((b) => b.status === status);
+        send(res, 200, { bugs: list.slice(0, 500).map(bugView), open: mod.bugs.filter((b) => b.status === 'open').length });
+        return true;
+      }
+      case 'bugs/close': case 'bugs/reopen': case 'bugs/delete': {
+        if (need(post, 'Use POST.', 405)) return true;
+        const ids = new Set(Array.isArray(body.ids) ? body.ids.map(String) : []);
+        let n = 0;
+        if (action === 'bugs/delete') { const before = mod.bugs.length; mod.bugs = mod.bugs.filter((b) => !ids.has(b.id)); n = before - mod.bugs.length; }
+        else for (const b of mod.bugs) {
+          if (!ids.has(b.id)) continue;
+          if (action === 'bugs/close' && b.status === 'open') { Object.assign(b, { status: 'closed', handledBy: by, handledAt: now() }); n++; }
+          if (action === 'bugs/reopen' && b.status !== 'open') { Object.assign(b, { status: 'open', handledBy: null, handledAt: null }); n++; }
+        }
+        if (n) { addLog(by, action.replace('/', '_'), null, `${n} bug report${n === 1 ? '' : 's'}`); save(); }
+        send(res, 200, { ok: true, changed: n });
+        return true;
+      }
+      case 'news': send(res, 200, { news: newsPublic() }); return true;
+      case 'news/add': {
+        if (need(post, 'Use POST.', 405)) return true;
+        const clean = (v, n) => String(v || '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]+/g, ' ').trim().slice(0, n);
+        const title = clean(body.title, 80), text = clean(body.body, 2000);
+        if (need(title.length >= 2, 'Give the post a title.')) return true;
+        if (need(text.length >= 2, 'Write something in the post.')) return true;
+        mod.news.unshift({ id: crypto.randomBytes(6).toString('hex'), at: now(), by, title, body: text });
+        if (mod.news.length > 50) mod.news.length = 50;
+        addLog(by, 'news_add', null, title); save();
+        send(res, 200, { ok: true, news: newsPublic() });
+        return true;
+      }
+      case 'news/delete': {
+        if (need(post, 'Use POST.', 405)) return true;
+        const before = mod.news.length;
+        mod.news = mod.news.filter((n) => n.id !== String(body.id || ''));
+        if (mod.news.length !== before) { addLog(by, 'news_delete', null, String(body.id || '')); save(); }
+        send(res, 200, { ok: true, news: newsPublic() });
+        return true;
+      }
+      // Watch a player's match from inside the game: the offer goes to the moderator's own signed-in game.
+      case 'spectate': {
+        if (need(post, 'Use POST.', 405)) return true;
+        const key = findKey(body.name);
+        if (need(key, 'There is no player with that name.', 404)) return true;
+        const r = d.spectateOffer ? d.spectateOffer(by, key) : { error: 'Spectating is not available on this server.' };
+        if (need(!r.error, r.error, 409)) return true;
+        addLog(by, 'spectate', key); save(false);
+        send(res, 200, { ok: true, ...r });
+        return true;
+      }
       case 'mods': send(res, 200, { owner: d.nameOf(mod.owner), moderators: mod.admins.map((k) => ({ name: d.nameOf(k), status: d.statusOf(k) })) }); return true;
       case 'mods/add': case 'mods/remove': {
         if (need(post, 'Use POST.', 405)) return true;
@@ -477,5 +565,5 @@ export function createModeration(d) {
     }
   }
 
-  return { checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
+  return { checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, onBug, recentWith, newsPublic, roleOf, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
 }

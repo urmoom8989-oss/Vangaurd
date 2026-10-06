@@ -22,7 +22,7 @@ const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
 };
-const VERSION = '2.9.0';
+const VERSION = '3.0.0';
 // ---------- client version gate ----------
 // Only the newest game build may play online. The newest build number is read from the
 // version.json attached to the latest GitHub release (refreshed every 5 minutes).
@@ -373,6 +373,8 @@ function socialSnapshot(key) {
     type: 'social', me: u.name,
     friends: u.friends.map((k) => ({ name: nameOf(k), status: statusOf(k), inParty: partyOf.get(k) != null && partyOf.get(k) === partyOf.get(key) })).sort((a, b) => (a.status === 'offline') - (b.status === 'offline') || a.name.localeCompare(b.name)),
     incoming: u.incoming.map(nameOf), outgoing: u.outgoing.map(nameOf), party: partyView(partyOf.get(key)), invites,
+    // players from recent matches, for "Recently played" (Add friend)
+    recent: (mod?.recentWith?.(key, 12) || []).map((r) => ({ name: r.name, at: r.at, mode: r.mode, map: r.map, status: statusOf(r.key), friend: u.friends.includes(r.key), sent: u.outgoing.includes(r.key), incoming: u.incoming.includes(r.key) })),
   };
 }
 function pushSocial(key) { const snap = socialSnapshot(key); if (snap) sendTo(key, snap); }
@@ -463,6 +465,7 @@ function leaveParty(key) {
   partyOf.delete(key);
   if (!pt) return;
   pt.members = pt.members.filter((k) => k !== key);
+  if (pt.ready) readyDone(pt, false, `${nameOf(key)} left the party.`);
   if (pt.members.length <= 1) {
     for (const k of pt.members) { partyOf.delete(k); note(k, 'Your party was disbanded', { kind: 'party' }); pushSocial(k); }
     for (const k of pt.invites) pushSocial(k);
@@ -518,6 +521,58 @@ function partyKick(c, msg) {
   note(them, 'You were removed from the party', { kind: 'party' });
   leaveParty(them);
 }
+// Ready check: before the leader queues, every party member who is not already in a match is asked to ready up.
+// Everyone ready -> the leader's game queues (and the party follows as usual); anyone not ready or 20 s pass -> off.
+const READY_S = 20;
+function readyView(pt) {
+  const r = pt.ready;
+  return { type: 'party_ready', id: r.id, leader: nameOf(pt.leader), mode: r.mode, endsIn: Math.max(0, Math.round((r.endsAt - now()) / 1000)), members: [...r.state].map(([k, st]) => ({ name: nameOf(k), state: st, leader: k === pt.leader })) };
+}
+function readyPush(pt) { const v = readyView(pt); for (const k of pt.members) sendTo(k, v); }
+function readyDone(pt, ok, reason = '') {
+  const r = pt.ready;
+  if (!r) return;
+  clearTimeout(r.timer);
+  pt.ready = null;
+  for (const k of pt.members) sendTo(k, { type: 'party_ready_done', id: r.id, ok, reason, mode: r.mode, leader: nameOf(pt.leader) });
+}
+function readyStart(c, msg) {
+  const me = keyOf(c.account), pt = parties.get(partyOf.get(me));
+  const mode = modeOf(msg.mode);
+  if (!pt || pt.members.length < 2) return send(c, { type: 'party_ready_done', id: null, ok: true, reason: 'solo', mode });
+  if (pt.leader !== me) return socialError(c, 'Only the party leader can start the match search.');
+  if (pt.ready) readyDone(pt, false, 'restarted');
+  const r = { id: newId('rdy'), mode, endsAt: now() + READY_S * 1000, state: new Map(), timer: null };
+  for (const k of pt.members) r.state.set(k, k === me ? 'ready' : statusOf(k) === 'match' ? 'in_match' : statusOf(k) === 'offline' ? 'offline' : 'pending');
+  pt.ready = r;
+  r.timer = setTimeout(() => {
+    if (pt.ready !== r) return;
+    const late = [...r.state].filter(([, st]) => st === 'pending').map(([k]) => nameOf(k));
+    readyDone(pt, false, late.length ? `${late.join(', ')} didn't ready up in time.` : 'The ready check timed out.');
+  }, READY_S * 1000);
+  readyCheck(pt);
+}
+function readyCheck(pt) {
+  const r = pt.ready;
+  if (!r) return;
+  readyPush(pt);
+  const states = [...r.state.values()];
+  if (states.includes('declined')) {
+    const who = [...r.state].filter(([, st]) => st === 'declined').map(([k]) => nameOf(k));
+    return readyDone(pt, false, `${who.join(', ')} ${who.length === 1 ? "isn't" : "aren't"} ready.`);
+  }
+  if (!states.includes('pending')) readyDone(pt, true);
+}
+function readyReply(c, msg) {
+  const me = keyOf(c.account), pt = parties.get(partyOf.get(me));
+  if (!pt?.ready || pt.ready.id !== msg.id || !pt.ready.state.has(me)) return;
+  pt.ready.state.set(me, msg.ready ? 'ready' : 'declined');
+  readyCheck(pt);
+}
+function readyCancel(c) {
+  const me = keyOf(c.account), pt = parties.get(partyOf.get(me));
+  if (pt?.ready && pt.leader === me) readyDone(pt, false, `${nameOf(me)} cancelled the search.`);
+}
 // The leader queued: bring the rest of the party along.
 function partyFollow(c, mode) {
   const me = keyOf(c.account), pt = parties.get(partyOf.get(me));
@@ -537,6 +592,9 @@ function handleSocial(c, msg) {
     case 'party_decline': partyDecline(c, msg); break;
     case 'party_leave': leaveParty(keyOf(c.account)); break;
     case 'party_kick': partyKick(c, msg); break;
+    case 'party_ready_start': readyStart(c, msg); break;
+    case 'party_ready_reply': readyReply(c, msg); break;
+    case 'party_ready_cancel': readyCancel(c); break;
     default: break;
   }
 }
@@ -559,6 +617,7 @@ function send(c, msg) {
 }
 function broadcast(match, msg, exceptId = null) {
   for (const id of match.players.keys()) if (id !== exceptId) send(clients.get(id), msg);
+  if (match.spectators?.size) for (const id of match.spectators) send(clients.get(id), msg);
 }
 function rosterOf(match) {
   return [...match.players.values()].map((p) => ({ id: p.id, name: p.name, team: p.team, alive: p.alive, kills: p.kills, deaths: p.deaths, score: p.score }));
@@ -771,7 +830,7 @@ function leaveMatch(c, notify = true) {
   if (notify) send(c, { type: 'match_left', matchId: match.id });
   broadcast(match, { type: 'player_left', matchId: match.id, playerId: c.id });
   if (match.players.size > 0) { broadcast(match, { type: 'match_update', matchId: match.id, roster: rosterOf(match) }); broadcastVote(match); if (match.ffa) broadcast(match, scoreMsg(match)); }
-  else { clearTimeout(match.vote?.timer); matches.delete(match.id); log(`match ${match.id} closed`); }
+  else { clearTimeout(match.vote?.timer); spectatorsOut(match, 'Everyone left the match.'); matches.delete(match.id); log(`match ${match.id} closed`); }
 }
 function endMatch(match, winner) {
   if (match.ended) return;
@@ -780,6 +839,7 @@ function endMatch(match, winner) {
   const msg = { type: 'match_ended', matchId: match.id, winner, score: { ...match.score } };
   if (match.ffa) { msg.ffa = true; msg.players = boardOf(match); msg.winnerName = match.players.get(winner)?.name || null; msg.scoreLimit = match.scoreLimit; }
   broadcast(match, msg);
+  for (const p of match.players.values()) if (p.key) pushSocial(p.key); // "Recently played" now lists this match
   log(`match ${match.id} ended · winner ${winner}`);
 }
 function addScore(match, team, pts) {
@@ -937,6 +997,51 @@ function onData(c, msg) {
   if (!savesTimer) savesTimer = setTimeout(writeSaves, 1500);
   send(c, { type: 'data_saved', rev: saves[key].rev, at: t });
 }
+// ---------- spectating (moderators, from the /admin console) ----------
+// The console sends an offer to the moderator's own signed-in game; the game then joins the match as an
+// invisible spectator: it gets every match message (positions, shots, kills) but is not a player.
+function liveMatchOf(key) {
+  for (const set of [online.get(key)]) if (set) for (const c of set) if (c.matchId && matches.get(c.matchId)) return { match: matches.get(c.matchId), c };
+  return null;
+}
+function spectateOffer(modKey, targetKey) {
+  const lm = liveMatchOf(targetKey);
+  if (!lm) return { error: `${nameOf(targetKey)} is not in a match right now.` };
+  if (!online.get(modKey)?.size) return { error: `Open Vangaurd and sign in as ${nameOf(modKey)} first; the match opens in your game.` };
+  sendTo(modKey, { type: 'spectate_offer', target: nameOf(targetKey), matchId: lm.match.id, mode: lm.match.mode, players: lm.match.players.size });
+  return { match: lm.match.id, players: lm.match.players.size, mode: lm.match.mode };
+}
+function spectateJoin(c, msg) {
+  if (!c.account && msg.token) { const u = sessionUser(msg.token); if (u) c.account = u.name; }
+  const me = keyOf(c.account);
+  if (!me || !mod.roleOf(me)) return send(c, { type: 'spectate_error', message: 'Only moderators can spectate.' });
+  if (c.matchId) return send(c, { type: 'spectate_error', message: 'Leave your own match first.' });
+  const lm = liveMatchOf(keyOf(msg.target));
+  if (!lm) return send(c, { type: 'spectate_error', message: `${String(msg.target || 'That player').slice(0, 16)} is not in a match right now.` });
+  spectateLeave(c, false);
+  removeFromQueue(c);
+  const { match } = lm;
+  (match.spectators ||= new Set()).add(c.id);
+  c.spectating = match.id;
+  send(c, {
+    type: 'spectate_start', matchId: match.id, mode: match.mode, ffa: match.ffa, phase: match.phase, mapId: match.mapId || match.vote?.options?.[0] || null,
+    roster: rosterOf(match), score: { ...match.score }, scoreLimit: match.scoreLimit, players: match.ffa ? boardOf(match) : undefined, target: lm.c.id, targetName: nameOf(keyOf(msg.target)), ended: match.ended,
+  });
+  for (const p of match.players.values()) if (p.state) send(c, { type: 'player_state', matchId: match.id, playerId: p.id, state: p.state });
+  log(`moderation: ${c.account} is spectating ${nameOf(keyOf(msg.target))} in match ${match.id}`);
+}
+function spectateLeave(c, notify) {
+  const match = c.spectating && matches.get(c.spectating);
+  if (match?.spectators) match.spectators.delete(c.id);
+  if (c.spectating && notify) send(c, { type: 'spectate_end', reason: 'left' });
+  c.spectating = null;
+}
+function spectatorsOut(match, reason) {
+  if (!match.spectators?.size) return;
+  for (const id of match.spectators) { const sc = clients.get(id); if (sc) { sc.spectating = null; send(sc, { type: 'spectate_end', reason }); } }
+  match.spectators.clear();
+}
+
 // ---------- moderation (bans, reports, /admin console) ----------
 // A banned player is told why, taken out of their queue or match and disconnected.
 function kickClient(c, msg) {
@@ -949,7 +1054,7 @@ function kickClient(c, msg) {
 }
 const mod = createModeration({
   DATA_DIR, accounts, saveAccounts, online, clients, statusOf, keyOf, userOf, nameOf, scrypt, now, log, send,
-  kick: kickClient, saveOf: (key) => saves[key]?.blob || null,
+  kick: kickClient, saveOf: (key) => saves[key]?.blob || null, spectateOffer,
   putSave(key, blob) {
     const cur = saves[key] || { rev: 0 };
     saves[key] = { rev: cur.rev + 1, at: now(), blob };
@@ -1002,7 +1107,11 @@ function handle(c, raw) {
     case 'resume': onResume(c, msg); break;
     case 'social_state': case 'friend_add': case 'friend_accept': case 'friend_decline': case 'friend_remove':
     case 'party_invite': case 'party_accept': case 'party_decline': case 'party_leave': case 'party_kick':
+    case 'party_ready_start': case 'party_ready_reply': case 'party_ready_cancel':
       handleSocial(c, msg); break;
+    case 'bug_report': mod.onBug(c, msg); break;
+    case 'spectate_join': spectateJoin(c, msg); break;
+    case 'spectate_leave': spectateLeave(c, true); break;
     case 'logout': onLogout(c, msg); break;
     case 'verify_code': onVerifyCode(c, msg).catch((e) => { log(`verify error: ${e.message}`); authError(c, 'server', 'The server could not check the code. Try again.'); }); break;
     case 'resend_code': onResendCode(c, msg).catch((e) => { log(`resend error: ${e.message}`); authError(c, 'server', 'The server could not send a new code. Try again.'); }); break;
@@ -1023,7 +1132,7 @@ setInterval(() => {
         broadcast(match, { type: 'tag_removed', matchId: match.id, tagId: tag.id, reason: 'expired' });
       }
     }
-    if (match.ended && t - match.createdAt > 6 * 3600 * 1000) matches.delete(match.id);
+    if (match.ended && t - match.createdAt > 6 * 3600 * 1000) { spectatorsOut(match, 'The match is over.'); matches.delete(match.id); }
   }
 }, 2000);
 
@@ -1034,6 +1143,11 @@ const server = http.createServer((req, res) => {
   if (path === '/admin' || path.startsWith('/admin/')) {
     mod.http(req, res, path).then((done) => { if (!done) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('not found'); } })
       .catch((e) => { log(`admin error: ${e.message}`); try { res.writeHead(500, { 'content-type': 'application/json' }); res.end('{"error":"Server error."}'); } catch { /* sent */ } });
+    return;
+  }
+  if (path === '/news') {
+    res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ news: mod.newsPublic() }));
     return;
   }
   if (path === '/' || path === '/health' || path === '/status') {
@@ -1069,6 +1183,7 @@ wss.on('connection', (ws, req) => {
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('message', (data) => handle(c, data.toString()));
   ws.on('close', () => {
+    spectateLeave(c, false);
     goOffline(c);
     removeFromQueue(c);
     if (c.matchId) leaveMatch(c, false);

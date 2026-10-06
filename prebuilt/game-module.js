@@ -23303,6 +23303,8 @@ var QP = {
     lookSens: 5,
     adsSens: 0.8,
     curve: "standard",
+    curveExp: 2,
+    moveCurve: 1,
     deadzoneL: 0.12,
     deadzoneR: 0.1,
     invertY: !1,
@@ -44971,7 +44973,7 @@ function R9(A, e) {
       const qA = hA.final ? JB(z / hA.redeployTotal) : JB(1 - hA.redeployIn / hA.redeployTotal);
       ur(s.dProg, "width", `${(qA * 100).toFixed(1)}%`), ur(s.dProg, "background", hA.final ? "var(--red)" : "var(--fg)");
     } else Fa(s.death, 0);
-    const FA = aA === "ended" ? "summary" : Z.ext ? null : aA === "menu" || aA === "deploying" ? "menu" : Z.paused ? "pause" : null;
+    const FA = aA === "ended" ? vgFinal.on ? null : "summary" : Z.ext ? null : aA === "menu" || aA === "deploying" ? "menu" : Z.paused ? "pause" : null;
     if (D(FA), FA === "menu") {
       const xA = bc(u());
       xt(s.mDiff, xA.label), xt(s.mDiffSub, xA.label), xt(s.mLives, String(xA.lives)), xt(s.mThreat, [
@@ -45807,7 +45809,7 @@ function T9(A) {
     E = !1, g.length = 0, B.clear(), r.enemiesAlive = 0;
   }
   function mA() {
-    sA(), aA(), c.dominationFlags = null, W.length = 0, Y.length = 0;
+    rangeStop(), sA(), aA(), c.dominationFlags = null, W.length = 0, Y.length = 0;
     try {
       Z().vfx.clear?.();
     } catch {
@@ -45819,7 +45821,7 @@ function T9(A) {
     });
   }
   function rA(O = {}) {
-    ggOff(), amS.clear(), pmS.clear(), wmVoteAbort(), c.paused && ft(), mA(), GA("menu"), c.menuT = 0, c.fade = 0, r.timeLeft = 1 / 0, FA(!1), pe(!1);
+    ggOff(), amS.clear(), pmS.clear(), wmVoteAbort(), c.paused && ft(), mA(), rangeLeaveMap(), GA("menu"), c.menuT = 0, c.fade = 0, r.timeLeft = 1 / 0, FA(!1), pe(!1);
     try {
       Z().player.setMovementEnabled(!1);
     } catch {
@@ -45966,7 +45968,7 @@ function T9(A) {
     const netSt = Z().network?.state, O = tA?.roster?.find((KA) => KA && netSt?.selfId != null && String(KA.id) === String(netSt.selfId)) || tA?.roster?.find((KA) => KA && tA.playerId != null && String(KA.id) === String(tA.playerId)), fA = O ? /^(bravo|red)$/i.test(String(O.team)) ? "red" : "blue" : netSt?.localTeam ? netSt.localTeam === "bravo" ? "red" : "blue" : null;
     r.ffa = !!(r.kc || r.gg), c.ggLevel = -1;
     for (const KA of Object.keys(r.score)) (/^ffa/.test(KA) || /^net:/.test(KA)) && delete r.score[KA];
-    r.playerTeam = r.ffa ? "ffa0" : r.matchType === "tdm" || r.matchType === "domination" ? fA || (Math.random() < 0.5 ? "blue" : "red") : "player", r.scoreLimit = r.matchType === "domination" ? 600 : r.gg ? ggLadder.length : r.kc ? tA && Number.isFinite(tA.scoreLimit) ? tA.scoreLimit : ffaLimit : 50, r.ffaBoard = r.ffa ? [{ key: r.playerTeam, name: "You", score: 0, you: !0 }] : null, c.ffaNames = { [r.playerTeam]: "You" }, r.score[r.playerTeam] = 0, r.score.blue = 0, r.score.red = 0, r.score.player = 0, r.matchTime = 0, Y.length = 0, W.length = 0, q();
+    r.playerTeam = r.ffa ? "ffa0" : r.matchType === "tdm" || r.matchType === "domination" ? fA || (Math.random() < 0.5 ? "blue" : "red") : "player", r.scoreLimit = r.matchType === "domination" ? 600 : r.gg ? ggLadder.length : r.kc ? tA && Number.isFinite(tA.scoreLimit) ? tA.scoreLimit : ffaLimit : tA && r.matchType === "tdm" && Number.isFinite(tA.scoreLimit) && tA.scoreLimit > 0 ? tA.scoreLimit : 50, r.ffaBoard = r.ffa ? [{ key: r.playerTeam, name: "You", score: 0, you: !0 }] : null, c.ffaNames = { [r.playerTeam]: "You" }, r.score[r.playerTeam] = 0, r.score.blue = 0, r.score.red = 0, r.score.player = 0, r.matchTime = 0, Y.length = 0, W.length = 0, q();
     const DA = MA();
     c.dominationFlags = DA.map((KA, he) => ({
       name: [
@@ -46026,7 +46028,7 @@ function T9(A) {
         label: r.winner,
         score: { ...r.score }
       }), xA()) try {
-        Z().hud.showMatchResult?.();
+        vgFinal.start?.(() => Z().hud.showMatchResult?.()) || Z().hud.showMatchResult?.();
       } catch {
       }
     }
@@ -46138,6 +46140,8 @@ function T9(A) {
       wmVoteBegin({}, { options: [id], endsIn: 0, total: 1, voters: O.roster?.length || 1 }) ? wmVoteResolve(id) : re();
       return;
     }
+    const back = Z().world?.mapId === "range" ? rangeLeaveMap() : null;
+    if (back) return void Promise.resolve(back).then(() => re(), () => re());
     re();
   }
   function wmNetMessage(O) {
@@ -46370,8 +46374,138 @@ function T9(A) {
       r.score[se] = (r.score[se] || 0) + 1, r.score.friendly = r.score[KA], r.score.enemy = r.score[he], r.score[se] >= r.scoreLimit && we(se, se === "blue" ? "BLUE TEAM" : "RED TEAM");
     }
   }
+  // ---------- Beta 1.2: Firing Range (singleplayer) ----------
+  // Cardboard targets at 10, 25, 50, 75 and 100 m down the longest clear line from the spawn, plus two moving
+  // targets. Targets never die (no XP); the readout shows damage, hit zone, distance, shots and time to down.
+  const rng = { R: null, T: [], pops: [], off: [], ui: null, fired: 0, hits: 0, last: null, down: null, own: [], layer: null };
+  const rngV = new b();
+  let rngPrev = null;
+  // leaving the range: go back to the last real map (the range room is never used for matches)
+  function rangeLeaveMap() {
+    try {
+      const W = Z().world;
+      if (W?.mapId !== "range") return null;
+      const list = wmList(), back = list.some((m) => m.id === rngPrev) ? rngPrev : list[0]?.id;
+      return back ? W.loadMap(back) : null;
+    } catch (err) {
+      return A.reportError("gamemode", "range-leave", err), null;
+    }
+  }
+  function rangeStop() {
+    for (const [ev, fn] of rng.off) e.off(ev, fn);
+    rng.off.length = 0;
+    try {
+      rng.R?.dispose();
+    } catch {
+    }
+    for (const o of rng.own) try {
+      o.dispose?.();
+    } catch {
+    }
+    rng.R = null, rng.T.length = 0, rng.own.length = 0;
+    for (const p of rng.pops) p.el.remove();
+    rng.pops.length = 0, rng.ui?.remove(), rng.ui = null, rng.layer?.remove(), rng.layer = null;
+    try {
+      rng.inv && Z().player.setInvulnerable?.(!1), rng.inv = !1;
+    } catch {
+    }
+  }
+  async function rangeStart() {
+    rangeStop(), r.playerTeam = "player", r.objective = "Firing Range", pA.stop(), q(), c.fade = 1, GA("range");
+    try {
+      Z().ai.setEnabled(!1);
+    } catch {
+    }
+    const W = Z().world;
+    try {
+      W.mapId !== "range" && (rngPrev = W.mapId || rngPrev, await W.loadMap("range"));
+    } catch (err) {
+      A.reportError("gamemode", "range-map", err);
+    }
+    if (c.stage !== "range") return void (c.stage === "menu" && rangeLeaveMap());
+    if (W.mapId !== "range") return qA("The firing range could not be loaded.", { kind: "warning", duration: 4 });
+    // booth 4 (centre) on the firing line; the lanes run straight down the hall (-z)
+    const sp = W.spawnPoints?.player?.[0], P0 = sp?.position ? sp.position.clone() : new b(0, 0, 51.3), yawP = 0, FL = 50;
+    try {
+      Z().player.teleport(P0, yawP, 0), Z().player.setMovementEnabled(!0), Z().player.setInvulnerable?.(!0), rng.inv = !0;
+    } catch {
+    }
+    e.emit("gamemode:respawn", { position: P0, yaw: yawP });
+    let R2;
+    const gy0 = W.groundHeight?.(0, FL - 5, 2.5);
+    try {
+      R2 = rng.R = jK(A, { origin: [0, Number.isFinite(gy0) ? gy0 : 0.02, FL], yaw: 0, floor: !1 });
+    } catch (err) {
+      return A.reportError("gamemode", "range-build", err), qA("The firing range could not be built.", { kind: "warning", duration: 4 });
+    }
+    // lanes 1 – 5: static targets; lanes 6 – 7: two moving targets on rails
+    const lanes = [[10, -10.2, 0], [25, -6.8, 0], [50, -3.4, 0], [100, 0, 0], [75, 3.4, 0], [20, 8.5, 2.7], [40, 8.5, 2.7]];
+    for (const [d, x0, amp] of lanes) {
+      const t = R2.target({ x: x0, z: -d, health: 1e9, name: amp ? `Moving target ${d} m` : `Target ${d} m`, team: "enemy" });
+      const tex = A.assets.canvasTexture(256, 96, (g2, w2, h2) => {
+        g2.clearRect(0, 0, w2, h2), g2.fillStyle = "rgba(10,13,15,.82)", g2.fillRect(0, 0, w2, h2), g2.fillStyle = amp ? "#7fd7ff" : "#f0c048", g2.fillRect(0, 0, w2, 6), g2.fillStyle = "#ffffff", g2.font = "bold 50px Arial, sans-serif", g2.textAlign = "center", g2.textBaseline = "middle", g2.fillText(`${d} m${amp ? " ↔" : ""}`, w2 / 2, h2 / 2 + 4);
+      }, { srgb: !0 }), mat = new ha({ map: tex, transparent: !0, depthWrite: !1 }), geo = new wi(Math.max(1.1, d / 34), Math.max(0.42, d / 88), 0.01), sign = new Le(geo, mat);
+      sign.position.set(0, 2.3 + d / 120, 0), t.group.add(sign), rng.own.push(tex, mat, geo), rng.T.push({ t, d, x0, amp, hp: 100, shots: 0, t0: 0, downT: -1, ph: Math.random() * 6 });
+    }
+    R2.finish(), ie("range"), pe(!0), FA(!0), rng.fired = 0, rng.hits = 0, rng.last = null, rng.down = null;
+    const onHit = (h) => {
+      const T = h?.target && rng.T.find((x) => x.t.damageable === h.target);
+      if (!T || T.downT >= 0) return;
+      const dmg = Math.round(h.damage || 0), now = A.time.t;
+      rng.hits++, T.shots === 0 && (T.t0 = now), T.shots++, T.hp -= dmg, rng.last = { dmg, zone: h.zone || "torso", dist: h.distance ?? T.d, head: !!h.headshot }, rangePop(h.point, dmg, !!h.headshot || h.zone === "head"), T.hp <= 0 && (T.downT = now, rng.down = { shots: T.shots, ttk: now - T.t0, d: T.d, moving: !!T.amp });
+    }, onFire = () => {
+      rng.fired++;
+      const ws = Z().weapons, st = ws?.state;
+      st && st.magSize > 0 && (st.reserve = Math.max(st.reserve | 0, st.magSize * 3)), Number.isFinite(st?.lethal) && st.lethal < 1 && ws.addGrenades?.(1);
+    };
+    e.on("combat:hit", onHit), e.on("weapon:fired", onFire), rng.off.push(["combat:hit", onHit], ["weapon:fired", onFire]), rangeUI(), qA("FIRING RANGE · Targets from 10 to 100 m · Infinite ammo", { kind: "banner", duration: 4 }), e.emit("gamemode:start", { mode: "range", difficulty: c.diffKey });
+  }
+  function rangePop(pt, dmg, head) {
+    if (!pt || typeof document > "u") return;
+    rng.layer || (rng.layer = document.createElement("div"), rng.layer.className = "vg-rngpop", document.body.appendChild(rng.layer));
+    const el = document.createElement("div");
+    el.className = head ? "h" : "", el.textContent = String(dmg), rng.layer.appendChild(el), rng.pops.push({ el, p: pt.clone ? pt.clone() : new b(pt.x, pt.y, pt.z), age: 0, dx: (Math.random() - 0.5) * 30 });
+    for (; rng.pops.length > 24; ) rng.pops.shift().el.remove();
+  }
+  function rangeUI() {
+    if (typeof document > "u") return;
+    if (!document.getElementById("vg-rng-style")) {
+      const st = document.createElement("style");
+      st.id = "vg-rng-style", st.textContent = vgRangeCss, document.head.appendChild(st);
+    }
+    rng.ui?.remove(), rng.ui = document.createElement("div"), rng.ui.className = "vg-rng", document.body.appendChild(rng.ui);
+  }
+  function rangeTick(dt) {
+    const now = A.time.t;
+    for (const T of rng.T) {
+      T.amp && (T.ph += dt * (Math.PI * 2 / (T.d > 30 ? 5.5 : 4)), T.t.group.position.x = T.x0 + Math.sin(T.ph) * T.amp);
+      // knocked down when "killed", back up 1.4 s later
+      const k2 = T.downT >= 0 ? now - T.downT : -1, tilt = k2 < 0 ? 0 : k2 < 0.18 ? k2 / 0.18 : k2 < 1.1 ? 1 : k2 < 1.4 ? 1 - (k2 - 1.1) / 0.3 : 0;
+      T.t.group.rotation.x = -tilt * 1.45, k2 >= 1.4 && (T.downT = -1, T.hp = 100, T.shots = 0), (T.amp || k2 >= 0) && T.t.group.updateMatrixWorld(!0);
+    }
+    const cam = A.camera, W2 = innerWidth, H2 = innerHeight;
+    for (let i2 = rng.pops.length - 1; i2 >= 0; i2--) {
+      const p2 = rng.pops[i2];
+      if (p2.age += Math.max(dt, 1 / 120), p2.age > 0.9) {
+        p2.el.remove(), rng.pops.splice(i2, 1);
+        continue;
+      }
+      rngV.copy(p2.p).project(cam);
+      const vis = rngV.z < 1 && Math.abs(rngV.x) < 1.2 && Math.abs(rngV.y) < 1.2;
+      p2.el.style.opacity = vis ? String(Math.min(1, (0.9 - p2.age) / 0.35)) : "0", p2.el.style.transform = `translate(${((rngV.x + 1) / 2 * W2 + p2.dx * p2.age).toFixed(1)}px, ${((1 - rngV.y) / 2 * H2 - 46 * p2.age - 18).toFixed(1)}px) translateX(-50%)`;
+    }
+    if (!rng.ui || (rng.uiT = (rng.uiT || 0) - dt) > 0) return;
+    rng.uiT = 0.15;
+    const st = Z().weapons?.state || {}, L2 = rng.last, D2 = rng.down, ZN = { head: "Head", neck: "Neck", chest: "Chest", torso: "Chest", stomach: "Stomach", arm: "Arm", leg: "Leg" };
+    rng.ui.innerHTML = `<div class="kk">Firing Range</div><div class="row"><span>Weapon</span><b>${Nn(String(st.name || st.displayName || st.id || "—"))}</b></div><div class="row"><span>Last hit</span><b>${L2 ? `${L2.dmg} dmg · ${ZN[L2.zone] || L2.zone} · ${Math.round(L2.dist)} m` : "—"}</b></div><div class="row"><span>Last target down</span><b>${D2 ? `${D2.shots} shot${D2.shots === 1 ? "" : "s"} · ${D2.ttk.toFixed(2)} s · ${D2.d} m${D2.moving ? " (moving)" : ""}` : "—"}</b></div><div class="row"><span>Accuracy</span><b>${rng.fired ? `${Math.min(rng.hits, rng.fired)} / ${rng.fired} · ${Math.round(Math.min(rng.hits, rng.fired) / rng.fired * 100)}%` : "—"}</b></div><div class="hint">Targets drop at 100 damage · Pause → Loadouts to change weapons</div>`;
+  }
   function QA(O = {}) {
-    if (O.vote && !A.flags.shotMode && !k && !tA && wmVoteBegin(O)) return;
+    if (O.vote && r.matchType !== "range" && !A.flags.shotMode && !k && !tA && wmVoteBegin(O)) return;
+    if (r.matchType === "range") return c.paused && ft(), mA(), rangeStart();
+    if (Z().world?.mapId === "range" && !O.rangeLeft) {
+      const back = rangeLeaveMap(), again = () => QA({ ...O, vote: !1, rangeLeft: !0 });
+      if (back) return c.paused && ft(), mA(), void Promise.resolve(back).then(again, again);
+    }
     c.paused && ft(), mA(), c.diffKey = A.settings.get("gameplay.difficulty", "regular"), Sc.includes(c.diffKey) || (c.diffKey = "regular"), r.difficulty = c.diffKey;
     const fA = j();
     if (r.lives = fA.lives, r.livesMax = fA.lives, r.maxLives = fA.lives, r.matchType === "tdm" || r.matchType === "domination") {
@@ -46650,7 +46784,8 @@ function T9(A) {
       "tdm",
       "domination",
       "kc",
-      "gg"
+      "gg",
+      "range"
     ].includes(O) || !(c.stage === "menu" || c.stage === "ended")) return !1;
     const fA = O;
     return r.kc = O === "kc", r.gg = O === "gg", (r.kc || r.gg) && (O = "tdm"), r.matchType = O, r.mode = O === "protection" ? E2 : fA, r.playerTeam = O === "tdm" || O === "domination" ? "blue" : "player", e.emit("gamemode:mode", { mode: fA }), !0;
@@ -46792,6 +46927,9 @@ function T9(A) {
         case "matchmaking":
           c.paused || (c.fade = Math.max(0, c.fade - fA * 1.6));
           break;
+        case "range":
+          c.fade = Math.max(0, c.fade - fA * 1.6), rangeTick(c.paused ? 0 : O);
+          break;
         case "vote":
           c.fade = Math.max(0, c.fade - fA * 2), wmVoteTick(fA);
           break;
@@ -46857,7 +46995,7 @@ function T9(A) {
     c.stage === "match-dead" && (UA += `:RESPAWN:${Math.ceil(R)}`);
     const KA = c.stage === "matchmaking" ? `${N.queued}/${N.maximum}/${N.startsIn}/${N.minimum}/${r.kc}` : fA ? r.wave : -1;
     if (!(c.stage === AA && DA === CA && L === KA && F === UA)) {
-      AA = c.stage, CA = DA, L = KA, F = UA, c.stage === "matchmaking" ? (gt.wave = null, gt.hostiles = null, gt.timer = N.startsIn === null ? N.minimum && N.queued < N.minimum ? `WAITING FOR ${N.minimum - N.queued} MORE` : `SEARCHING · ${N.queued}/${N.maximum}` : N.startsIn > 0 ? `STARTING IN ${N.startsIn}` : "STARTING MATCH", gt.objective = `${r.kc ? "KILL CONFIRMED · FFA" : "TEAM DEATHMATCH"} · SEARCHING FOR PLAYERS`) : r.ffa ? (gt.wave = r.gg ? "GG" : "KC", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : r.gg ? `GUN ${Math.min(r.scoreLimit, (r.score[r.playerTeam] || 0) + 1)} OF ${r.scoreLimit}` : `FIRST TO ${r.scoreLimit}`, gt.objective = ffaLine()) : r.matchType === "tdm" || r.matchType === "domination" ? (gt.wave = r.matchType === "domination" ? "DOM" : r.kc ? "KC" : "TDM", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : `FIRST TO ${r.scoreLimit}`, gt.objective = r.matchType === "domination" ? `BLUE ${r.score.blue} — RED ${r.score.red}  ·  ${$A}` : `BLUE ${r.score.blue} — RED ${r.score.red}`) : c.stage === "warmup" ? (gt.wave = null, gt.hostiles = null, gt.timer = `Assault in ${cF(DA)}`, gt.objective = kA()) : c.stage === "intermission" ? (gt.wave = r.wave, gt.hostiles = null, gt.timer = c.lastWaveFinal ? "Relief column inbound" : `Next wave in ${cF(DA)}`, gt.objective = kA()) : (gt.wave = void 0, gt.hostiles = void 0, gt.timer = void 0, gt.objective = kA());
+      AA = c.stage, CA = DA, L = KA, F = UA, r.matchType === "range" ? (gt.wave = "RNG", gt.hostiles = null, gt.timer = "INFINITE AMMO", gt.objective = "FIRING RANGE · PAUSE → LOADOUTS TO CHANGE WEAPONS") : c.stage === "matchmaking" ? (gt.wave = null, gt.hostiles = null, gt.timer = N.startsIn === null ? N.minimum && N.queued < N.minimum ? `WAITING FOR ${N.minimum - N.queued} MORE` : `SEARCHING · ${N.queued}/${N.maximum}` : N.startsIn > 0 ? `STARTING IN ${N.startsIn}` : "STARTING MATCH", gt.objective = `${r.kc ? "KILL CONFIRMED · FFA" : "TEAM DEATHMATCH"} · SEARCHING FOR PLAYERS`) : r.ffa ? (gt.wave = r.gg ? "GG" : "KC", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : r.gg ? `GUN ${Math.min(r.scoreLimit, (r.score[r.playerTeam] || 0) + 1)} OF ${r.scoreLimit}` : `FIRST TO ${r.scoreLimit}`, gt.objective = ffaLine()) : r.matchType === "tdm" || r.matchType === "domination" ? (gt.wave = r.matchType === "domination" ? "DOM" : r.kc ? "KC" : "TDM", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : `FIRST TO ${r.scoreLimit}`, gt.objective = r.matchType === "domination" ? `BLUE ${r.score.blue} — RED ${r.score.red}  ·  ${$A}` : `BLUE ${r.score.blue} — RED ${r.score.red}`) : c.stage === "warmup" ? (gt.wave = null, gt.hostiles = null, gt.timer = `Assault in ${cF(DA)}`, gt.objective = kA()) : c.stage === "intermission" ? (gt.wave = r.wave, gt.hostiles = null, gt.timer = c.lastWaveFinal ? "Relief column inbound" : `Next wave in ${cF(DA)}`, gt.objective = kA()) : (gt.wave = void 0, gt.hostiles = void 0, gt.timer = void 0, gt.objective = kA());
       try {
         O.setMatchInfo(gt);
       } catch (he) {
@@ -46918,7 +47056,7 @@ function T9(A) {
         ffaOnlineScore(O);
         return;
       }
-      !tA || O.matchId !== tA.matchId || (r.score.blue = O.score?.alpha || 0, r.score.red = O.score?.bravo || 0, r.score.friendly = r.score[r.playerTeam] || 0, r.score.enemy = r.playerTeam === "blue" ? r.score.red : r.score.blue, r.score.blue >= r.scoreLimit ? we("blue", "BLUE TEAM") : r.score.red >= r.scoreLimit && we("red", "RED TEAM"));
+      !tA || O.matchId !== tA.matchId || (Number.isFinite(O.scoreLimit) && O.scoreLimit > 0 && (r.scoreLimit = O.scoreLimit), r.score.blue = O.score?.alpha || 0, r.score.red = O.score?.bravo || 0, r.score.friendly = r.score[r.playerTeam] || 0, r.score.enemy = r.playerTeam === "blue" ? r.score.red : r.score.blue, O.type === "match_ended" ? (O.winner === "bravo" || O.winner !== "alpha" && r.score.red > r.score.blue ? we("red", "RED TEAM") : we("blue", "BLUE TEAM")) : r.score.blue >= r.scoreLimit ? we("blue", "BLUE TEAM") : r.score.red >= r.scoreLimit && we("red", "RED TEAM"));
     }), EA("combat:kill", (O) => {
       try {
         const qf = O?.target;
@@ -47077,7 +47215,7 @@ function T9(A) {
         sA(), pA.stop(), GA("sandbox"), r.mode = "sandbox";
         return;
       }
-      Dt(["protection", "tdm"].includes(O) ? O : "protection"), fA.difficulty && Je(fA.difficulty), !(c.stage === "warmup" && c.stageT === 0) && QA(fA);
+      Dt(["protection", "tdm", "range"].includes(O) ? O : "protection"), fA.difficulty && Je(fA.difficulty), !(c.stage === "warmup" && c.stageT === 0) && QA(fA);
     },
     end(O = "ended") {
       if (O === "quit" || O === "menu") {
@@ -47152,7 +47290,8 @@ var Jo, x2, C3, jh, m3, w3, bp, y3, b3, D3, v2, M3, Y9 = YA((() => {
     intermission: !0,
     matchmaking: !0,
     "match-live": !0,
-    "match-dead": !0
+    "match-dead": !0,
+    range: !0
   }, x2 = {
     boot: "warmup",
     sandbox: "live",
@@ -47166,6 +47305,7 @@ var Jo, x2, C3, jh, m3, w3, bp, y3, b3, D3, v2, M3, Y9 = YA((() => {
     "match-live": "live",
     "match-dead": "live",
     dead: "live",
+    range: "live",
     ended: "ended"
   }, C3 = [
     "Hold Vardanek",
@@ -48688,6 +48828,7 @@ function Sy() {
     xp: 0,
     kills: 0,
     headshots: 0,
+    longshots: 0,
     deaths: 0,
     weapons: {},
     grenadeType: "frag"
@@ -48740,7 +48881,7 @@ function vgBotName() {
   }
   return b.order[b.i++ % b.order.length];
 }
-var VGD = { label: "Beta 1.1", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 1.2", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -48766,8 +48907,34 @@ var camoDefs = [
   { id: "gold", name: "Gold", lv: 85, kind: "brushed", pal: ["#e2b445", "#a8791f"], rough: 0.2, metal: 1, scale: 2, desc: "Polished gold. Earned, not bought." },
   { id: "prism", name: "Prism", lv: 90, kind: "prism", rough: 0.18, metal: 0.65, glow: 0.18, flow: [0.06, 0.035], scale: 2.2, live: !0, desc: "Shifting holographic colours (animated)." },
   { id: "molten", name: "Molten", lv: 95, kind: "molten", rough: 0.78, metal: 0.05, glow: 2.6, flow: [0, 0.035], scale: 2.6, live: !0, desc: "Cooling rock over glowing lava (animated)." },
-  { id: "nebula", name: "Nebula", lv: 100, kind: "nebula", rough: 0.32, metal: 0.25, glow: 1.6, flow: [0.018, 0.01], scale: 2.2, live: !0, desc: "A drifting starfield. Level 100 only (animated)." }
+  { id: "nebula", name: "Nebula", lv: 100, kind: "nebula", rough: 0.32, metal: 0.25, glow: 1.6, flow: [0.018, 0.01], scale: 2.2, live: !0, desc: "A drifting starfield. Level 100 only (animated)." },
+  // Challenge camos (Beta 1.2): unlocked by headshot and longshot kills (35 m or more) instead of level.
+  { id: "headhunter", name: "Headhunter", lv: 0, ch: { hs: 100 }, kind: "digital", pal: ["#8c1414", "#4a0b0b", "#b32a22", "#140707"], thr: [0.48, 0.57, 0.64], P: [3, 3], px: 40, rough: 0.5, metal: 0.12, scale: 2.4, desc: "Challenge: 100 headshot kills. Crimson digital for people who aim high." },
+  { id: "farsight", name: "Farsight", lv: 0, ch: { ls: 50 }, kind: "hex", pal: ["#1d6c74", "#123f46", "#0a2125"], rough: 0.36, metal: 0.45, scale: 5, desc: "Challenge: 50 longshot kills (35 m or more). Deep teal plating." },
+  { id: "deadeye", name: "Deadeye", lv: 0, ch: { hs: 250, ls: 100 }, kind: "forged", pal: ["#f2c14e", "#2a1d08"], rough: 0.22, metal: 0.95, scale: 2.4, desc: "Master challenge: 250 headshot kills and 100 longshot kills. Gold-and-black folded steel." }
 ];
+// Challenge progress for a camo (null for level camos) and whether a camo is unlocked.
+function camoChallenge(d) {
+  if (!d?.ch) return null;
+  const hs = typeof Za == "object" && Za ? Za.headshots | 0 : 0, ls = typeof Za == "object" && Za ? Za.longshots | 0 : 0, parts = [];
+  d.ch.hs && parts.push({ k: "headshots", have: Math.min(hs, d.ch.hs), need: d.ch.hs }), d.ch.ls && parts.push({ k: "longshots", have: Math.min(ls, d.ch.ls), need: d.ch.ls });
+  return { done: parts.every((x) => x.have >= x.need), parts, text: parts.map((x) => `${x.have}/${x.need} ${x.k}`).join(" · ") };
+}
+function vgKillDist(k) {
+  if (k?.distance != null && isFinite(k.distance)) return +k.distance;
+  try {
+    const o = k?.target?.object, p = pgCtx?.services.player?.state?.position;
+    if (o && p) {
+      const w = o.getWorldPosition(new o.position.constructor());
+      return Math.hypot(w.x - p.x, w.z - p.z);
+    }
+  } catch {
+  }
+  return null;
+}
+function camoUnlocked(d, level = pgLevel().level) {
+  return d?.ch ? camoChallenge(d).done : level >= (d?.lv || 0);
+}
 function camoDef(A) {
   return camoDefs.find((e) => e.id === A) || camoDefs[0];
 }
@@ -48970,11 +49137,11 @@ function pgCamoRaw(A, e = pgActive()) {
 }
 function pgCamo(A, e = pgActive()) {
   const t = camoDef(pgCamoRaw(A, e));
-  return pgLevel().level >= (t.lv || 0) ? t.id : "none";
+  return camoUnlocked(t) ? t.id : "none";
 }
 function pgSetCamo(A, e, t = pgActive()) {
   const i = A === "pistol" || A === "secondary" ? "secondary" : "primary", a = camoDef(e), s = pgSlots()[t];
-  return !s || pgLevel().level < (a.lv || 0) ? !1 : (s.camo = { primary: "none", secondary: "none", ...s.camo || {} }, s.camo[i] = a.id, om(), !0);
+  return !s || !camoUnlocked(a) ? !1 : (s.camo = { primary: "none", secondary: "none", ...s.camo || {} }, s.camo[i] = a.id, om(), !0);
 }
 var camoView = null;
 function camoViewer() {
@@ -49209,10 +49376,17 @@ function Z3() {
     rankProgress: A.progress
   };
 }
-function iJ(A, e = !1) {
-  Za.kills++, e && Za.headshots++;
+function iJ(A, e = !1, dist = null) {
+  const before = camoDefs.filter((c) => c.ch && camoUnlocked(c));
+  Za.kills++, e && Za.headshots++, dist != null && dist >= 35 && (Za.longshots = (Za.longshots | 0) + 1);
   const t = String(A || "").startsWith("pistol") ? "pistol" : "rifle";
-  return Za.weapons[t] ||= { kills: 0 }, Za.weapons[t].kills++, om(), pgAddXp($3 + (e ? 50 : 0), "kill"), Z3();
+  Za.weapons[t] ||= { kills: 0 }, Za.weapons[t].kills++, om(), pgAddXp($3 + (e ? 50 : 0), "kill");
+  // challenge camos finished by this kill
+  for (const c of camoDefs) if (c.ch && !before.includes(c) && camoUnlocked(c)) try {
+    pgCtx?.services.hud?.banner?.(`${c.name} camo unlocked`, { kicker: "Challenge complete", sub: c.desc.replace(/^[^:]*:\s*/, "").split(".")[0], duration: 4 }), pgCtx?.services.audio?.ui?.("success");
+  } catch {
+  }
+  return Z3();
 }
 function aJ() {
   Za.deaths++, om();
@@ -49801,8 +49975,13 @@ function padSystem(A, H) {
     const a = Math.abs(x || 0);
     return a <= z ? 0 : Math.sign(x) * Math.min(1, (a - z) / (1 - z));
   }
+  // Response curves (Beta 1.2 sliders): 1 = linear, higher = finer control near the centre of the stick.
   function curve(x, z) {
-    const n = dz(x, z), c = S("curve", "standard"), e = c === "linear" ? 1 : c === "dynamic" ? 1.5 : 2;
+    const n = dz(x, z), e = Math.max(1, Math.min(3, Number(S("curveExp", 2)) || 2));
+    return Math.sign(n) * Math.pow(Math.abs(n), e);
+  }
+  function mcurve(x, z) {
+    const n = dz(x, z), e = Math.max(1, Math.min(3, Number(S("moveCurve", 1)) || 1));
     return Math.sign(n) * Math.pow(Math.abs(n), e);
   }
   function key(code, name, down) {
@@ -49901,7 +50080,7 @@ function padSystem(A, H) {
     }
     if (H.inPlay()) {
       H.lock();
-      const mx = dz(ax[0], zL), my = -dz(ax[1], zL);
+      const mx = mcurve(ax[0], zL), my = -mcurve(ax[1], zL);
       mx || my ? (inp.injectMove(mx, my), st.moving = !0) : st.moving && (inp.injectMove(null), st.moving = !1);
       for (const i in ACT) setAct(ACT[i], !!b[i]);
       setAct("ads", (bv[6] || 0) > 0.35), setAct("fire", (bv[7] || 0) > 0.35), b[9] && !st.prev[9] && H.pause();
@@ -50503,7 +50682,7 @@ function wmMap(id) {
   return all.find((d) => d.id === id) || all[0];
 }
 function wmList() {
-  return wmDefs().map((d) => ({ id: d.id, name: d.name, tag: d.tag, desc: d.desc }));
+  return wmDefs().filter((d) => !d.hidden).map((d) => ({ id: d.id, name: d.name, tag: d.tag, desc: d.desc }));
 }
 function wmLayout(def) {
   wmOrig || (wmOrig = { Pl: { ...Pl }, hs: { ...hs }, Tu, h4, d4, f4, I4, DD });
@@ -50779,6 +50958,7 @@ function wmDefs() {
       }
     });
   }
+  list.push(wmDefRange());
   return wmDefsCache = list;
 }
 var wmPart = { object: null, material: null, surface: "metal" };
@@ -51090,6 +51270,128 @@ function wmDefAirfield() {
     }
   };
 }
+// Beta 1.2: the Firing Range is its own indoor map (hidden from map votes). A long concrete hall with seven
+// shooting booths behind a counter, lanes out to 100 m, overhead baffles, a sandbag backstop and a staging area
+// with gun racks, lockers and benches. Lit by ceiling fixtures (point lights + a soft fill) instead of daylight.
+var wmRangeMats = null;
+function wmRangeMatsGet(ctx) {
+  if (wmRangeMats) return wmRangeMats;
+  const tex = (w, h, draw) => ctx.assets.canvasTexture(w, h, draw, { srgb: !0 }), sign = (t, o = {}) => new Vt({ map: t, roughness: 0.82, metalness: 0, emissive: 16777215, emissiveMap: t, emissiveIntensity: o.glow ?? 0.32, transparent: !!o.alpha, depthWrite: !o.alpha }), board = (text, sub, o = {}) => tex(o.w || 512, o.h || 256, (g, w, h) => {
+    g.fillStyle = o.bg || "#15191c", g.fillRect(0, 0, w, h), g.fillStyle = o.bar || "#f0c048", g.fillRect(0, 0, w, Math.round(h * 0.07)), g.fillRect(0, h - Math.round(h * 0.07), w, Math.round(h * 0.07)), g.fillStyle = o.fg || "#f4f1e6", g.textAlign = "center", g.textBaseline = "middle", g.font = `900 ${o.size || Math.round(h * 0.5)}px Arial, sans-serif`, g.fillText(text, w / 2, sub ? h * 0.44 : h / 2 + h * 0.03), sub && (g.font = `700 ${Math.round(h * 0.13)}px Arial, sans-serif`, g.fillStyle = o.subFg || "#c9c3b2", g.fillText(sub, w / 2, h * 0.78));
+  });
+  const M = wmRangeMats = { dist: {}, lane: [] };
+  for (const d of [10, 25, 50, 75, 100]) M.dist[d] = sign(board(`${d} M`, d === 100 ? "MAX RANGE" : "DISTANCE"));
+  for (let k = 1; k <= 7; k++) M.lane.push(sign(tex(128, 128, (g, w, h) => {
+    g.fillStyle = k >= 6 ? "#16313b" : "#15191c", g.fillRect(0, 0, w, h), g.strokeStyle = k >= 6 ? "#7fd7ff" : "#f0c048", g.lineWidth = 8, g.strokeRect(6, 6, w - 12, h - 12), g.fillStyle = "#f4f1e6", g.font = "900 78px Arial, sans-serif", g.textAlign = "center", g.textBaseline = "middle", g.fillText(String(k), w / 2, h / 2 + 4);
+  }), { glow: 0.45 }));
+  M.title = sign(board("FIRING RANGE", "VANGAURD TRAINING FACILITY", { w: 1024, h: 256, size: 118 }), { glow: 0.42 });
+  M.moving = sign(board("MOVING TARGETS", "LANES 6 – 7", { w: 512, h: 160, size: 58, bar: "#7fd7ff" }), { glow: 0.4 });
+  M.rules = sign(tex(512, 384, (g, w, h) => {
+    g.fillStyle = "#e9e4d4", g.fillRect(0, 0, w, h), g.fillStyle = "#b8322a", g.fillRect(0, 0, w, 74), g.fillStyle = "#fff", g.font = "900 44px Arial, sans-serif", g.textAlign = "center", g.textBaseline = "middle", g.fillText("RANGE RULES", w / 2, 40), g.textAlign = "left", g.fillStyle = "#1b1e21", g.font = "700 25px Arial, sans-serif";
+    ["Treat every weapon as loaded", "Keep the muzzle downrange", "Targets drop at 100 damage", "They pop back up on their own", "Ammo is unlimited", "Pause → Loadouts to swap guns"].forEach((s, i) => (g.fillStyle = "#b8322a", g.fillText(`${i + 1}`, 34, 112 + i * 45), g.fillStyle = "#1b1e21", g.fillText(s, 70, 112 + i * 45)));
+  }), { glow: 0.3 });
+  M.floor = sign(tex(1024, 128, (g, w, h) => {
+    g.clearRect(0, 0, w, h), g.fillStyle = "rgba(226,72,52,.92)", g.font = "900 84px Arial, sans-serif", g.textAlign = "center", g.textBaseline = "middle", g.fillText("▲  FIRING LINE  ▲", w / 2, h / 2 + 4);
+  }), { glow: 0.12, alpha: !0 });
+  M.lamp = new ha({ color: new ue(1, 0.97, 0.9).multiplyScalar(2.6) });
+  M.exit = new ha({ color: new ue(0.25, 1, 0.45).multiplyScalar(1.6) });
+  return M;
+}
+function wmDefRange() {
+  const S = 66, X0 = -14, X1 = 14, Z0 = -63, Z1 = 62, H = 7.2, FL = 50, BW = 3.4, BX = 11.9, lx = [-3, -2, -1, 0, 1, 2, 3].map((k) => k * BW), dists = [10, 25, 50, 75, 100], rows = [-6.8, 0, 6.8], lampZ = [];
+  for (let z = 58.5; z > Z0 + 2; z -= 7.5) lampZ.push(z);
+  return {
+    id: "range",
+    name: "Firing Range",
+    tag: "Indoor range",
+    desc: "An indoor shooting range: seven booths, lanes out to 100 m and moving targets.",
+    hidden: !0,
+    size: S,
+    seed: "range",
+    light: "overcast",
+    groundMat: "concrete_floor#grey",
+    streets: [],
+    patches: [],
+    plaza: null,
+    buildings: [],
+    oob: [],
+    center: [0, 0],
+    playerSpawns: [{ p: [0, 51.3], yaw: 0 }, { p: [-BW, 51.3], yaw: 0 }, { p: [BW, 51.3], yaw: 0 }, { p: [0, 56], yaw: 0 }],
+    aiSpawns: [{ p: [0, 56] }, { p: [-8, 57] }, { p: [8, 57] }],
+    flags: null,
+    zones: () => ({ range: new ct(new b(X0, -1, Z0), new b(X1, 12, Z1)) }),
+    shapes: [{ t: "rect", r: [X0, X1, Z0, Z1], c: "#6f716c" }, { t: "rect", r: [X0, X1, FL - 0.6, Z1], c: "#8a8c86" }, { t: "rect", r: [-BX, BX, FL - 0.3, FL + 0.3], c: "#3d4349" }, ...dists.map((d) => ({ t: "rect", r: [-BX, BX, FL - d - 0.3, FL - d + 0.3], c: "#c9a43c" })), { t: "rect", r: [X0, X1, Z0, Z0 + 6], c: "#5a5446" }],
+    build(A) {
+      const K = wmKit2(A, wmCommon(A, this)), e = A.B, nc = { col: !1, shadow: !1 };
+      K.hall({ x0: X0, x1: X1, z0: Z0, z1: Z1, h: H, wall: "concrete_wall#pale", base: "concrete_wall#grey", roof: "concrete_wall#grey", floor: "concrete_floor#grey", skylights: 0 });
+      // staging-area tiles, firing line, lane and distance lines
+      e.box("tile_floor#grey", 0, 0.025, (FL - 0.6 + Z1) / 2, X1 - X0 - 0.3, 0.012, Z1 - FL + 0.6, { shadow: !1 });
+      e.box("metal_painted#red", 0, 0.034, FL - 0.75, X1 - X0 - 0.3, 0.01, 0.16, nc);
+      for (const x of [-BX, -8.5, -5.1, -1.7, 1.7, 5.1, BX]) e.box("concrete_floor#white", x, 0.03, (FL - 1 + Z0 + 7) / 2, 0.08, 0.01, FL - 1 - Z0 - 7, nc);
+      for (const d of dists) e.box("metal_painted#yellow", 0, 0.032, FL - d, BX * 2, 0.01, 0.14, nc);
+      for (let x = -BX + 0.4; x < BX; x += 0.9) e.box(Math.round((x + BX) / 0.9) % 2 ? "metal_painted#yellow" : "metal_painted#dark", x, 0.033, Z0 + 7.2, 0.45, 0.01, 0.4, nc);
+      // moving-target rails (lanes 6 – 7)
+      for (const d of [20, 40]) e.box("metal_steel", 8.5, 0.05, FL - d, 6.4, 0.08, 0.12, { col: !1 }), e.box("metal_painted#dark", 8.5, 0.03, FL - d + 0.35, 6.6, 0.04, 0.5, nc);
+      // walls: pilasters, acoustic panels, a hazard band
+      for (let z = Z0 + 6.5; z < FL - 2; z += 12.5) for (const sx of [-1, 1]) e.box("concrete_wall#grey", sx * (X1 - 0.35), H / 2, z, 0.5, H, 0.7);
+      for (let z = Z0 + 9; z < FL - 2; z += 4.2) for (const sx of [-1, 1]) e.box("metal_painted%33393f", sx * (X1 - 0.2), 3.2, z, 0.08, 2.6, 3.6, { col: !1 });
+      for (const sx of [-1, 1]) e.box("metal_painted#yellow", sx * (X1 - 0.16), 1.48, (Z0 + Z1) / 2, 0.03, 0.1, Z1 - Z0 - 1, nc);
+      // ceiling: lamp housings and angled bullet baffles over the lanes
+      for (const z of lampZ) for (const x of rows) e.box("metal_painted#dark", x, H - 0.62, z, 0.46, 0.12, 2.6, { col: !1 }), e.box("metal_painted#dark", x, H - 0.33, z, 0.04, 0.5, 0.04, nc);
+      for (let z = FL - 10.25; z > Z0 + 8; z -= 15) e.box("metal_painted%4a5057", 0, H - 1.25, z, X1 - X0 - 0.4, 0.08, 1.8, { rot: [0.55, 0, 0], move: !1 });
+      // backstop: sloped steel plate over a sandbag berm
+      e.box("metal_painted%2b2f33", 0, 3.4, Z0 + 2.2, X1 - X0 - 0.4, 0.2, 7.6, { rot: [0.9, 0, 0] }), e.box("metal_painted%2b2f33", 0, 0.5, Z0 + 4.4, X1 - X0 - 0.4, 1, 1.4);
+      for (const x of [-10.5, -3.5, 3.5, 10.5]) K.bagWall(x, Z0 + 6.2, 0, 6.6, 5);
+      // firing-line counter
+      e.box("metal_painted%3d4349", 0, 0.46, FL - 0.2, BX * 2, 0.92, 0.6), e.box("wood_planks#tan", 0, 0.95, FL - 0.17, BX * 2 + 0.1, 0.06, 0.74), K.ledge(-BX, FL - 0.54, BX, FL - 0.54, 0.98);
+      // booth dividers, header beam
+      for (const x of [-BX, -8.5, -5.1, -1.7, 1.7, 5.1, 8.5, BX]) e.box("metal_painted%59616a", x, 1.1, FL + 1.2, 0.07, 2.2, 1.7), e.box("metal_painted#dark", x, 2.23, FL + 1.2, 0.12, 0.06, 1.76, { col: !1 }), e.box("metal_painted#dark", x, 1.45, FL + 2.06, 0.1, 2.9, 0.1, { col: !1 });
+      e.box("metal_painted#dark", 0, 2.85, FL + 0.25, BX * 2 + 0.2, 0.34, 0.12, { col: !1 }), e.box("metal_painted#dark", 0, 2.85, FL + 2.06, BX * 2 + 0.2, 0.1, 0.1, { col: !1 });
+      for (const x of lx) e.box("rubber", x, 0.99, FL - 0.15, 1.6, 0.02, 0.5, nc), e.box("metal_painted%4b5a3a", x + 1.05, 1.07, FL - 0.25, 0.32, 0.18, 0.18), e.box("metal_painted%4b5a3a", x + 1.05, 1.17, FL - 0.25, 0.08, 0.02, 0.18, { col: !1 });
+      // staging area: gun racks and range-rules board on the back wall, lockers, tables, benches
+      for (const rx of [-8.6, 8.6]) {
+        e.box("wood_planks#dark", rx, 2.05, Z1 - 0.2, 6.2, 2.3, 0.06, { col: !1 }), e.box("metal_painted#dark", rx, 0.95, Z1 - 0.32, 6.2, 0.08, 0.32, { col: !1 }), e.box("metal_painted#dark", rx, 3.25, Z1 - 0.28, 6.2, 0.06, 0.2, { col: !1 });
+        for (let k = 0; k < 7; k++) {
+          const x = rx - 2.7 + k * 0.9;
+          e.box("metal_painted%1d2023", x, 1.9, Z1 - 0.3, 0.07, 0.62, 0.07, { col: !1 }), e.box("metal_painted%1d2023", x, 2.62, Z1 - 0.3, 0.03, 0.8, 0.03, { col: !1 }), e.box("metal_painted%1d2023", x, 1.4, Z1 - 0.3, 0.09, 0.4, 0.06, { col: !1 }), e.box("metal_painted%1d2023", x + 0.06, 1.82, Z1 - 0.3, 0.05, 0.2, 0.05, { col: !1 });
+        }
+      }
+      for (let z = FL + 3.2; z < Z1 - 1.5; z += 0.95) e.box("metal_painted%55606b", X0 + 0.5, 1, z, 0.6, 2, 0.9), e.box("metal_painted#dark", X0 + 0.81, 1.55, z, 0.02, 0.2, 0.5, { col: !1 });
+      for (const [x, z] of [[9.2, 55.6], [9.2, 58.4]]) {
+        e.box("metal_painted%3a4048", x, 0.88, z, 3, 0.06, 1.1);
+        for (const sx of [-1.4, 1.4]) for (const sz of [-0.48, 0.48]) e.box("metal_painted#dark", x + sx, 0.43, z + sz, 0.06, 0.86, 0.06, { col: !1 });
+      }
+      for (const [n, x, z, r] of [["ammo_box", 8.4, 55.6, 0.2], ["ammo_box", 9.8, 55.5, -0.3], ["ammo_box", 9.1, 58.5, 1.5], ["old_military_crate", 12.6, 60.4, 0.05], ["wooden_crate_02", 12.6, 52.8, 0.3], ["metal_trash_can", -12.8, 61, 0], ["plastic_monobloc_chair_01", 6.4, 57, 1.9]]) K.prop(n, x, z, r, 1, n === "ammo_box" ? { y: 0.91 } : {});
+      for (const [x, z] of [[-3.4, 56.5], [3.4, 56.5]]) e.box("wood_planks#tan", x, 0.45, z, 2.6, 0.08, 0.5), e.box("metal_painted#dark", x - 1.1, 0.22, z, 0.08, 0.44, 0.4, { col: !1 }), e.box("metal_painted#dark", x + 1.1, 0.22, z, 0.08, 0.44, 0.4, { col: !1 });
+      // "moving targets" sign hanging over lanes 6 – 7
+      for (const sx of [-1.1, 1.1]) e.box("metal_steel", 8.5 + sx, (5 + H) / 2, FL - 6.02, 0.03, H - 5, 0.03, { col: !1 });
+      e.box("metal_painted#dark", 8.5, 4.6, FL - 6.04, 2.7, 0.9, 0.04, { col: !1 });
+      // closed doors on the back wall (left: entrance, right: armory)
+      for (const dx of [-3.6, 3.6]) e.box("metal_painted%4f5962", dx, 1.1, Z1 - 0.17, 1.6, 2.2, 0.06, { col: !1 }), e.box("metal_painted#dark", dx, 2.27, Z1 - 0.17, 1.8, 0.14, 0.1, { col: !1 }), e.box("metal_painted#dark", dx - 0.85, 1.1, Z1 - 0.17, 0.1, 2.2, 0.1, { col: !1 }), e.box("metal_painted#dark", dx + 0.85, 1.1, Z1 - 0.17, 0.1, 2.2, 0.1, { col: !1 }), e.box("metal_steel", dx + 0.55, 1.05, Z1 - 0.21, 0.04, 0.04, 0.14, { col: !1 });
+    },
+    post(root, ctx) {
+      const M = wmRangeMatsGet(ctx), add = (o, name) => (o.name = name, root.add(o), o), plane = (mat, w, h, x, y, z, ry = 0, rx = 0) => {
+        const m = new Le(new zs(w, h), mat);
+        return m.position.set(x, y, z), m.rotation.set(rx, ry, 0, "YXZ"), m.receiveShadow = !1, m.castShadow = !1, m.userData.surface = "metal", add(m, "range:sign");
+      };
+      for (const d of dists) plane(M.dist[d], 2.4, 1.2, X0 + 0.27, 3.7, FL - d, Math.PI / 2), plane(M.dist[d], 2.4, 1.2, X1 - 0.27, 3.7, FL - d, -Math.PI / 2);
+      lx.forEach((x, k) => plane(M.lane[k], 0.34, 0.34, x, 2.85, FL + 0.32));
+      plane(M.title, 7.2, 1.8, 0, 5.2, Z1 - 0.2, Math.PI), plane(M.rules, 2.2, 1.65, 0, 1.75, Z1 - 0.2, Math.PI), plane(M.moving, 2.6, 0.81, 8.5, 4.6, FL - 6, 0), plane(M.floor, 5.6, 0.7, 0, 0.04, FL - 1.35, 0, -Math.PI / 2);
+      for (const dx of [-3.6, 3.6]) plane(M.exit, 0.5, 0.18, dx, 2.55, Z1 - 0.12, Math.PI);
+      // glowing fluorescent panels (one instanced draw call)
+      const g = new wi(0.3, 0.04, 2.3), im = new WB(g, M.lamp, lampZ.length * rows.length), tmp = new Pt();
+      let n = 0;
+      for (const z of lampZ) for (const x of rows) tmp.position.set(x, H - 0.69, z), tmp.updateMatrix(), im.setMatrixAt(n++, tmp.matrix);
+      im.instanceMatrix.needsUpdate = !0, im.castShadow = !1, im.receiveShadow = !1, im.frustumCulled = !1, add(im, "range:lamps");
+      // the light itself: a soft fill plus warm-white pools under the fixtures
+      add(new Eb(14079463, 0.55), "range:fill");
+      for (const [z, I] of [[56, 70], [41, 70], [22, 75], [0, 80], [-24, 80], [-48, 85]]) {
+        const L = new Su(16774372, I, 34, 2);
+        L.position.set(0, H - 1.4, z), L.castShadow = !1, add(L, "range:light");
+      }
+    }
+  };
+}
 function wmPreview(canvas, id) {
   const def = wmMap(id), g = canvas.getContext("2d"), W = canvas.width, H = canvas.height, L = wmOrig || { Tu, hs, h4 };
   const size = def.legacy ? 70 : def.size, streets = def.legacy ? L.Tu : def.streets, plaza = def.legacy ? L.hs : def.plaza, bld = def.legacy ? L.h4 : def.buildings, patches = def.legacy ? [] : def.patches;
@@ -51209,6 +51511,11 @@ var loCss = `
 .od-camo-tile:hover { border-color: rgba(240,192,72,.6); }
 .od-camo-tile .sw { aspect-ratio: 1.5; background-size: 160% auto; }
 .od-camo-tile .nm { font-size: calc(var(--u) * 10.5); letter-spacing: .1em; text-transform: uppercase; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.od-camo-tile.ch em { background: rgba(120,20,16,.85); }
+.od-camo-ch { display: block; margin-top: calc(var(--u) * 6); }
+.od-camo-ch i { display: block; position: relative; height: calc(var(--u) * 4); margin-top: calc(var(--u) * 6); background: rgba(236,240,234,.14); overflow: hidden; }
+.od-camo-ch i b { position: absolute; inset: 0; background: var(--accent); transform-origin: 0 50%; }
+.od-camo-ch small { display: block; margin-top: calc(var(--u) * 3); font-size: calc(var(--u) * 11); letter-spacing: .1em; text-transform: uppercase; color: var(--fg2); }
 .od-camo-tile em { position: absolute; top: calc(var(--u) * 10); right: calc(var(--u) * 10); font-style: normal; font-size: calc(var(--u) * 9.5); font-weight: 700; letter-spacing: .14em; padding: calc(var(--u) * 2) calc(var(--u) * 6); background: rgba(0,0,0,.72); color: var(--fg); }
 .od-camo-tile.locked .sw { filter: grayscale(.8) brightness(.5); }
 .od-camo-tile.locked .nm { opacity: .6; }
@@ -52124,6 +52431,10 @@ var vgFrCss = `
 .vg-power { position: absolute; left: calc(var(--u) * 84); top: calc(var(--u) * 22); z-index: 30; width: calc(var(--u) * 46); height: calc(var(--u) * 40); display: grid; place-items: center; padding: 0; background: rgba(10,13,15,.6); border: 1px solid rgba(236,240,234,.18); color: #e9ece6; cursor: pointer; }
 .vg-power:hover, .vg-power:focus-visible { border-color: #ff6b5b; color: #ff6b5b; outline: none; }
 .vg-power svg { width: calc(var(--u) * 20); height: calc(var(--u) * 20); }
+.vg-newsbtn { position: absolute; left: calc(var(--u) * 136); top: calc(var(--u) * 22); z-index: 30; width: calc(var(--u) * 46); height: calc(var(--u) * 40); display: grid; place-items: center; padding: 0; background: rgba(10,13,15,.6); border: 1px solid rgba(236,240,234,.18); color: #e9ece6; cursor: pointer; }
+.vg-newsbtn:hover, .vg-newsbtn:focus-visible { border-color: #f2c14e; color: #f2c14e; outline: none; }
+.vg-newsbtn svg { width: calc(var(--u) * 21); height: calc(var(--u) * 21); }
+.vg-fr .tagf { font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #7fe08c; padding: 0 4px; }
 .vg-fr { position: fixed; left: 0; top: 0; bottom: 0; z-index: 380; width: min(380px, 92vw); display: flex; flex-direction: column; background: rgba(10,13,15,.97); border-right: 1px solid rgba(236,240,234,.14); box-shadow: 20px 0 60px rgba(0,0,0,.5); color: #e9ece6; transform: translateX(-102%); transition: transform .22s ease; font-size: 13px; }
 .vg-fr.on { transform: none; }
 .vg-fr header { display: flex; align-items: center; padding: 20px 20px 14px; border-bottom: 1px solid rgba(236,240,234,.1); }
@@ -52170,6 +52481,11 @@ function vgFriendsMount(host, opts = {}) {
     pw.addEventListener("click", (ev) => {
       ev.stopPropagation(), vgQuitAsk();
     });
+    const nw = document.createElement("button");
+    nw.type = "button", nw.className = "vg-newsbtn", nw.title = "News and patch notes", nw.setAttribute("aria-label", "News and patch notes"), nw.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M3.5 10v4l3 .5 9.5 4.5V5L6.5 9.5z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M7 14.5 8.3 20M19 9.5a3.2 3.2 0 0 1 0 5"/></svg>', h.appendChild(nw);
+    nw.addEventListener("click", (ev) => {
+      ev.stopPropagation(), vgNewsShow(!1);
+    });
     render();
   }
   const panel = document.createElement("aside");
@@ -52178,6 +52494,7 @@ function vgFriendsMount(host, opts = {}) {
   const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const status = (s) => s === "match" ? "In a match" : s === "searching" ? "Searching for a match" : s === "online" ? "Online" : "Offline";
   let open = !1, confirmRemove = null;
+  const added = /* @__PURE__ */ new Set();
   const ui = {
     get open() {
       return open;
@@ -52210,7 +52527,11 @@ function vgFriendsMount(host, opts = {}) {
       const canInvite = f.status !== "offline" && !f.inParty && (!pt || leader);
       h.push(`<div class="row"><span class="dot ${f.status}"></span><span class="nm">${esc(f.name)}<small>${f.inParty ? "In your party" : status(f.status)}</small></span>${canInvite ? `<button class="btn" data-invite="${esc(f.name)}">Invite</button>` : ""}<button class="btn x" data-remove="${esc(f.name)}" title="Remove friend">${confirmRemove === f.name ? "Remove?" : "×"}</button></div>`);
     }
-    sn.outgoing.length && (h.push("<h4>Sent requests</h4>"), sn.outgoing.forEach((nm) => h.push(`<div class="row"><span class="dot"></span><span class="nm">${esc(nm)}<small>Waiting for them to accept</small></span><button class="btn x" data-decline="${esc(nm)}" title="Cancel request">×</button></div>`))), list.innerHTML = h.join("");
+    sn.outgoing.length && (h.push("<h4>Sent requests</h4>"), sn.outgoing.forEach((nm) => h.push(`<div class="row"><span class="dot"></span><span class="nm">${esc(nm)}<small>Waiting for them to accept</small></span><button class="btn x" data-decline="${esc(nm)}" title="Cancel request">×</button></div>`)));
+    // Recently played (Beta 1.2): people from your recent online matches, with Add friend
+    const rc = Array.isArray(sn.recent) ? sn.recent : [];
+    rc.length && (h.push(`<h4>Recently played · ${rc.length}</h4>`), rc.forEach((r) => h.push(`<div class="row"><span class="dot ${r.status}"></span><span class="nm">${esc(r.name)}<small>${esc(vgRecentLine(r))}</small></span>${r.friend ? '<span class="tagf">Friend</span>' : r.sent || added.has(r.name) ? '<button class="btn" disabled>Requested</button>' : r.incoming ? `<button class="btn pri" data-accept="${esc(r.name)}">Accept</button>` : `<button class="btn" data-add="${esc(r.name)}">Add friend</button>`}</div>`)));
+    list.innerHTML = h.join("");
   }
   panel.addEventListener("click", (ev) => {
     const b = ev.target.closest("button");
@@ -52225,6 +52546,7 @@ function vgFriendsMount(host, opts = {}) {
     if (d.accept) return vgNetSend({ type: "friend_accept", username: d.accept });
     if (d.decline) return vgNetSend({ type: "friend_decline", username: d.decline });
     if (d.invite) return vgNetSend({ type: "party_invite", username: d.invite }), b.disabled = !0, b.textContent = "Invited";
+    if (d.add) return vgNetSend({ type: "friend_add", username: d.add }) && added.add(d.add), b.disabled = !0, b.textContent = "Requested";
     if (d.remove) return confirmRemove === d.remove ? (confirmRemove = null, vgNetSend({ type: "friend_remove", username: d.remove })) : (confirmRemove = d.remove, render());
   }), panel.querySelector("form").addEventListener("submit", (ev) => {
     ev.preventDefault();
@@ -52431,7 +52753,7 @@ function vgReportOpen() {
   }
   const me = String(vgAuth.user || "").toLowerCase(), M = vgLastMatch, names = [...M.names].filter((n) => n.toLowerCase() !== me).sort((a, b) => a.localeCompare(b));
   const d = document.createElement("div");
-  d.className = "vg-rep", d.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-rep-h"><h3 id="vg-rep-h">Report a player</h3><p class="sub">From the match you just played. Reports go to the Vangaurd moderators, who can ban cheaters and abusive players.</p><span class="lbl">Player</span><div class="who">${names.map((n) => `<button type="button" data-n="${vgEsc(n)}"${M.reported.has(n) ? " disabled" : ""}>${vgEsc(n)}${M.reported.has(n) ? " \xB7 reported" : ""}</button>`).join("")}</div><span class="lbl">Reason</span><div class="why">${VG_REPORT_REASONS.map(([k, t]) => `<button type="button" data-r="${k}">${t}</button>`).join("")}</div><span class="lbl">What happened? (optional)</span><textarea maxlength="300" placeholder="For example: always knew where everyone was through walls"></textarea><div class="msg" aria-live="polite"></div><div class="acts"><button type="button" data-c>Cancel</button><button type="button" class="pri" data-s disabled>Send report</button></div></div>`, document.body.appendChild(d);
+  d.className = "vg-rep", d.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-rep-h"><h3 id="vg-rep-h">Report a player</h3><p class="sub">${M.ended ? "From the match you just played." : "From your current match."} Reports go to the Vangaurd moderators, who can ban cheaters and abusive players.</p><span class="lbl">Player</span><div class="who">${names.map((n) => `<button type="button" data-n="${vgEsc(n)}"${M.reported.has(n) ? " disabled" : ""}>${vgEsc(n)}${M.reported.has(n) ? " \xB7 reported" : ""}</button>`).join("")}</div><span class="lbl">Reason</span><div class="why">${VG_REPORT_REASONS.map(([k, t]) => `<button type="button" data-r="${k}">${t}</button>`).join("")}</div><span class="lbl">What happened? (optional)</span><textarea maxlength="300" placeholder="For example: always knew where everyone was through walls"></textarea><div class="msg" aria-live="polite"></div><div class="acts"><button type="button" data-c>Cancel</button><button type="button" class="pri" data-s disabled>Send report</button></div></div>`, document.body.appendChild(d);
   const $ = (q) => d.querySelector(q), send = $("[data-s]"), msg = $(".msg"), note = $("textarea");
   let who = names.length === 1 && !M.reported.has(names[0]) ? names[0] : null, why = null, busy = !1;
   const sync = () => {
@@ -52470,6 +52792,295 @@ function vgReportOpen() {
       b && (b.disabled = !0, b.textContent = `${who} \xB7 reported`), who = null, setTimeout(() => d.isConnected && close(), 1800);
     } else say(r.message || "The report could not be sent.", "err"), sync();
   }), sync(), setTimeout(() => (d.querySelector("[data-n]:not(:disabled)") || $("[data-c]")).focus(), 30);
+}
+var vgRangeCss = `
+.vg-rng { position: fixed; right: 22px; top: 38%; z-index: 30; width: 280px; padding: 12px 14px 10px; background: rgba(8,11,13,.62); border-left: 3px solid #f0c048; color: #eef1ec; font-family: inherit; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.vg-rng .kk { color: #f0c048; font-size: 11px; font-weight: 800; letter-spacing: .3em; text-transform: uppercase; margin-bottom: 6px; }
+.vg-rng .row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-top: 1px solid rgba(236,240,234,.08); font-size: 12.5px; }
+.vg-rng .row span { color: #a9b0a8; letter-spacing: .1em; text-transform: uppercase; font-size: 10.5px; font-weight: 700; padding-top: 2px; }
+.vg-rng .row b { text-align: right; font-weight: 700; }
+.vg-rng .hint { margin-top: 6px; color: #8e968f; font-size: 11px; line-height: 1.35; }
+.vg-rngpop { position: fixed; inset: 0; z-index: 29; pointer-events: none; overflow: hidden; }
+.vg-rngpop div { position: absolute; left: 0; top: 0; font: 800 20px/1 inherit; font-family: inherit; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.9), 0 1px 2px #000; will-change: transform, opacity; }
+.vg-rngpop div.h { color: #ffd166; font-size: 24px; }
+`;
+/* ------------------------------------------------------------------ Beta 1.2: final killcam + spectating state */
+var vgFinal = { on: !1, label: "", start: null };
+var vgSpec = { active: !1, offerOpen: !1, start: null, stop: null };
+var vgSpecCss = `
+.vg-spec { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #eef1ec; font-family: inherit; }
+.vg-spec .top { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); text-align: center; padding: 10px 26px 12px; background: rgba(8,11,13,.72); border: 1px solid rgba(236,240,234,.14); border-top: 3px solid #ff5a4a; min-width: 300px; }
+.vg-spec .top .k { display: block; color: #ff8070; font-size: 11px; font-weight: 800; letter-spacing: .3em; text-transform: uppercase; }
+.vg-spec .top b { display: block; margin-top: 3px; font-size: 26px; letter-spacing: .08em; }
+.vg-spec .top small { display: block; margin-top: 2px; color: #a9b0a8; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+.vg-spec .stats { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); display: grid; gap: 6px; width: 190px; }
+.vg-spec .stats div { padding: 8px 12px; background: rgba(8,11,13,.66); border-left: 3px solid rgba(242,193,78,.8); }
+.vg-spec .stats span { display: block; color: #a9b0a8; font-size: 10.5px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
+.vg-spec .stats b { display: block; font-size: 20px; }
+.vg-spec .keys { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; padding: 10px 16px; background: rgba(8,11,13,.66); font-size: 12.5px; letter-spacing: .06em; white-space: nowrap; }
+.vg-spec .keys i { display: inline-block; min-width: 18px; margin-right: 4px; padding: 2px 6px; border: 1px solid rgba(236,240,234,.4); font-style: normal; font-weight: 700; text-align: center; }
+.vg-spec .keys button { pointer-events: auto; padding: 8px 12px; background: #f2c14e; border: 0; color: #111; font: 800 11px/1 inherit; font-family: inherit; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; }
+`;
+/* ------------------------------------------------------------------ Beta 1.2: report menu, bug reports */
+var vgCurMap = null;
+var VG_BUG_CATS = [["gameplay", "Gameplay"], ["graphics", "Graphics"], ["controls", "Controls"], ["online", "Online"], ["menus", "Menus"], ["performance", "Performance"], ["other", "Other"]];
+var vgRep2Css = `
+.vg-rep .pick { display: grid; gap: 10px; margin: 4px 0 6px; }
+.vg-rep .pick button { display: block; width: 100%; text-align: left; padding: 14px 16px; background: rgba(255,255,255,.05); border: 1px solid rgba(236,240,234,.2); color: #e9ece6; font-family: inherit; cursor: pointer; }
+.vg-rep .pick button:hover:not(:disabled), .vg-rep .pick button:focus-visible { border-color: #f2c14e; outline: none; }
+.vg-rep .pick button b { display: block; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; }
+.vg-rep .pick button small { display: block; margin-top: 4px; color: #a9b0a8; font-size: 12.5px; line-height: 1.4; }
+.vg-rep .pick button:disabled { opacity: .45; cursor: default; }
+.vg-rep .meta { margin: 8px 0 0; color: #858d86; font-size: 11.5px; line-height: 1.4; }
+`;
+function vgRepDialog(html) {
+  for (const [id, css] of [["vg-rep-style", vgRepCss], ["vg-rep2-style", vgRep2Css]]) if (!document.getElementById(id)) {
+    const st = document.createElement("style");
+    st.id = id, st.textContent = css, document.head.appendChild(st);
+  }
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  const d = document.createElement("div");
+  d.className = "vg-rep", d.innerHTML = `<div class="card" role="dialog" aria-modal="true">${html}</div>`, document.body.appendChild(d);
+  const key = (ev) => {
+    ev.stopImmediatePropagation(), ev.key === "Escape" && (ev.preventDefault(), close());
+  }, close = () => {
+    d.remove();
+    for (const t of ["keydown", "keyup"]) window.removeEventListener(t, key, !0);
+    d.onclose?.();
+  };
+  for (const t of ["keydown", "keyup"]) window.addEventListener(t, key, !0);
+  return d.addEventListener("mousedown", (ev) => {
+    ev.stopPropagation(), ev.target === d && close();
+  }), d.close = close, d;
+}
+// Pause menu "Report": a player in the current (or just finished) online match, or a bug.
+function vgReportMenu() {
+  if (typeof document > "u" || document.querySelector(".vg-rep")) return;
+  const me = String(vgAuth.user || "").toLowerCase(), M = vgLastMatch, live = !!(M && !M.ended && pgCtx?.services.network?.state?.active), others = M ? [...M.names].filter((n) => n.toLowerCase() !== me) : [];
+  const canPlayer = !!vgAuth.user && others.length > 0 && (live || vgReportable());
+  const d = vgRepDialog(`<h3>Report</h3><p class="sub">Tell the Vangaurd team about a player or a problem.</p><div class="pick"><button type="button" data-p${canPlayer ? "" : " disabled"}><b>Report a player</b><small>${canPlayer ? `Cheating, exploiting, an offensive name or abuse, from ${live ? "this" : "your last"} match (${others.length} other player${others.length === 1 ? "" : "s"}).` : vgAuth.user ? "Available in online matches with other players." : "Sign in to report players."}</small></button><button type="button" data-b><b>Report a bug</b><small>Something broken or not working right. Your version, map and mode are added for you.</small></button></div><div class="acts"><button type="button" data-c>Cancel</button></div>`);
+  d.querySelector("[data-c]").addEventListener("click", d.close), d.querySelector("[data-p]").addEventListener("click", () => {
+    d.close(), vgReportOpen();
+  }), d.querySelector("[data-b]").addEventListener("click", () => {
+    d.close(), vgBugOpen();
+  }), setTimeout(() => d.querySelector(canPlayer ? "[data-p]" : "[data-b]")?.focus(), 30);
+}
+function vgBugMeta() {
+  const gm = pgCtx?.services.gamemode?.state || {}, net = pgCtx?.services.network?.state, ua = typeof navigator < "u" ? navigator : {};
+  const mode = net?.active ? `Online ${gm.kc ? "Kill Confirmed" : "Team Deathmatch"}` : gm.matchType === "range" ? "Firing Range" : gm.gg ? "Gun Game" : gm.kc ? "Kill Confirmed" : gm.matchType === "domination" ? "Domination" : gm.matchType === "tdm" ? "Team Deathmatch" : gm.matchType === "protection" ? "Survival" : gm.matchType || "Menus";
+  const plat = String(ua.userAgentData?.platform || ua.platform || "").slice(0, 24) + (/Electron/i.test(ua.userAgent || "") ? " · desktop app" : " · browser");
+  return { version: VGD.label, build: VGD.build || null, mode, map: vgCurMap?.id || null, matchId: net?.active ? net.matchId || vgLastMatch?.id || null : null, screen: gm.stage || null, platform: plat };
+}
+function vgBugOpen() {
+  if (typeof document > "u" || document.querySelector(".vg-rep")) return;
+  const meta = vgBugMeta(), d = vgRepDialog(`<h3>Report a bug</h3><p class="sub">Describe what went wrong and what you were doing. It goes straight to the Vangaurd team.</p><span class="lbl">Type</span><div class="why">${VG_BUG_CATS.map(([k, t]) => `<button type="button" data-k="${k}">${t}</button>`).join("")}</div><span class="lbl">What happened?</span><textarea maxlength="1500" placeholder="For example: on Foundry I fell through the floor next to the crane after a slide."></textarea><p class="meta">Sent with it: ${vgEsc([meta.version, meta.mode, vgCurMap?.name, meta.platform].filter(Boolean).join(" · "))}</p><div class="msg"></div><div class="acts"><button type="button" data-c>Cancel</button><button type="button" class="pri" data-s>Send</button></div>`);
+  const $ = (q) => d.querySelector(q), txt = $("textarea"), send = $("[data-s]"), msg = $(".msg");
+  let cat = meta.mode && /Online/.test(meta.mode) ? "online" : "gameplay", busy = !1, done = null;
+  const sync = () => {
+    d.querySelectorAll("[data-k]").forEach((b) => b.classList.toggle("on", b.dataset.k === cat)), send.disabled = busy;
+  }, say = (t, kind = "") => {
+    msg.textContent = t || "", msg.className = `msg ${kind}`;
+  }, onMsg = (m) => {
+    (m.type === "bug_ok" || m.type === "bug_error") && done?.(m);
+  };
+  vgNet.listeners.push(onMsg), d.onclose = () => {
+    vgNet.listeners = vgNet.listeners.filter((f) => f !== onMsg);
+  }, d.querySelectorAll("[data-k]").forEach((b) => b.addEventListener("click", () => {
+    cat = b.dataset.k, sync();
+  })), $("[data-c]").addEventListener("click", d.close), send.addEventListener("click", async () => {
+    if (busy) return;
+    const text = txt.value.trim();
+    if (!vgAuth.user) return say("Sign in to your Vangaurd account to send bug reports.", "err");
+    if (text.length < 8) return say("Describe the bug in a few words first.", "err"), txt.focus();
+    if (!vgNet.open) return say("Not connected to the Vangaurd server. Try again in a moment.", "err");
+    busy = !0, sync(), say("Sending…");
+    const r = await new Promise((res) => {
+      const to = setTimeout(() => res({ type: "bug_error", message: "The server did not answer. Try again." }), 8e3);
+      done = (m) => (clearTimeout(to), res(m)), vgNetSend({ type: "bug_report", category: cat, text, meta: vgBugMeta() }) || (clearTimeout(to), res({ type: "bug_error", message: "Not connected to the server." }));
+    });
+    busy = !1, r.type === "bug_ok" ? (say("Thanks! The Vangaurd team got your bug report.", "ok"), send.textContent = "Sent", send.disabled = !0, txt.disabled = !0, setTimeout(() => d.isConnected && d.close(), 1800)) : (say(r.message || "The bug report could not be sent.", "err"), sync());
+  }), sync(), setTimeout(() => txt.focus(), 30);
+}
+function vgRecentLine(r) {
+  const mode = r.mode === "kc" ? "Kill Confirmed" : "Team Deathmatch", map = r.map ? wmMap?.(r.map)?.name || r.map : "";
+  let when = "";
+  const m = Math.round((Date.now() - (r.at || Date.now())) / 6e4);
+  return when = m < 2 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`, [mode, map, when].filter(Boolean).join(" · ");
+}
+/* ------------------------------------------------------------------ Beta 1.2: party ready check */
+var vgRdy = { open: !1, el: null, id: null, go: null, t: 0, m: null };
+var vgRdyCss = `
+.vg-rdy { position: fixed; inset: 0; z-index: 412; display: grid; place-items: center; padding: 16px; background: rgba(4,6,8,.62); color: #e9ece6; }
+.vg-rdy .card { width: min(420px, 94vw); box-sizing: border-box; padding: 22px 24px 20px; background: rgba(12,15,17,.98); border: 1px solid rgba(236,240,234,.14); border-top: 3px solid #f2c14e; box-shadow: 0 30px 90px rgba(0,0,0,.65); }
+.vg-rdy .kk { color: #f2c14e; font-size: 11px; font-weight: 700; letter-spacing: .26em; text-transform: uppercase; }
+.vg-rdy h3 { margin: 4px 0 6px; font-size: 22px; letter-spacing: .12em; text-transform: uppercase; }
+.vg-rdy p { margin: 0 0 12px; color: #b9bfb8; font-size: 13.5px; line-height: 1.45; }
+.vg-rdy .bar { height: 3px; background: rgba(236,240,234,.14); overflow: hidden; margin-bottom: 12px; }
+.vg-rdy .bar i { display: block; height: 100%; background: #f2c14e; transform-origin: 0 50%; transition: transform 1s linear; }
+.vg-rdy ul { list-style: none; margin: 0 0 14px; padding: 0; }
+.vg-rdy li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(236,240,234,.08); font-size: 14px; }
+.vg-rdy li .nm { flex: 1; font-weight: 600; }
+.vg-rdy li .st { font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #a9b0a8; }
+.vg-rdy li.ready .st { color: #7fe08c; }
+.vg-rdy li.declined .st { color: #ff8070; }
+.vg-rdy li.pending .st::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 7px; border-radius: 50%; background: #f2c14e; animation: vgRdyP 1s ease-in-out infinite; }
+@keyframes vgRdyP { 50% { opacity: .2; } }
+.vg-rdy .acts { display: flex; gap: 10px; }
+.vg-rdy .acts button { flex: 1; padding: 12px; border: 1px solid rgba(236,240,234,.24); background: rgba(255,255,255,.06); color: #e9ece6; font-family: inherit; font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; cursor: pointer; }
+.vg-rdy .acts button.pri { background: #f2c14e; border-color: #f2c14e; color: #111; }
+.vg-rdy .acts button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+`;
+function vgPartyLeading() {
+  const sn = vgNet.social;
+  return !!(vgNet.open && sn?.party && sn.party.leader === sn.me && sn.party.members.length > 1);
+}
+function vgReadyAsk(mode, go) {
+  if (!vgPartyLeading() || !vgNetSend({ type: "party_ready_start", mode })) return go();
+  vgRdy.go = go;
+  const sn = vgNet.social;
+  vgReadyRender({ id: null, leader: sn.me, mode, endsIn: 20, members: sn.party.members.map((x) => ({ name: x.name, leader: x.leader, state: x.name === sn.me ? "ready" : x.status === "match" ? "in_match" : "pending" })) });
+}
+function vgReadyClose() {
+  clearInterval(vgRdy.t), vgRdy.el?.remove(), vgRdy.el = null, vgRdy.open = !1, vgRdy.m = null;
+}
+function vgReadyRender(m) {
+  if (typeof document > "u") return;
+  if (!document.getElementById("vg-rdy-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-rdy-style", st.textContent = vgRdyCss, document.head.appendChild(st);
+  }
+  const first = !vgRdy.el || vgRdy.m?.id !== m.id && m.id != null && vgRdy.m?.id != null;
+  vgRdy.m = m, vgRdy.open = !0, m.id && (vgRdy.id = m.id);
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  if (!vgRdy.el) {
+    vgRdy.el = document.createElement("div"), vgRdy.el.className = "vg-rdy", document.body.appendChild(vgRdy.el);
+    for (const t of ["keydown", "keyup"]) vgRdy.el.addEventListener(t, (ev) => ev.stopPropagation());
+    vgRdy.el.addEventListener("click", (ev) => {
+      const b = ev.target.closest("button");
+      if (!b) return;
+      "yes" in b.dataset || "no" in b.dataset ? vgNetSend({ type: "party_ready_reply", id: vgRdy.id, ready: "yes" in b.dataset }) : "x" in b.dataset && (vgNetSend({ type: "party_ready_cancel" }) || (vgReadyClose(), vgRdy.go = null));
+    });
+    try {
+      pgCtx?.services.audio?.ui?.("alert");
+    } catch {
+    }
+  }
+  const me = vgNet.social?.me || vgAuth.user, amLeader = m.leader === me, mine = m.members.find((x) => x.name === me)?.state, ST = { ready: "Ready", pending: "Waiting", declined: "Not ready", in_match: "In a match", offline: "Offline" };
+  const mode = m.mode === "kc" ? "Kill Confirmed" : "Team Deathmatch";
+  vgRdy.el.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-rdy-h"><div class="kk">Party · ${vgEsc(mode)}</div><h3 id="vg-rdy-h">Ready check</h3><p>${amLeader ? "Your match search starts when everyone in your party is ready." : `<b>${vgEsc(m.leader)}</b> wants to start a match. Are you ready?`}</p><div class="bar"><i></i></div><ul>${m.members.map((x) => `<li class="${x.state}"><span class="nm">${vgEsc(x.name)}${x.leader ? " ★" : ""}${x.name === me ? " (you)" : ""}</span><span class="st">${ST[x.state] || x.state}</span></li>`).join("")}</ul><div class="acts">${amLeader ? "<button type=\"button\" data-x>Cancel search</button>" : mine === "pending" ? "<button type=\"button\" data-no>Not ready</button><button type=\"button\" class=\"pri\" data-yes>Ready</button>" : mine === "ready" ? "<button type=\"button\" data-no>Not ready</button>" : ""}</div></div>`;
+  const bar = vgRdy.el.querySelector(".bar i"), total = 20, left = Math.max(0, m.endsIn ?? total);
+  bar.style.transition = "none", bar.style.transform = `scaleX(${left / total})`, requestAnimationFrame(() => {
+    bar.style.transition = `transform ${left}s linear`, bar.style.transform = "scaleX(0)";
+  });
+  const yes = vgRdy.el.querySelector("[data-yes]");
+  yes && first !== !1 && setTimeout(() => yes.focus(), 30);
+}
+function vgReadyMsg(m) {
+  if (m.type === "party_ready") vgReadyRender(m);
+  else if (m.type === "party_ready_done") {
+    const go = vgRdy.go, mine = vgRdy.m, me = vgNet.social?.me;
+    vgReadyClose(), vgRdy.go = null, m.ok ? go ? go() : mine && mine.leader !== me && vgToast("Everyone is ready. Joining the match search…") : m.reason && m.reason !== "restarted" && vgToast(m.reason);
+  } else m.type === "_closed" && vgRdy.open && (vgReadyClose(), vgRdy.go = null);
+}
+typeof window < "u" && vgNet.listeners.push((m) => vgReadyMsg(m));
+/* ------------------------------------------------------------------ Beta 1.2: news & patch notes */
+var VG_PATCH_NOTES = [
+  { v: "Beta 1.2", items: ["Firing Range (new Practice category): an indoor range with seven booths and lanes from 10 to 100 m. Try every weapon with damage, hit zone, distance and shots-to-kill readouts.", "Killcam in online matches, and a Final Killcam that replays the match-winning kill for everyone.", "Spectating for moderators from the Vangaurd anti-cheat console.", "Party ready check: the leader's match search starts once everyone in the party is ready.", "Recently played in the friends panel, with Add friend.", "Three challenge camos: Headhunter (100 headshots), Farsight (50 longshots) and Deadeye (250 headshots and 100 longshots).", "Dive to prone: press prone while sprinting.", "Tactical sprint is one-handed: your right arm holds the gun up and your left hand lets go.", "Controller: aim and move response curve sliders; deadzone sliders now go up to 50%.", "Report in the pause menu: report a player during the match, or report a bug.", "News and patch notes after you sign in (this screen)."] },
+  { v: "Beta 1.1", items: ["Each level takes 500 more XP than the last (instead of 1,000 more).", "Bots have their own callsigns.", "\"Eliminated\" call-out at the bottom of the screen.", "Animated level-up."] },
+  { v: "Beta 1.05", items: ["Accounts are confirmed by email, sign-in sends a code, and Forgot password resets it by email."] }
+];
+var vgNewsUI = { open: !1, shown: !1, el: null };
+var vgNewsCss = `
+.vg-news { position: fixed; inset: 0; z-index: 405; display: grid; place-items: center; padding: 16px; background: rgba(4,6,8,.78); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #e9ece6; }
+.vg-news .card { width: min(820px, 96vw); max-height: 92vh; display: flex; flex-direction: column; box-sizing: border-box; background: rgba(12,15,17,.98); border: 1px solid rgba(236,240,234,.14); border-top: 3px solid #f2c14e; box-shadow: 0 30px 90px rgba(0,0,0,.65); }
+.vg-news header { padding: 20px 26px 14px; border-bottom: 1px solid rgba(236,240,234,.1); }
+.vg-news header .kk { color: #f2c14e; font-size: 11px; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; }
+.vg-news header h3 { margin: 4px 0 0; font-size: 26px; letter-spacing: .12em; text-transform: uppercase; }
+.vg-news .body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; overflow-y: auto; min-height: 0; }
+.vg-news section { padding: 16px 26px 18px; }
+.vg-news section + section { border-left: 1px solid rgba(236,240,234,.08); }
+.vg-news h4 { margin: 0 0 10px; color: #949c95; font-size: 11px; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; }
+.vg-news article { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(236,240,234,.07); }
+.vg-news article b { display: block; font-size: 15.5px; }
+.vg-news article time { display: block; margin: 2px 0 6px; color: #858d86; font-size: 11.5px; letter-spacing: .06em; }
+.vg-news article p { margin: 0; color: #c9cec8; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; }
+.vg-news .empty { color: #858d86; font-size: 13px; line-height: 1.5; }
+.vg-news details { margin-bottom: 10px; }
+.vg-news summary { cursor: pointer; font-weight: 700; font-size: 14px; letter-spacing: .06em; padding: 4px 0; }
+.vg-news ul { margin: 6px 0 0; padding-left: 18px; }
+.vg-news li { margin: 0 0 6px; color: #c9cec8; font-size: 13.5px; line-height: 1.45; }
+.vg-news footer { display: flex; align-items: center; gap: 14px; padding: 14px 26px 18px; border-top: 1px solid rgba(236,240,234,.1); }
+.vg-news footer label { flex: 1; display: flex; align-items: center; gap: 9px; color: #b9bfb8; font-size: 13px; cursor: pointer; }
+.vg-news footer input { accent-color: #f2c14e; width: 15px; height: 15px; }
+.vg-news footer button { min-width: 180px; padding: 13px 18px; background: #f2c14e; border: 0; color: #121212; font: 800 13px/1 inherit; font-family: inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
+.vg-news footer button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+@media (max-width: 640px) { .vg-news .body { grid-template-columns: 1fr; } .vg-news section + section { border-left: 0; border-top: 1px solid rgba(236,240,234,.08); } }
+`;
+async function vgNewsFetch() {
+  try {
+    const u = new URL(vgServerWs().replace(/^ws(s?):/, "http$1:"));
+    u.pathname = "/news", u.search = "";
+    const r = await fetch(u.href, { cache: "no-store", signal: AbortSignal.timeout ? AbortSignal.timeout(6e3) : void 0 }), j = await r.json();
+    return Array.isArray(j.news) ? j.news : [];
+  } catch {
+    return null;
+  }
+}
+function vgNewsSkip() {
+  try {
+    return JSON.parse(localStorage.getItem("vangaurd.news.skip") || "null");
+  } catch {
+    return null;
+  }
+}
+// After sign-in (auto): shown unless "don't show again" was ticked for this version and nothing new was posted since.
+async function vgNewsShow(auto) {
+  if (typeof document > "u" || vgNewsUI.open) return;
+  try {
+    if (auto && localStorage.getItem("vangaurd.news.off") === "1") return;
+  } catch {
+  }
+  const posts = vgNewsFetch(), sk = vgNewsSkip();
+  if (auto && sk && sk.v === VGD.label) {
+    const list = await posts;
+    if (!list || !list.some((p) => (p.at || 0) > (sk.at || 0))) return;
+  }
+  if (vgNewsUI.open || vgUpd.open || document.querySelector(".vg-upd") || vgAuth.open) return;
+  if (!document.getElementById("vg-news-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-news-style", st.textContent = vgNewsCss, document.head.appendChild(st);
+  }
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  const d = vgNewsUI.el = document.createElement("div");
+  vgNewsUI.open = !0, d.className = "vg-news";
+  const date = (t) => new Date(t).toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
+  d.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-news-h"><header><div class="kk">Vangaurd · ${vgEsc(VGD.label)}</div><h3 id="vg-news-h">News &amp; patch notes</h3></header><div class="body"><section class="nw"><h4>News</h4><div class="empty">Loading news…</div></section><section><h4>Patch notes</h4>${VG_PATCH_NOTES.map((n, i) => `<details${i === 0 ? " open" : ""}><summary>${vgEsc(n.v)}</summary><ul>${n.items.map((x) => `<li>${vgEsc(x)}</li>`).join("")}</ul></details>`).join("")}</section></div><footer><label><input type="checkbox" data-skip${sk && sk.v === VGD.label ? " checked" : ""}> Don't show this after sign-in until there's an update or news</label><button type="button" data-ok>Continue</button></footer></div>`;
+  document.body.appendChild(d);
+  const close = () => {
+    try {
+      d.querySelector("[data-skip]").checked ? localStorage.setItem("vangaurd.news.skip", JSON.stringify({ v: VGD.label, at: Date.now() })) : localStorage.removeItem("vangaurd.news.skip");
+    } catch {
+    }
+    d.remove(), vgNewsUI.open = !1, vgNewsUI.el = null;
+    for (const t of ["keydown", "keyup"]) window.removeEventListener(t, key, !0);
+  }, key = (ev) => {
+    ev.stopImmediatePropagation(), ev.type === "keydown" && (ev.key === "Escape" || ev.key === "Enter") && (ev.preventDefault(), close());
+  };
+  for (const t of ["keydown", "keyup"]) window.addEventListener(t, key, !0);
+  d.querySelector("[data-ok]").addEventListener("click", close), d.addEventListener("mousedown", (ev) => {
+    ev.stopPropagation(), ev.target === d && close();
+  }), setTimeout(() => d.querySelector("[data-ok]")?.focus(), 40);
+  const list = await posts, box = d.querySelector(".nw");
+  box && (box.innerHTML = "<h4>News</h4>" + (list == null ? '<div class="empty">Can\'t reach the Vangaurd server for news right now.</div>' : list.length ? list.map((p) => `<article><b>${vgEsc(p.title)}</b><time>${date(p.at)}</time><p>${vgEsc(p.body)}</p></article>`).join("") : '<div class="empty">No news right now. Check back after updates.</div>'));
 }
 /* ------------------------------------------------------------------ update required */
 // Shown when the Vangaurd server says this build is too old: when the game connects (launch, sign-in) or
@@ -52643,6 +53254,10 @@ function vgBuildProbe() {
 // Usernames and passwords live on the Vangaurd server; the game only keeps a sign-in token on this device
 // ("Stay signed in"). A username that is taken can only be used by signing in to that account.
 var vgAuth = { user: null, token: null, offline: !1, open: !1, listeners: [] }, VG_AUTH_KEY = "vangaurd.auth.v1";
+// News & patch notes once per launch, right after sign-in (Beta 1.2).
+typeof window < "u" && vgAuth.listeners.push(() => {
+  vgAuth.user && !vgNewsUI.shown && (vgNewsUI.shown = !0, setTimeout(() => vgNewsShow(!0), 900));
+});
 function vgAuthSet(user, token, remember) {
   vgAuth.user = user || null, vgAuth.token = token || null, vgAuth.offline = !user;
   try {
@@ -53129,6 +53744,13 @@ function rJ(A) {
         desc: "How the faster, weapon-up tactical sprint is triggered."
       },
       {
+        path: "player.diveToProne",
+        label: "Dive to prone",
+        type: "toggle",
+        opt: !0,
+        desc: "Press prone while sprinting to dive forward and land on your stomach."
+      },
+      {
         path: "player.leanMode",
         label: "Lean",
         type: "cycle",
@@ -53194,18 +53816,31 @@ function rJ(A) {
         desc: "Right stick speed while aiming down sights, relative to the normal speed."
       },
       {
-        path: "pad.curve",
-        label: "Response curve",
-        type: "cycle",
-        options: [["standard", "STANDARD"], ["dynamic", "DYNAMIC"], ["linear", "LINEAR"]],
-        desc: "Standard: fine control for small stick movements and full speed at full tilt. Linear: speed follows the stick exactly. Dynamic: in between."
+        path: "pad.curveExp",
+        label: "Aim response curve",
+        type: "slider",
+        min: 1,
+        max: 3,
+        step: 0.1,
+        fmt: (t) => (+t).toFixed(1) + (t <= 1.05 ? " LINEAR" : ""),
+        desc: "How the right stick turns tilt into aim speed. 1.0 is linear (speed follows the stick exactly). Higher values give finer control for small stick movements and still reach full speed at full tilt. 2.0 is the default."
+      },
+      {
+        path: "pad.moveCurve",
+        label: "Move response curve",
+        type: "slider",
+        min: 1,
+        max: 3,
+        step: 0.1,
+        fmt: (t) => (+t).toFixed(1) + (t <= 1.05 ? " LINEAR" : ""),
+        desc: "How the left stick turns tilt into movement speed. 1.0 is linear (the default). Higher values make small tilts walk slower for precise movement."
       },
       {
         path: "pad.deadzoneL",
         label: "Left stick deadzone",
         type: "slider",
         min: 0,
-        max: 0.4,
+        max: 0.5,
         step: 0.01,
         fmt: (t) => Math.round(t * 100) + "%",
         desc: "Ignores small left stick movement. Raise it if you drift without touching the stick."
@@ -53215,7 +53850,7 @@ function rJ(A) {
         label: "Right stick deadzone",
         type: "slider",
         min: 0,
-        max: 0.4,
+        max: 0.5,
         step: 0.01,
         fmt: (t) => Math.round(t * 100) + "%",
         desc: "Ignores small right stick movement. Raise it if your view drifts on its own."
@@ -53449,6 +54084,11 @@ function cJ(A) {
       "protection",
       "Protection",
       "Hold the line · Wave survival"
+    ],
+    [
+      "range",
+      "Firing Range",
+      "Try every weapon · Targets from 10 to 100 m"
     ]
   ];
   const gmKey = () => e.services.gamemode.state?.gg ? "gg" : e.services.gamemode.state?.kc ? "kc" : e.services.gamemode.state?.matchType, gmName = () => e.services.gamemode.state?.gg ? "Gun Game" : e.services.gamemode.state?.kc ? "Kill Confirmed" : "Team Deathmatch", gmLimit = () => e.services.gamemode.state?.kc ? 20 : 50;
@@ -53488,13 +54128,13 @@ function cJ(A) {
   tA.id = "od-mode-title", tA.textContent = "Choose operation";
   const K = NA("button", "od-mode-close", $);
   K.type = "button", K.textContent = "×", K.setAttribute("aria-label", "Close game mode selector"), NA("div", "od-mode-dialog-sub", V).textContent = "Select a game mode to deploy";
-  let mgF = null, mgO = null;
+  let mgF = null, mgO = null, mgP = null;
   const eA = NA("div", "od-mode-grid", V), X = f.map(([yA, VA, le], mgI) => {
-    mgI === 0 && (mgF = NA("div", "od-mode-group", eA), mgF.textContent = "Featured"), mgI === 2 && (mgO = NA("div", "od-mode-group", eA), mgO.textContent = "Other");
+    mgI === 0 && (mgF = NA("div", "od-mode-group", eA), mgF.textContent = "Featured"), mgI === 2 && (mgO = NA("div", "od-mode-group", eA), mgO.textContent = "Other"), yA === "range" && (mgP = NA("div", "od-mode-group", eA), mgP.textContent = "Practice");
     const ge = NA("button", "od-mode-option", eA);
     ge.type = "button", ge.dataset.mode = yA, ge.setAttribute("aria-pressed", "false");
     const Se = NA("span", "od-mode-thumb", ge), Ue = NA("canvas", "", Se), lt = NA("span", "od-mode-mark", Se);
-    lt.textContent = yA === "tdm" ? "05 / 05" : yA === "domination" ? "A · B · C" : yA === "kc" ? "FFA · 20 TAGS" : yA === "gg" ? "FFA · 11 GUNS" : "HOLD THE LINE";
+    lt.textContent = yA === "tdm" ? "05 / 05" : yA === "domination" ? "A · B · C" : yA === "kc" ? "FFA · 20 TAGS" : yA === "gg" ? "FFA · 11 GUNS" : yA === "range" ? "10 – 100 M" : "HOLD THE LINE";
     const $e = NA("span", "od-mode-info", ge);
     return NA("span", "od-mode-name", $e).textContent = VA, NA("span", "od-mode-desc", $e).textContent = le, ge.addEventListener("click", () => {
       const it = f.findIndex(([ot]) => ot === yA);
@@ -53541,7 +54181,7 @@ function cJ(A) {
         for (let i = 1; i < L; i++) t += pgCost(i);
         return Math.max(0, t - lv.total);
       };
-      j.innerHTML = `<div class="od-armory-grid"><section><h3>Operator level</h3><p class="od-armory-rank od-pg-level">Level ${lv.level}</p><div class="od-armory-bar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div><p>${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.level + 1}</p><p>${nxt ? `Next unlock at level ${nxt}: <strong>${pgUnlocksAt(nxt).map(Nn).join(", ")}</strong> · ${toL(nxt).toLocaleString()} XP to go` : "Every loadout and attachment is unlocked."}</p><h3>Service record</h3><p>${yA.kills} eliminations · ${yA.headshots} headshots · ${yA.deaths} deaths · ${lv.total.toLocaleString()} XP total</p></section><section><h3>How to earn XP</h3><div class="od-armory-unlock on"><b>+100</b><span>Elimination (+50 more for a headshot)</span></div><div class="od-armory-unlock on"><b>+50</b><span>Confirming a dog tag in Kill Confirmed</span></div><div class="od-armory-unlock on"><b>+200</b><span>Surviving a wave in Protection</span></div><div class="od-armory-unlock on"><b>+500</b><span>Winning a match (+150 for finishing one)</span></div><p>Level 1 to 2 takes 5,000 XP, level 2 to 3 takes 5,500, and each level after takes 500 more. Your XP bar starts from zero after every level up.</p></section></div><div class="od-armory-grid od-armory-weapons"><section><h3>Unlock track</h3>${track.join("")}</section><section><h3>Loadout slots</h3>${pgSlotLv.map((L, i) => `<div class="od-armory-unlock ${pgUnlocked(i) ? "on" : ""}"><b>${pgUnlocked(i) ? "UNLOCKED" : "LEVEL " + L}</b><span>Loadout ${i + 1}${i === pgActive() ? " · equipped" : ""}</span></div>`).join("")}<p>Build and equip loadouts from <strong>Loadouts</strong> in the main menu or the pause menu.</p></section></div>`;
+      j.innerHTML = `<div class="od-armory-grid"><section><h3>Operator level</h3><p class="od-armory-rank od-pg-level">Level ${lv.level}</p><div class="od-armory-bar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div><p>${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.level + 1}</p><p>${nxt ? `Next unlock at level ${nxt}: <strong>${pgUnlocksAt(nxt).map(Nn).join(", ")}</strong> · ${toL(nxt).toLocaleString()} XP to go` : "Every loadout and attachment is unlocked."}</p><h3>Service record</h3><p>${yA.kills} eliminations · ${yA.headshots} headshots · ${yA.longshots | 0} longshots · ${yA.deaths} deaths · ${lv.total.toLocaleString()} XP total</p></section><section><h3>How to earn XP</h3><div class="od-armory-unlock on"><b>+100</b><span>Elimination (+50 more for a headshot)</span></div><div class="od-armory-unlock on"><b>+50</b><span>Confirming a dog tag in Kill Confirmed</span></div><div class="od-armory-unlock on"><b>+200</b><span>Surviving a wave in Protection</span></div><div class="od-armory-unlock on"><b>+500</b><span>Winning a match (+150 for finishing one)</span></div><p>Level 1 to 2 takes 5,000 XP, level 2 to 3 takes 5,500, and each level after takes 500 more. Your XP bar starts from zero after every level up.</p></section></div><div class="od-armory-grid od-armory-weapons"><section><h3>Unlock track</h3>${track.join("")}</section><section><h3>Loadout slots</h3>${pgSlotLv.map((L, i) => `<div class="od-armory-unlock ${pgUnlocked(i) ? "on" : ""}"><b>${pgUnlocked(i) ? "UNLOCKED" : "LEVEL " + L}</b><span>Loadout ${i + 1}${i === pgActive() ? " · equipped" : ""}</span></div>`).join("")}<p>Build and equip loadouts from <strong>Loadouts</strong> in the main menu or the pause menu.</p></section></div>`;
     } else {
       const gun = (w, kind) => `<section><h3>${Nn(w.name)}</h3><p class="od-lw-sum">${Nn(w.cls)} · ${kind}</p><p>${Nn(w.desc)}</p>${barH(w)}</section>`, att = Object.entries(_c).map(([sl, d]) => `<section><h3>${d.label}${d.frames ? " · rifles only" : ""}</h3>${d.options.map((o) => `<div class="od-armory-unlock ${lv.level >= (o.lv || 1) ? "on" : ""}"><b>${o.id === "none" ? "STANDARD" : lv.level >= o.lv ? "UNLOCKED" : "LEVEL " + o.lv}</b><span>${Nn(o.name)}${o.frames ? " (rifles only)" : ""} — ${Nn(o.effect || "")}</span></div>`).join("")}</section>`).join("");
       j.innerHTML = `<p class="od-armory-note">Every weapon is available from level 1. Attachments unlock as you level up and are fitted per loadout in <strong>Loadouts</strong>.</p><h3 class="od-pg-h">Attachments</h3><div class="od-armory-grid od-armory-weapons">${att}</div><h3 class="od-pg-h">Primary weapons</h3><div class="od-armory-grid od-armory-weapons">${D.primary.map((w) => gun(w, "Primary")).join("")}</div><h3 class="od-pg-h">Secondary weapons</h3><div class="od-armory-grid od-armory-weapons">${D.secondary.map((w) => gun(w, "Secondary")).join("")}</div>`;
@@ -53568,8 +54208,8 @@ function cJ(A) {
   function camoOpen(role) {
     const k = F.loEdit ?? pgActive(), L = pgSlots()[k], D = lwData(), list = role === "secondary" ? D.secondary : D.primary, gun = list.find((w) => w.id === L[role]) || list[0];
     F.camoPick = { role, k, gun: gun.id, gunName: gun.name, sel: pgCamo(role, k) };
-    const lv = pgLevel().level, cur = F.camoPick.sel, n = camoDefs.filter((c) => c.lv && c.lv <= lv).length;
-    camoEl.innerHTML = `<div class="od-camo-box"><div class="od-camo-head"><div><span class="k">${role === "secondary" ? "Secondary" : "Primary"} camo</span><h3>${Nn(gun.name)}</h3></div><span class="cnt">${n} / ${camoDefs.length - 1} unlocked · Level ${lv}</span><button type="button" class="od-btn" data-camo-close>Close</button></div><div class="od-camo-body"><div class="od-camo-left"><div class="od-camo-stage"><span class="od-camo-hint">Drag to rotate</span><span class="od-camo-live"></span></div><div class="od-camo-info"></div><div class="od-camo-actions"><button type="button" class="od-btn pri" data-camo-apply>Apply camo</button><button type="button" class="od-btn" data-camo-close>Cancel</button></div></div><div class="od-camo-grid">${camoDefs.map((c) => `<button type="button" class="od-camo-tile${c.id === cur ? " eq sel" : ""}${lv < (c.lv || 0) ? " locked" : ""}" data-camo="${c.id}"><span class="sw${c.live ? " live" : ""}"></span><span class="nm">${Nn(c.name)}</span>${c.id === cur ? "<em>Equipped</em>" : lv < (c.lv || 0) ? `<em>LV ${c.lv}</em>` : ""}</button>`).join("")}</div></div></div>`, camoEl.classList.add("on");
+    const lv = pgLevel().level, cur = F.camoPick.sel, n = camoDefs.filter((c) => c.id !== "none" && camoUnlocked(c, lv)).length;
+    camoEl.innerHTML = `<div class="od-camo-box"><div class="od-camo-head"><div><span class="k">${role === "secondary" ? "Secondary" : "Primary"} camo</span><h3>${Nn(gun.name)}</h3></div><span class="cnt">${n} / ${camoDefs.length - 1} unlocked · Level ${lv}</span><button type="button" class="od-btn" data-camo-close>Close</button></div><div class="od-camo-body"><div class="od-camo-left"><div class="od-camo-stage"><span class="od-camo-hint">Drag to rotate</span><span class="od-camo-live"></span></div><div class="od-camo-info"></div><div class="od-camo-actions"><button type="button" class="od-btn pri" data-camo-apply>Apply camo</button><button type="button" class="od-btn" data-camo-close>Cancel</button></div></div><div class="od-camo-grid">${camoDefs.map((c) => `<button type="button" class="od-camo-tile${c.id === cur ? " eq sel" : ""}${camoUnlocked(c, lv) ? "" : " locked"}${c.ch ? " ch" : ""}" data-camo="${c.id}"><span class="sw${c.live ? " live" : ""}"></span><span class="nm">${Nn(c.name)}</span>${c.id === cur ? "<em>Equipped</em>" : camoUnlocked(c, lv) ? c.ch ? "<em>Challenge</em>" : "" : c.ch ? `<em>${camoChallenge(c).parts.map((x) => Math.floor(x.have / x.need * 100)).reduce((a, b) => Math.min(a, b), 100)}%</em>` : `<em>LV ${c.lv}</em>`}</button>`).join("")}</div></div></div>`, camoEl.classList.add("on");
     const V = camoViewer(), stage = camoEl.querySelector(".od-camo-stage");
     V.ok ? (V.yaw = 0, stage.prepend(V.canvas), camoViewStart(V)) : stage.insertAdjacentHTML("afterbegin", '<div class="od-camo-noview">3D preview unavailable on this device</div>');
     camoEl.querySelectorAll("[data-camo-close]").forEach((b2) => b2.addEventListener("click", camoClose)), camoEl.querySelector("[data-camo-apply]").addEventListener("click", () => {
@@ -53586,12 +54226,12 @@ function cJ(A) {
   function camoSelect(id) {
     const P = F.camoPick;
     if (!P) return;
-    const d = camoDef(id), lv = pgLevel().level, locked = lv < (d.lv || 0), applied = pgCamo(P.role, P.k) === d.id;
+    const d = camoDef(id), lv = pgLevel().level, locked = !camoUnlocked(d, lv), applied = pgCamo(P.role, P.k) === d.id, chl = camoChallenge(d);
     P.sel = d.id, camoEl.querySelectorAll("[data-camo]").forEach((b2) => b2.classList.toggle("sel", b2.dataset.camo === d.id));
     const info = camoEl.querySelector(".od-camo-info");
-    info && (info.innerHTML = `<div class="od-camo-tex${d.live ? " live" : ""}"${d.id === "none" ? "" : ` style="background-image:url(${camoSwatch(d.id, 192)})"`}></div><div><b>${Nn(d.name)}</b><span class="lv${locked ? " lock" : ""}">${d.id === "none" ? "Always available" : locked ? `Locked · unlocks at level ${d.lv} (you are level ${lv})` : `Unlocked at level ${d.lv}`}</span><p>${Nn(d.desc || "")}</p></div>`);
+    info && (info.innerHTML = `<div class="od-camo-tex${d.live ? " live" : ""}"${d.id === "none" ? "" : ` style="background-image:url(${camoSwatch(d.id, 192)})"`}></div><div><b>${Nn(d.name)}</b><span class="lv${locked ? " lock" : ""}">${d.id === "none" ? "Always available" : chl ? locked ? `Challenge · ${chl.text}` : "Challenge complete" : locked ? `Locked · unlocks at level ${d.lv} (you are level ${lv})` : `Unlocked at level ${d.lv}`}</span>${chl ? `<span class="od-camo-ch">${chl.parts.map((x) => `<i><b style="transform:scaleX(${(x.have / x.need).toFixed(3)})"></b></i><small>${x.have} / ${x.need} ${x.k}</small>`).join("")}</span>` : ""}<p>${Nn(d.desc || "")}</p></div>`);
     const ap = camoEl.querySelector("[data-camo-apply]");
-    ap && (ap.disabled = locked || applied, ap.textContent = applied ? "Equipped" : locked ? `Reach level ${d.lv}` : "Apply camo");
+    ap && (ap.disabled = locked || applied, ap.textContent = applied ? "Equipped" : locked ? chl ? "Complete the challenge" : `Reach level ${d.lv}` : "Apply camo");
     const lv2 = camoEl.querySelector(".od-camo-live");
     lv2 && (lv2.textContent = d.live ? "Animated" : "");
     try {
@@ -53629,7 +54269,7 @@ function cJ(A) {
       }).join("");
       return `<div class="od-lo-att"><h4>${d.label}</h4><div class="od-lo-opts">${opts}</div><p>${Nn(pgAttOpt(sl, cur)?.effect || "")}</p></div>`;
     }).join("");
-    const camoN = camoDefs.filter((c) => c.lv && c.lv <= lv.level).length, camoNext = camoDefs.find((c) => c.lv > lv.level), camoRow = (role) => {
+    const camoN = camoDefs.filter((c) => c.id !== "none" && camoUnlocked(c, lv.level)).length, camoNext = camoDefs.find((c) => !c.ch && c.lv > lv.level), camoRow = (role) => {
       const cd = camoDef(pgCamo(role, k));
       return `<div class="od-lo-att od-lo-camo"><h4>Camo</h4><button type="button" class="od-btn od-lo-camobtn" data-lo-camo="${role}"><span class="sw${cd.live ? " live" : ""}"${cd.id === "none" ? "" : ` style="background-image:url(${camoSwatch(cd.id)})"`}></span><span>${Nn(cd.name)}</span><i>Change</i></button><p>${camoN} of ${camoDefs.length - 1} camos unlocked${camoNext ? ` · next: ${Nn(camoNext.name)} at level ${camoNext.lv}` : ""}</p></div>`;
     };
@@ -53674,8 +54314,188 @@ function cJ(A) {
     }));
   }
   j.addEventListener("click", (yA) => yA.stopPropagation());
+  // Beta 1.2 final killcam: remember the latest kill (who, whom, when) so the match end can replay it.
+  e.events.on("combat:kill", (yA) => {
+    try {
+      const src = String(yA?.source || ""), tk = yA?.target?.key || (yA?.target?.isPlayer ? "player" : "");
+      if (!src || !tk || src.startsWith("player:") || tk.startsWith("player:")) return;
+      F.lastKill = { t: e.time.t, src, victim: tk, killer: yA.killer || null, victimName: yA.victim || null, obj: yA.target?.object || null, killerObj: src.startsWith("ai:") ? (e.services.ai?.agents || []).find((ag) => ag.key === src)?.object || null : null };
+    } catch {
+    }
+  });
+  vgFinal.start = (done) => {
+    try {
+      if (e.settings.get("interface.finalKillcam", !0) === !1) return !1;
+      const N = e.services.network, AI = e.services.ai, now = e.time.t, di = A.deathInfo;
+      let kf = [], vf = [], kName = "", vName = "";
+      const hide = [], lk = N?.state?.active ? N.lastKill : null;
+      if (lk && now - lk.t < 6) {
+        const me2 = N.state.selfId, kSelf = lk.attacker === me2, vSelf = lk.target === me2;
+        kf = N.getReplayFrames(kSelf ? "self" : lk.attacker, 3.5, lk.t), vf = N.getReplayFrames(vSelf ? "self" : lk.target, 4, lk.t), kName = kSelf ? Uc() : lk.attackerName || N.nameOf(lk.attacker) || "Player", vName = vSelf ? Uc() : lk.targetName || N.nameOf(lk.target) || "Player", kSelf || hide.push(N.pose(lk.attacker)?.group), vSelf || hide.push(N.pose(lk.target)?.group);
+      } else if (!N?.state?.active && F.lastKill && now - F.lastKill.t < 6) {
+        const k = F.lastKill, upTo = (fr) => (fr || []).filter((f) => f.t <= k.t + 0.06);
+        kf = k.src === "player" ? N?.getReplayFrames?.("self", 3.5, k.t) || [] : upTo(AI?.getReplayFrames?.(k.src, 3.5)), vf = k.victim === "player" ? N?.getReplayFrames?.("self", 4, k.t) || [] : upTo(AI?.getReplayFrames?.(k.victim, 4)), kName = k.src === "player" ? Uc() : k.killer || "Enemy", vName = k.victim === "player" ? Uc() : k.victimName || "Enemy", hide.push(k.killerObj, k.obj);
+      }
+      if (kf.length < 2 || !di) return !1;
+      ghostsClear(), di.killReplay = kf, di.killer = kName, di.ghosts = vf.length > 1 ? [{ frames: vf, name: vName, die: !0 }] : [], di.hide = hide.filter(Boolean), vgFinal.on = !0, vgFinal.label = `FINAL KILLCAM · ${kName} eliminated ${vName}`, F.finalDone = done;
+      try {
+        e.input.unlock?.();
+      } catch {
+      }
+      return tt("replay"), !0;
+    } catch (err) {
+      return e.reportError?.("hud", "final-killcam", err), vgFinal.on = !1, !1;
+    }
+  };
+  // ---------- Beta 1.2: moderator spectating (offered from the /admin console) ----------
+  const spec = { ws: null, active: !1, queue: [], target: null, targetName: "", third: !1, el: null, hidden: null, stats: /* @__PURE__ */ new Map(), names: /* @__PURE__ */ new Map(), ended: !1, uiT: 0 };
+  const spP = new b(), spL = new b();
+  vgNet.listeners.push((m) => {
+    m.type === "spectate_offer" && specOffer(m);
+  });
+  function specOffer(m) {
+    if (vgSpec.offerOpen || spec.active || typeof document > "u") return;
+    if (e.services.network?.state?.active || F.multiplayerMatch || F.waitingForPlayers) return vgToast(`Spectate ${m.target}: leave your own match first, then press Spectate again in the console.`);
+    vgSpec.offerOpen = !0;
+    const d = vgRepDialog(`<h3>Spectate ${vgEsc(m.target)}?</h3><p class="sub">You join ${vgEsc(m.mode === "kc" ? "Kill Confirmed" : "Team Deathmatch")} (${m.players | 0} players) as an invisible moderator. Nobody in the match can see you. You watch from ${vgEsc(m.target)}'s eyes, so you see exactly how they aim.</p><div class="acts"><button type="button" data-c>Cancel</button><button type="button" class="pri" data-go>Spectate</button></div>`);
+    d.onclose = () => {
+      vgSpec.offerOpen = !1;
+    }, d.querySelector("[data-c]").addEventListener("click", d.close), d.querySelector("[data-go]").addEventListener("click", () => {
+      d.close(), specStart(m.target);
+    }), setTimeout(() => d.querySelector("[data-go]")?.focus(), 30);
+  }
+  function specStart(target) {
+    if (spec.active || spec.ws) return;
+    let ws;
+    try {
+      ws = new WebSocket(vgServerWs());
+    } catch {
+      return vgToast("Can't reach the Vangaurd server.");
+    }
+    spec.ws = ws, spec.targetName = target, spec.queue = [], spec.stats.clear(), spec.names.clear(), spec.ended = !1, vgToast(`Joining ${target}'s match…`), ws.onmessage = (ev) => {
+      let m;
+      try {
+        m = JSON.parse(ev.data);
+      } catch {
+        return;
+      }
+      specMsg(m);
+    }, ws.onclose = () => {
+      spec.ws === ws && (spec.ws = null, spec.active ? specStop("The spectator connection closed.") : vgToast("Couldn't start spectating."));
+    };
+  }
+  function specMsg(m) {
+    if (m.type === "connected") return spec.ws?.send(JSON.stringify({ type: "spectate_join", token: vgAuth.token, target: spec.targetName, clientBuild: VGD.build, device: vgDevice() }));
+    if (m.type === "spectate_error") return vgToast(m.message || "Can't spectate that player."), specStop();
+    if (m.type === "spectate_start") return specBegin(m);
+    if (m.type === "spectate_end") return specStop(m.reason === "left" ? "" : `Spectating ended: ${m.reason || "the match closed."}`);
+    if (!m.matchId && m.type !== "player_state") return;
+    specTrack(m), spec.active ? e.events.emit("network:message", m) : spec.queue.push(m);
+  }
+  async function specBegin(m) {
+    spec.match = m, spec.target = m.target, spec.targetName = m.targetName || spec.targetName;
+    for (const r of m.roster || []) spec.names.set(String(r.id), r.name), spec.stats.set(String(r.id), { kills: r.kills | 0, deaths: r.deaths | 0, score: r.score | 0, hs: 0, shots: 0, seenKills: 0, team: r.team });
+    ni();
+    try {
+      e.services.player.setMovementEnabled(!1), e.services.player.setInvulnerable?.(!0), e.services.hud.setVisible?.(!1);
+    } catch {
+    }
+    try {
+      m.mapId && await e.services.world.loadMap(m.mapId);
+    } catch (err) {
+      e.reportError?.("hud", "spectate-map", err);
+    }
+    if (!spec.ws) return;
+    e.events.emit("network:session", { ...m, type: "match_found", playerId: null }), spec.active = !0, vgSpec.active = !0;
+    for (const q of spec.queue.splice(0)) e.events.emit("network:message", q);
+    specUI(), window.addEventListener("keydown", specKey, !0);
+  }
+  function specTrack(m) {
+    const st = (id) => {
+      const k = String(id);
+      let x = spec.stats.get(k);
+      return x || spec.stats.set(k, x = { kills: 0, deaths: 0, score: 0, hs: 0, shots: 0, seenKills: 0 }), x;
+    };
+    if (m.type === "player_killed") {
+      const a2 = st(m.attackerId);
+      a2.seenKills++, m.zone === "head" && a2.hs++, m.attackerName && spec.names.set(String(m.attackerId), m.attackerName), m.targetName && spec.names.set(String(m.targetId), m.targetName);
+    } else if (m.type === "weapon_fired") st(m.playerId).shots++;
+    else if (m.type === "player_joined" && m.player) spec.names.set(String(m.player.id), m.player.name);
+    else if (m.type === "match_ended") spec.ended = !0;
+    for (const r of [...m.roster || [], ...m.type === "match_score" && Array.isArray(m.players) ? m.players : []]) if (r?.id != null) {
+      const x = st(r.id);
+      r.name && spec.names.set(String(r.id), r.name), r.kills != null && (x.kills = r.kills | 0), r.deaths != null && (x.deaths = r.deaths | 0), r.score != null && (x.score = r.score | 0), r.team && (x.team = r.team);
+    }
+  }
+  function specIds() {
+    return (e.services.network?.ids?.() || []).map(String);
+  }
+  function specSwitch(dir) {
+    const ids = specIds();
+    if (!ids.length) return;
+    spec.hidden && (spec.hidden.visible = !0, spec.hidden = null);
+    const i2 = ids.indexOf(String(spec.target));
+    spec.target = ids[((i2 < 0 ? 0 : i2 + dir) % ids.length + ids.length) % ids.length], spec.targetName = spec.names.get(String(spec.target)) || spec.targetName, spec.uiT = 0;
+  }
+  function specKey(ev) {
+    const k = ev.code;
+    if (!spec.active) return;
+    const mine = k === "Escape" || k === "ArrowLeft" || k === "ArrowRight" || k === "KeyQ" || k === "KeyE" || k === "KeyV";
+    if (!mine) return;
+    ev.preventDefault(), ev.stopImmediatePropagation(), k === "Escape" ? specStop("") : k === "KeyV" ? (spec.third = !spec.third, spec.hidden && (spec.hidden.visible = !0, spec.hidden = null)) : specSwitch(k === "ArrowLeft" || k === "KeyQ" ? -1 : 1);
+  }
+  function specUI() {
+    spec.el?.remove();
+    const d = spec.el = document.createElement("div");
+    d.className = "vg-spec", d.innerHTML = '<div class="top"><span class="k">Spectating · moderator</span><b></b><small></small></div><div class="stats"></div><div class="keys"><span><i>←</i><i>→</i> Switch player</span><span><i>V</i> First person / chase</span><span><i>Esc</i> Stop spectating</span><button type="button" data-x>Stop spectating</button></div>', document.body.appendChild(d), d.querySelector("[data-x]").addEventListener("click", () => specStop(""));
+    if (!document.getElementById("vg-spec-style")) {
+      const st = document.createElement("style");
+      st.id = "vg-spec-style", st.textContent = vgSpecCss, document.head.appendChild(st);
+    }
+  }
+  function specFrame(dt) {
+    const N = e.services.network;
+    let P = spec.target != null ? N?.pose?.(spec.target) : null;
+    if (!P) {
+      const ids = specIds();
+      ids.length && (spec.target = ids[0], spec.targetName = spec.names.get(ids[0]) || ids[0], P = N.pose(spec.target));
+    }
+    const cam = e.camera;
+    if (P) {
+      const fx = -Math.sin(P.yaw) * Math.cos(P.pitch), fy = Math.sin(P.pitch), fz = -Math.cos(P.yaw) * Math.cos(P.pitch), eye = P.stance === "prone" ? 0.4 : P.stance === "crouch" ? 1.1 : 1.64;
+      if (spec.third || !P.alive) spec.hidden && (spec.hidden.visible = !0, spec.hidden = null), spP.set(P.x + Math.sin(P.yaw) * 3.2, P.y + 2.3, P.z + Math.cos(P.yaw) * 3.2), spL.set(P.x - Math.sin(P.yaw) * 6, P.y + 1.3, P.z - Math.cos(P.yaw) * 6);
+      else P.group && P.group !== spec.hidden && (spec.hidden && (spec.hidden.visible = !0), spec.hidden = P.group), spec.hidden && (spec.hidden.visible = !1), spP.set(P.x, P.y + eye, P.z), spL.set(P.x + fx * 20, P.y + eye + fy * 20, P.z + fz * 20);
+      cam.parent && cam.parent !== e.scene ? (cam.parent.updateWorldMatrix(!0, !1), cam.position.copy(cam.parent.worldToLocal(spP.clone()))) : cam.position.copy(spP), cam.lookAt(spL), cam.updateMatrixWorld(!0);
+    }
+    cam.layers.isEnabled(e.layers.VIEWMODEL) && (cam.layers.disable(e.layers.VIEWMODEL), F.vmDisabled = !0);
+    if (spec.uiT -= dt, spec.uiT > 0 || !spec.el) return;
+    spec.uiT = 0.25;
+    const k = String(spec.target ?? ""), x = spec.stats.get(k) || {}, nm = spec.names.get(k) || spec.targetName || "—", acc = x.shots ? Math.round(x.seenKills / x.shots * 100) : null;
+    spec.el.querySelector(".top b").textContent = nm, spec.el.querySelector(".top small").textContent = P ? `${P.alive ? spec.third ? "Chase camera" : "First person" : "Dead · respawning"} · ${specIds().length} player${specIds().length === 1 ? "" : "s"}${spec.ended ? " · match over" : ""}` : "Waiting for players…", spec.el.querySelector(".stats").innerHTML = `<div><span>Kills</span><b>${x.kills | 0}</b></div><div><span>Deaths</span><b>${x.deaths | 0}</b></div><div><span>Score</span><b>${x.score | 0}</b></div><div title="Since you started watching"><span>Seen kills</span><b>${x.seenKills | 0}</b></div><div title="Headshot kills since you started watching"><span>Headshots</span><b>${x.hs | 0}${x.seenKills ? ` · ${Math.round(x.hs / x.seenKills * 100)}%` : ""}</b></div><div title="Shots heard since you started watching"><span>Shots</span><b>${x.shots | 0}</b></div>`;
+  }
+  function specStop(reason) {
+    const was = spec.active;
+    spec.active = !1, vgSpec.active = !1;
+    const ws = spec.ws;
+    spec.ws = null;
+    try {
+      ws?.readyState === 1 && ws.send(JSON.stringify({ type: "spectate_leave" })), ws?.close();
+    } catch {
+    }
+    spec.hidden && (spec.hidden.visible = !0, spec.hidden = null), window.removeEventListener("keydown", specKey, !0), spec.el?.remove(), spec.el = null;
+    if (was) {
+      e.events.emit("network:clear");
+      try {
+        e.services.hud.setVisible?.(!0), e.services.player.setMovementEnabled(!0), e.services.player.setInvulnerable?.(!1);
+      } catch {
+      }
+      F.vmDisabled && (e.camera.layers.enable(e.layers.VIEWMODEL), F.vmDisabled = !1), tt("entry");
+    }
+    reason && vgToast(reason);
+  }
+  vgSpec.stop = specStop, vgSpec.start = specStart;
   const cA = [], bA = (yA) => {
-    yA?.source !== "player" || yA.target?.team === "player" || yA.target?.team === "friendly" || (iJ(yA.weaponId, yA.zone === "head"), F.screen === "armory" && z());
+    yA?.source !== "player" || yA.target?.team === "player" || yA.target?.team === "friendly" || (iJ(yA.weaponId, yA.zone === "head", vgKillDist(yA)), F.screen === "armory" && z());
   }, GA = () => {
     aJ(), F.screen === "armory" && z();
   };
@@ -53691,7 +54511,9 @@ function cJ(A) {
   }, pgRef = () => {
     F.screen === "armory" && z(), F.screen === "loadouts" && loRender();
   };
-  e.events.on("combat:kill", bA), e.events.on("player:died", GA), e.events.on("gamemode:kc-tag", pgTag), e.events.on("gamemode:match-end", pgEnd), e.events.on("gamemode:wave", pgWave), e.events.on("progress:xp", pgRef), cA.push(["combat:kill", bA], ["player:died", GA], ["gamemode:kc-tag", pgTag], ["gamemode:match-end", pgEnd], ["gamemode:wave", pgWave], ["progress:xp", pgRef]);
+  e.events.on("world:map-changed", (m) => {
+    vgCurMap = m || null;
+  }), e.events.on("combat:kill", bA), e.events.on("player:died", GA), e.events.on("gamemode:kc-tag", pgTag), e.events.on("gamemode:match-end", pgEnd), e.events.on("gamemode:wave", pgWave), e.events.on("progress:xp", pgRef), cA.push(["combat:kill", bA], ["player:died", GA], ["gamemode:kc-tag", pgTag], ["gamemode:match-end", pgEnd], ["gamemode:wave", pgWave], ["progress:xp", pgRef]);
   const FA = s("pause", "od-pause");
   NA("div", "od-scrim dark", FA);
   const xA = NA("div", "od-hdr", FA);
@@ -53703,6 +54525,7 @@ function cJ(A) {
     }),
     de(hA, "Settings", "Graphics, mouse, audio and interface", () => Ct("graphics")),
     de(hA, "Restart", "Restart the operation from wave 1", () => HA()),
+    de(hA, "Report", "Report a player in this match, or report a bug", () => vgReportMenu()),
     de(hA, "Quit to main menu", "Abandon the current operation", () => OA())
   ], fe = NA("div", "od-pstats", FA), pe = NA("div", "od-foot", FA);
   pe.innerHTML = '<span class="hint"><span class="od-key">ESC</span>Resume</span><span class="hint"><span class="od-key">ENTER</span>Select</span><span class="sp"></span><span class="ver">Vangaurd</span>';
@@ -53806,7 +54629,7 @@ function cJ(A) {
     E[1].querySelector(".d").textContent = F.sessionType === "multiplayer" ? "Team Deathmatch · Up to 12 players" : "Start immediately against AI", X.forEach(({ key: Ue, button: lt }) => {
       const $e = Ue === le;
       lt.classList.toggle("sel", $e), lt.setAttribute("aria-pressed", String($e));
-    }), le === "protection" ? (w.textContent = "Mission · Protection", m.textContent = "Hold the line · Wave survival", D.textContent = "Crimson Vanguard contractors are pushing in. Vote on the battleground, then hold it against escalating waves until the relief column arrives.") : le === "kc" ? (w.textContent = "Match · Kill Confirmed · Free-for-all", m.textContent = "Every player for themselves · First to 20", D.textContent = "No teams: everyone spawns in a different part of the map. Every elimination drops a dog tag. Grab anyone else's tag to score, grab your own to deny it. First to 20 confirmed kills wins.") : le === "gg" ? (w.textContent = "Match · Gun Game · Free-for-all", m.textContent = "Every kill upgrades your gun · 11 guns", D.textContent = "A free-for-all party mode against bots. Everyone starts with the same SMG, and every kill swaps you to the next gun: rifles, a machine gun, a shotgun, marksman and sniper rifles, then four pistols. The first to get a kill with all 11 guns wins.") : le === "domination" ? (w.textContent = "Match · Domination", m.textContent = "Three flags · First team to 600", D.textContent = "Capture each flag for 200 points. Each team can score once from A, B, and C; first to 600 wins.") : (w.textContent = `Match · ${ge}`, m.textContent = "Up to 12 players · First to 50", D.textContent = "Join the Team Deathmatch queue. The match starts automatically when players are ready, with up to 12 players per game. First side to 50 wins."), Or();
+    }), le === "range" ? (w.textContent = "Practice · Firing Range", m.textContent = "Indoor range · No enemies · Infinite ammo", D.textContent = "An indoor shooting range with seven lanes. Test every weapon and attachment on cardboard targets at 10, 25, 50, 75 and 100 m, plus two moving targets. See the damage, hit zone and distance of every hit, how many shots it takes to drop a target and how fast. Change your loadout from the pause menu.") : le === "protection" ? (w.textContent = "Mission · Protection", m.textContent = "Hold the line · Wave survival", D.textContent = "Crimson Vanguard contractors are pushing in. Vote on the battleground, then hold it against escalating waves until the relief column arrives.") : le === "kc" ? (w.textContent = "Match · Kill Confirmed · Free-for-all", m.textContent = "Every player for themselves · First to 20", D.textContent = "No teams: everyone spawns in a different part of the map. Every elimination drops a dog tag. Grab anyone else's tag to score, grab your own to deny it. First to 20 confirmed kills wins.") : le === "gg" ? (w.textContent = "Match · Gun Game · Free-for-all", m.textContent = "Every kill upgrades your gun · 11 guns", D.textContent = "A free-for-all party mode against bots. Everyone starts with the same SMG, and every kill swaps you to the next gun: rifles, a machine gun, a shotgun, marksman and sniper rifles, then four pistols. The first to get a kill with all 11 guns wins.") : le === "domination" ? (w.textContent = "Match · Domination", m.textContent = "Three flags · First team to 600", D.textContent = "Capture each flag for 200 points. Each team can score once from A, B, and C; first to 600 wins.") : (w.textContent = `Match · ${ge}`, m.textContent = "Up to 12 players · First to 50", D.textContent = "Join the Team Deathmatch queue. The match starts automatically when players are ready, with up to 12 players per game. First side to 50 wins."), Or();
   }
   function vA() {
     const yA = Math.round(460 * A.u * A.dpr), VA = Math.round(150 * A.u * A.dpr), le = e.services.world.spawnPoints?.player?.[0]?.position, ge = e.services.world.bounds, Se = ge ? (ge.min.x + ge.max.x) / 2 : le?.x || 0, Ue = ge ? (ge.min.z + ge.max.z) / 2 : le?.z || 0, lt = ge ? Math.max(ge.max.x - ge.min.x, (ge.max.z - ge.min.z) * (yA / VA)) * 1.05 : 120, $e = {
@@ -53834,6 +54657,11 @@ function cJ(A) {
         0.2,
         0.07,
         0.18
+      ],
+      range: [
+        0.22,
+        0.2,
+        0.08
       ]
     };
     for (const { key: it, canvas: ot } of X) {
@@ -53870,7 +54698,7 @@ function cJ(A) {
   function JA() {
     const yA = F.sessionType === "multiplayer", VA = !!v.value.trim(), le = f[p]?.[0];
     yA && le !== "tdm" && (p = 0, e.services.gamemode.setMode?.("tdm")), E[1].firstChild.nodeValue = F.waitingForPlayers ? "Cancel Queue" : F.multiplayerMatch ? "Online Match" : yA ? "Queue for Match" : "Start Game", E[1].querySelector(".d").textContent = F.waitingForPlayers ? `${gmName()} · matchmaking in progress` : F.multiplayerMatch ? "You are already deployed in the online match" : yA ? `${gmName()} · Up to 12 players · First to ${gmLimit()}` : "Start immediately against AI", X.forEach(({ key: ge, button: Se }) => {
-      Se.hidden = yA && ge !== "tdm", mgO && (mgO.hidden = yA);
+      Se.hidden = yA && ge !== "tdm", mgO && (mgO.hidden = yA), mgP && (mgP.hidden = yA);
     }), U.hidden = !yA || !F.serverConfigurationOpen, P.hidden = !yA || VA, N.hidden = !F.multiplayerMatch, yA && !G.textContent && (G.textContent = `${gmName()} · Up to 12 players · First to ${gmLimit()}.`), lA(f[p][0]);
   }
   const Ae = "vangaurd.multiplayer.url.v2";
@@ -54054,6 +54882,14 @@ function cJ(A) {
         G.textContent = yA.message || "Configure the matchmaking connection before queueing.", DA();
         return;
       }
+      if (!F.readyPassed && vgPartyLeading()) return G.textContent = "Ready check: waiting for your party…", vgReadyAsk(gmKey?.() || "tdm", () => {
+        F.readyPassed = !0;
+        try {
+          ye();
+        } finally {
+          F.readyPassed = !1;
+        }
+      });
       F.waitingForPlayers = !0, G.textContent = "Deploying solo; matchmaking will begin in the game.", e.events.emit("gamemode:online-queue", { active: !0 }), JA(), Pi();
     }
   }
@@ -54307,13 +55143,19 @@ function cJ(A) {
     ].map(([ge, Se]) => `<div>${ge}<b>${Nn(String(Se))}</b></div>`).join(""), ti(Pe, "display", VA ? "" : "none"), ti(Je, "display", VA ? "none" : "");
   }
   function ar() {
-    $t(me, `KILLCAM · ELIMINATOR POV · ${A.deathInfo.killer || "UNKNOWN"}`), $t(XA, "Skip replay · K"), ti(uA, "transform", "scaleX(0)");
+    $t(me, vgFinal.on ? vgFinal.label : `KILLCAM · ELIMINATOR POV · ${A.deathInfo.killer || "UNKNOWN"}`), $t(XA, "Skip replay · K"), ti(uA, "transform", "scaleX(0)");
   }
   function Kr() {
+    if (ghostsClear(), F.screen === "replay" && vgFinal.on) {
+      vgFinal.on = !1;
+      const done = F.finalDone;
+      F.finalDone = null, done ? done() : ni();
+      return;
+    }
     F.screen === "replay" && (F.killReplaySkipped = !0, e.services.player.state.alive === !1 ? tt("death") : (A.mode = "play", ni(), e.input.locked || A.requestResume()));
   }
   const th = (yA) => {
-    if (F.screen === "none" || e.flags.shotMode || vgAuth.open || vgQuitOpen || vgFr?.open || vgUpd.open) return;
+    if (F.screen === "none" || e.flags.shotMode || vgAuth.open || vgQuitOpen || vgFr?.open || vgUpd.open || vgNewsUI.open || vgRdy.open || vgSpec.offerOpen) return;
     const tgt = yA.target;
     if (tgt && tgt !== document.body && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable) && yA.code !== "Escape") return;
     if (F.screen === "main" && Y.classList.contains("on")) {
@@ -54468,7 +55310,8 @@ function cJ(A) {
     }
   }
   function mm(yA) {
-    if (F.screen === "replay") {
+    if (vgSpec.active) return specFrame(yA);
+    if (F.screen !== "replay" && (A.deathInfo?.ghosts?.length || A.deathInfo?.hidden?.length) && ghostsClear(), F.screen === "replay") {
       const Ot = Math.min(F.replayAge, zr());
       bm(Ot), ti(uA, "transform", `scaleX(${Ut(Ot / zr()).toFixed(3)})`), F.replayAge >= zr() && Kr(), e.camera.layers.isEnabled(e.layers.VIEWMODEL) && e.camera.layers.disable(e.layers.VIEWMODEL), F.vmDisabled = !0;
       return;
@@ -54512,7 +55355,59 @@ function cJ(A) {
   function bm(yA) {
     if (!r0(yA, rg, sr)) return;
     const VA = e.camera;
-    VA.parent ? (VA.parent.updateWorldMatrix(!0, !1), VA.position.copy(VA.parent.worldToLocal(wm.copy(rg)))) : VA.position.copy(rg), VA.lookAt(sr), VA.layers.disable(e.layers.VIEWMODEL), F.vmDisabled = !0, VA.updateMatrixWorld(!0), $t(me, `KILLCAM · ELIMINATOR POV · ${A.deathInfo.killer}`), $t(XA, "Skip replay · K");
+    VA.parent ? (VA.parent.updateWorldMatrix(!0, !1), VA.position.copy(VA.parent.worldToLocal(wm.copy(rg)))) : VA.position.copy(rg), VA.lookAt(sr), VA.layers.disable(e.layers.VIEWMODEL), F.vmDisabled = !0, VA.updateMatrixWorld(!0), $t(me, vgFinal.on ? vgFinal.label : `KILLCAM · ELIMINATOR POV · ${A.deathInfo.killer}`), $t(XA, "Skip replay · K");
+    const ge = A.deathInfo.killReplay;
+    ge?.length > 1 && ghostsUpdate(ge[0].t + (ge[ge.length - 1].t - ge[0].t) * Ut(yA / T2));
+  }
+  // Beta 1.2: the victim is replayed as a soldier inside killcams; bodies the camera sits in are hidden.
+  const ghP = new b(), ghV = new b();
+  let ghLast = 0;
+  function ghostsUpdate(tAbs) {
+    const di = A.deathInfo, dt = Math.min(0.1, Math.max(1 / 120, performance.now() / 1e3 - ghLast));
+    ghLast = performance.now() / 1e3;
+    for (const o of di.hide || []) o && o.visible !== !1 && (o.visible = !1, (di.hidden ||= []).push(o));
+    for (const g of di.ghosts || []) {
+      const fr = g.frames;
+      if (!fr || fr.length < 2 || g.failed) continue;
+      if (!g.sol) {
+        try {
+          g.sol = e.services.ai?.netSoldier?.(`ghost-${g.name}`, 5) || null;
+        } catch {
+          g.sol = null;
+        }
+        if (!g.sol) {
+          g.failed = !0;
+          continue;
+        }
+        e.scene.add(g.sol.group), g.sol.group.visible = !0;
+      }
+      let k = 1;
+      for (; k < fr.length - 1 && fr[k].t < tAbs; ) k++;
+      const f0 = fr[k - 1], f1 = fr[k], w = f1.t > f0.t ? Ut((tAbs - f0.t) / (f1.t - f0.t)) : 1, yaw = f0.pyaw + Math.atan2(Math.sin(f1.pyaw - f0.pyaw), Math.cos(f1.pyaw - f0.pyaw)) * w;
+      ghP.set(f0.x + (f1.x - f0.x) * w, f0.fy + (f1.fy - f0.fy) * w, f0.z + (f1.z - f0.z) * w);
+      if (!g.placed) {
+        g.placed = !0, g.prev = ghP.clone(), g.sol.place({ pos: ghP, yaw, pitch: f0.pitch });
+        continue;
+      }
+      if (g.die && !g.dead && tAbs >= fr[fr.length - 1].t - 0.03) {
+        g.dead = !0;
+        try {
+          g.sol.kill({ zone: "torso" });
+        } catch {
+        }
+      }
+      ghV.copy(ghP).sub(g.prev).multiplyScalar(1 / dt), g.prev.copy(ghP), g.sol.update({ dt, pos: ghP, vel: ghV, yaw, pitch: f0.pitch + (f1.pitch - f0.pitch) * w, crouch: f1.stance === "stand" ? 0 : 1, sprint: ghV.length() > 5 });
+    }
+  }
+  function ghostsClear() {
+    const di = A.deathInfo;
+    if (!di) return;
+    for (const g of di.ghosts || []) try {
+      g.sol && (g.sol.group.parent?.remove(g.sol.group), g.sol.dispose?.());
+    } catch {
+    }
+    for (const o of di.hidden || []) o.visible = !0;
+    di.ghosts = [], di.hidden = [], di.hide = [];
   }
   function Dm(yA = rg) {
     if (F.screen !== "replay" || F.killReplaySkipped) return null;
@@ -55117,10 +56012,14 @@ function hJ(A) {
     }
   }
   function WA(QA) {
-    const uA = QA?.info || {}, XA = eA(uA.source ?? uA.attacker), ae = a.deathInfo;
-    ae.killer = XA || String(uA.source || "").startsWith("ai") ? X(XA, uA.source) : uA.killer || (uA.kind === "fall" ? "Fall damage" : "Crimson Vanguard"), ae.faction = `Crimson Vanguard · ${XA?.loadout && P2[XA.loadout] ? P2[XA.loadout] : XA?.role || "Rifleman"}`, ae.weaponId = uA.weaponId || XA?.loadout || "rifle", ae.kind = uA.kind || uA.type || "", ae.weaponName = uA.weaponName || ie(ae.weaponId, ae.kind);
+    const uA = QA?.info || {}, netSrc = typeof uA.source == "string" && uA.source.startsWith("player:") ? uA.source.slice(7) : null, XA = netSrc ? null : eA(uA.source ?? uA.attacker), ae = a.deathInfo, NS = A.services.network;
+    ae.killer = netSrc ? uA.killer || NS?.nameOf?.(netSrc) || "Enemy player" : XA || String(uA.source || "").startsWith("ai") ? X(XA, uA.source) : uA.killer || (uA.kind === "fall" ? "Fall damage" : "Crimson Vanguard"), ae.faction = netSrc ? "Online · enemy player" : `Crimson Vanguard · ${XA?.loadout && P2[XA.loadout] ? P2[XA.loadout] : XA?.role || "Rifleman"}`, ae.weaponId = uA.weaponId || XA?.loadout || "rifle", ae.kind = uA.kind || uA.type || "", ae.weaponName = uA.weaponName || ie(ae.weaponId, ae.kind);
     const Ce = XA?.key || (typeof uA.source == "string" ? uA.source : "");
-    ae.killReplay = A.services.gamemode.state?.matchType !== "protection" && Ce ? A.services.ai?.getReplayFrames?.(Ce, 3.5) || [] : [];
+    // killcam frames: a bot's own recording, or (online, Beta 1.2) the killer's received positions and aim
+    ae.killReplay = A.services.gamemode.state?.matchType !== "protection" && Ce ? (netSrc ? NS?.getReplayFrames?.(netSrc, 3.5) : A.services.ai?.getReplayFrames?.(Ce, 3.5)) || [] : [];
+    // you, replayed as a soldier in the killer's view; the killer's live body is hidden while the camera is in it
+    ae.ghosts = ae.killReplay.length > 1 ? [{ frames: NS?.getReplayFrames?.("self", 4.5) || [], name: Uc(), die: !0 }] : [], ae.hide = ae.killReplay.length > 1 ? [netSrc ? NS?.pose?.(netSrc)?.group : XA?.object].filter(Boolean) : [];
+    netSrc && !uA.sourcePosition && ae.killReplay.length && (uA.sourcePosition = ae.killReplay[ae.killReplay.length - 1]);
     const Me = A.services.player.state, ve = uA.sourcePosition || uA.origin || XA?.position || null;
     ae.distance = ve ? Math.hypot(ve.x - Me.position.x, ve.z - Me.position.z) : null, a.stats.deaths++, a.stats.streak = 0, _ = {
       count: 0,
@@ -55287,10 +56186,10 @@ function hJ(A) {
     pA && l.screen === "none" && a.mode === "play" && ae.alive !== !1 && (a.stats.combatTime += QA), pA ? (R && (k += uA, R === "resume" && k > 0.9 && l.screen !== "resume" && !A.input.locked && l.open("resume")), a.mode === "play" && A.input.pressed("pause") && l.screen === "none" && (A.input.locked ? A.input.unlock() : we()), a.mode === "dead" && (ae.alive !== !1 && W < 0 ? (a.mode = "play", l.screen === "death" && l.close(), A.input.locked || a.requestResume()) : W >= 0 && (W -= uA, W < 0 && (ae.alive === !1 ? (l.open("death"), a.isGameOver() && A.input.unlock?.()) : a.mode = "play")))) : a.mode === "dead" && W >= 0 && (W -= uA, W < 0 && ae.alive === !1 && l.screen === "none" && l.open("death")), n.maybeRebake(uA), D.length && q();
     const Me = z();
     if (Me.wave != null && Me.wave !== v) {
-      if (v != null && m.banner) {
+      if (v != null && m.banner && typeof Me.wave == "number") {
         const Pe = A.services.gamemode.state?.waveTitle || "Hostiles converging on the plaza";
         r.pushBanner(`Wave ${Me.wave}`, {
-          kicker: "Hold Vardanek",
+          kicker: `Hold ${typeof vgCurMap < "u" && vgCurMap?.name || "Vardanek"}`,
           sub: Pe,
           duration: 3.4
         });
@@ -55347,7 +56246,7 @@ function hJ(A) {
       }
     }
     const Dt = E > 6 && !et, Tt = A.settings.get("hud.compass", !0) !== !1;
-    if (sA = fo(sA, ve * (Tt ? Dt ? 0.7 : 1 : 0), 4, uA), mA = fo(mA, ve * (Dt ? 0.8 : 1), 4, uA), s.setAlpha(sA), sA > 4e-3 && s.update(ft, U, bt), n.setAlpha(mA), mA > 4e-3) {
+    if (sA = fo(sA, ve * (Tt ? Dt ? 0.7 : 1 : 0), 4, uA), mA = fo(mA, A.services.gamemode.state?.matchType === "range" ? 0 : ve * (Dt ? 0.8 : 1), 4, uA), s.setAlpha(sA), sA > 4e-3 && s.update(ft, U, bt), n.setAlpha(mA), mA > 4e-3) {
       H.x = ae.position.x, H.z = ae.position.z, H.bearing = A.settings.get("hud.minimapRotate", !0) === !1 ? 0 : dt;
       const Pe = (A.settings.data.graphics?.fov || 90) * (Math.PI / 180);
       H.hfov = Pe, H.bearing === 0 && A.settings.get("hud.minimapRotate", !0), n.draw(H, S, Te, a.uiTime);
@@ -60339,7 +61238,28 @@ function jJ(A) {
       team: M.team ?? M.state?.team
     }));
     const G = U.alive;
-    U.target.set(S.x, S.y, S.z), S.yaw !== null && (U.targetYaw = S.yaw), S.pitch !== null && (U.targetPitch = S.pitch), S.stance && (U.crouch = S.stance === "crouch" || S.stance === "prone" ? 1 : 0), U.sprint = S.sprinting, U.soldier && (U.soldier.quiet = !!S.quiet), U.alive = S.alive, setAlive(U, U.alive), U.lastSeen = performance.now(), o++, r = performance.now(), U.alive && (revive(U), (!G || posOf(U).distanceToSquared(U.target) > 100) && (U.yaw = U.targetYaw, U.pitch = U.targetPitch, snap(U))), U.hasState = !0;
+    U.target.set(S.x, S.y, S.z), S.yaw !== null && (U.targetYaw = S.yaw), S.pitch !== null && (U.targetPitch = S.pitch), S.stance && (U.crouch = S.stance === "crouch" || S.stance === "prone" ? 1 : 0), U.sprint = S.sprinting, U.soldier && (U.soldier.quiet = !!S.quiet), U.alive = S.alive, setAlive(U, U.alive), U.lastSeen = performance.now(), o++, r = performance.now(), U.alive && (revive(U), (!G || posOf(U).distanceToSquared(U.target) > 100) && (U.yaw = U.targetYaw, U.pitch = U.targetPitch, snap(U))), U.hasState = !0, U.stance = S.stance || U.stance || "stand", histPush(U.hist ||= [], S.x, S.y, S.z, U.targetYaw, U.targetPitch, U.stance, U.alive);
+  }
+  // Beta 1.2 killcams: a few seconds of where each player was and where they looked (camera frames use the AI
+  // convention yaw = player yaw + PI, y = eye height); the local player is recorded the same way every 0.08 s.
+  const rec = [];
+  let recT = -1;
+  function histPush(H, x, y, z, yaw, pitch, stance, alive) {
+    const eye = stance === "prone" ? 0.4 : stance === "crouch" ? 1.1 : 1.64;
+    H.push({ t: A.time.t, x, y: y + eye, z, fy: y, yaw: (yaw || 0) + Math.PI, pyaw: yaw || 0, pitch: pitch || 0, stance: stance || "stand", alive: alive !== !1 }), H.length > 110 && H.splice(0, H.length - 110);
+  }
+  function recTick() {
+    const P = A.services.player?.state;
+    if (!P?.position || A.time.t - recT < 0.08) return;
+    recT = A.time.t;
+    const st = P.stance || "stand";
+    histPush(rec, P.position.x, P.position.y, P.position.z, P.yaw, P.pitch, st, P.alive);
+  }
+  function framesOf(id, secs = 3.5, until = null) {
+    const src = id === "self" || id == null || (s && sid(id) === s) ? rec : i.get(sid(id))?.hist;
+    if (!src?.length) return [];
+    const end = until ?? src[src.length - 1].t;
+    return src.filter((f) => f.t <= end + 0.06 && f.t >= end - Math.max(0.5, secs)).map((f) => ({ ...f }));
   }
   function d(M) {
     if (!M || typeof M != "object") return;
@@ -60359,6 +61279,7 @@ function jJ(A) {
         const S = A.services.player, U = fin(M.health) && M.health <= 0 && S.state.alive !== !1;
         U && S.setInvulnerable?.(!1), S.damage(U ? Math.max(Number(M.amount) || 0, (S.state.health || 100) + 50) : M.amount, {
           source: `player:${M.attackerId}`,
+          killer: i.get(sid(M.attackerId))?.name || void 0,
           type: "bullet",
           zone: M.zone,
           network: !0
@@ -60427,6 +61348,7 @@ function jJ(A) {
       matchId: M.matchId ?? a.matchId
     });
     else if (x === "player_killed" && inMatch(M)) {
+      D.lastKill = { t: A.time.t, attacker: sid(M.attackerId), target: sid(M.targetId), attackerName: M.attackerName || i.get(sid(M.attackerId))?.name || null, targetName: M.targetName || i.get(sid(M.targetId))?.name || null, zone: M.zone || null, self: s };
       const S = i.get(sid(M.targetId));
       S && (S.alive = !1, setAlive(S, !1, { zone: M.zone }), S.damageable && (S.damageable.alive = !1, S.damageable.health = 0));
     } else x === "match_left" && u();
@@ -60489,7 +61411,7 @@ function jJ(A) {
       e.on("network:message", y), e.on("network:session", w), e.on("network:clear", m), e.on("weapon:fired", f), e.on("player:respawn", p), e.on("gamemode:start", C), A.services.provide("network", D);
     },
     update(M) {
-      if (!a) return;
+      if (recTick(), !a) return;
       const x = A.services.gamemode.state?.stage;
       ["match-live", "match-dead"].includes(x) && (n += M, n >= K2 && (n %= K2, E()));
       const S = Math.min(1, M * 12);
@@ -60519,6 +61441,20 @@ function jJ(A) {
     },
     dispose() {
       e.off("network:message", y), e.off("network:session", w), e.off("network:clear", m), e.off("weapon:fired", f), e.off("player:respawn", p), e.off("gamemode:start", C), u();
+    },
+    lastKill: null,
+    getReplayFrames: framesOf,
+    nameOf(id) {
+      const k = sid(id);
+      return k === s ? Uc() : i.get(k)?.name || null;
+    },
+    // a remote player's smoothed pose and body (spectator camera, killcam hiding)
+    pose(id) {
+      const U = i.get(sid(id));
+      return U ? { id: U.id, name: U.name, team: U.team, x: posOf(U).x, y: posOf(U).y, z: posOf(U).z, yaw: U.yaw, pitch: U.pitch, stance: U.stance || (U.crouch ? "crouch" : "stand"), alive: U.alive && !U.soldier?.dead, group: U.group, hasState: U.hasState } : null;
+    },
+    ids() {
+      return [...i.values()].map((U) => U.id);
     },
     get state() {
       return {
@@ -60588,6 +61524,10 @@ var K2, $J = YA((() => {
     slideMaxTime: 1.15,
     slideMinTime: 0.35,
     slideSteer: 1.1,
+    diveMinSpeed: 5.4,
+    diveBoost: 1.4,
+    diveUp: 3.4,
+    diveCarry: 3.2,
     slideSlopeAccel: 0.85,
     standToProneTime: 0.62,
     proneToStandTime: 0.55,
@@ -60688,6 +61628,7 @@ var K2, $J = YA((() => {
     sprintMode: "toggle",
     tacSprint: "doubleTap",
     slideOnCrouch: !0,
+    diveToProne: !0,
     headBob: 1,
     fovEffects: !0,
     leanMode: "hold",
@@ -60992,7 +61933,7 @@ var eV, Hh, T5, tV = YA((() => {
     }
     _handleStanceIntents(A, e, t) {
       const i = this.state, a = this.intent, s = this.ctx.settings.data.controls.toggleCrouch !== !1;
-      a.crouch ? this.mode === "slide" ? this.slideTime > be.slideMinTime && this._endSlide(!0) : this.mode === "ground" && this.sprinting && A.slideOnCrouch !== !1 && Math.hypot(this.vel.x, this.vel.z) >= be.slideMinSpeed && this.stanceLock <= 0 ? this._startSlide() : i.stance === "crouch" ? s && this.setStance("stand") : this.setStance("crouch") : a.crouchRelease && !s && i.stance === "crouch" && this.mode !== "slide" && this.setStance("stand"), a.prone && this.mode !== "slide" && (i.stance === "prone" ? this.setStance("stand") || this.setStance("crouch") : this.grounded && this.setStance("prone"));
+      a.crouch ? this.mode === "slide" ? this.slideTime > be.slideMinTime && this._endSlide(!0) : this.mode === "ground" && this.sprinting && A.slideOnCrouch !== !1 && Math.hypot(this.vel.x, this.vel.z) >= be.slideMinSpeed && this.stanceLock <= 0 ? this._startSlide() : i.stance === "crouch" ? s && this.setStance("stand") : this.setStance("crouch") : a.crouchRelease && !s && i.stance === "crouch" && this.mode !== "slide" && this.setStance("stand"), a.prone && this.mode !== "slide" && (i.stance === "prone" ? this.setStance("stand") || this.setStance("crouch") : this.grounded && (this.mode === "ground" && this.sprinting && A.diveToProne !== !1 && Math.hypot(this.vel.x, this.vel.z) >= be.diveMinSpeed && this.stanceLock <= 0 ? this._startDive() : this.setStance("prone")));
     }
     _updateSprint(A, e, t, i, a, s, n) {
       const o = this.state, r = this.intent, c = n.sprintMode || "toggle", l = n.tacSprint || "doubleTap", g = i >= be.sprintMinForward && a > 0.5;
@@ -61046,7 +61987,23 @@ var eV, Hh, T5, tV = YA((() => {
       const e = this._evJump;
       e.position.copy(this.pos), e.speed = Math.hypot(this.vel.x, this.vel.z), this.ctx.events.emit("player:jump", e);
     }
+    // Dive to prone (Beta 1.2): a low forward lunge out of a sprint; the body goes prone in the air and lands on
+    // its stomach, keeping some speed for a short belly slide.
+    _startDive() {
+      const A = this.vel, e = Math.hypot(A.x, A.z) || 1, t = Math.min(be.slideMaxEntry, e + be.diveBoost);
+      A.x = A.x / e * t, A.z = A.z / e * t, A.y = be.diveUp, this.grounded = !1, this.mode = "air", this.jumpLock = 0.12, this.sinceGrounded = 1, this.maxFallSpeed = 0, this.fallStartY = this.pos.y;
+      const i = this.tac;
+      this.sprintLatched = !1, i && this._setTac(!1), this.sprinting = !1, this.diving = !0, this.diveSpeed = t, this.setStance("prone", !0), this.fb.diveStart = (this.fb.diveStart || 0) + 1;
+      const a = this._evSlide;
+      a.phase = "dive", a.position.copy(this.pos), a.speed = t, a.surface = this._surfaceBelow(), this.ctx.events.emit("player:dive", a);
+    }
     _land(A) {
+      if (this.diving) {
+        // belly landing: a thump, then the leftover speed carries a little way
+        this.diving = !1, this.fb.landSpeed = Math.max(this.fb.landSpeed, 6.5), this.fb.diveLand = (this.fb.diveLand || 0) + 1;
+        const k = Math.min(1, be.diveCarry / Math.max(0.01, Math.hypot(this.vel.x, this.vel.z)));
+        this.vel.x *= k, this.vel.z *= k;
+      }
       this.jumped = !1;
       const e = Math.max(this.maxFallSpeed, -A);
       this.maxFallSpeed = 0;
@@ -61358,7 +62315,7 @@ var eV, Hh, T5, tV = YA((() => {
         const FA = r.landSpeed, xA = Math.min(at.landOffsetMax * at.landOmega, FA * at.landOffsetGain * at.landOmega);
         this.landY.impulse(-xA), this.landPitch.impulse(-Math.min(0.16, FA * at.landPitchGain) * at.landOmega), FA > 9 && this.addShake(Cn((FA - 9) / 14, 0.1, 0.55), 0.35), r.landSpeed = 0;
       }
-      if (r.jump > 0 && (this.landY.impulse(-0.35), this.landPitch.impulse(0.9 * Yt * at.landOmega * 0.3), r.jump = 0), r.stepDelta !== 0 && (this.stepOffset += r.stepDelta, this.stepOffset = Cn(this.stepOffset, -0.6, 0.6), r.stepDelta = 0), r.slideStart > 0 && (this.landY.impulse(-0.8), this.landPitch.impulse(-1.2 * Yt * at.landOmega * 0.5), this.addShake(0.16, 0.25), r.slideStart = 0), r.mantleStart > 0 && (this.mantlePitch.impulse(-0.12), r.mantleStart = 0), a.stance !== this.lastStance) {
+      if (r.jump > 0 && (this.landY.impulse(-0.35), this.landPitch.impulse(0.9 * Yt * at.landOmega * 0.3), r.jump = 0), r.stepDelta !== 0 && (this.stepOffset += r.stepDelta, this.stepOffset = Cn(this.stepOffset, -0.6, 0.6), r.stepDelta = 0), r.slideStart > 0 && (this.landY.impulse(-0.8), this.landPitch.impulse(-1.2 * Yt * at.landOmega * 0.5), this.addShake(0.16, 0.25), r.slideStart = 0), r.diveStart > 0 && (this.landPitch.impulse(-2.4 * Yt * at.landOmega * 0.5), this.addShake(0.1, 0.2), r.diveStart = 0), r.diveLand > 0 && (this.landY.impulse(-0.9), this.addShake(0.28, 0.3), r.diveLand = 0), r.mantleStart > 0 && (this.mantlePitch.impulse(-0.12), r.mantleStart = 0), a.stance !== this.lastStance) {
         const FA = ya[a.stance].eye < ya[this.lastStance || "stand"].eye;
         s.mode !== "slide" && this.landPitch.impulse((FA ? -0.5 : 0.35) * Yt * at.landOmega), this.lastStance = a.stance;
       }
@@ -71893,14 +72850,14 @@ var FI, Ed, eD, R8, ME, G8, k8 = YA((() => {
       },
       tac: {
         pos: [
-          0.13,
-          -0.06,
-          -0.33
+          0.115,
+          -0.025,
+          -0.31
         ],
         rot: [
-          30,
-          8,
-          22
+          40,
+          10,
+          26
         ]
       },
       lowered: {
@@ -74926,6 +75883,13 @@ function b6(A) {
       Ue.gun && (Ue.gun.sample(R, XA), xA.compose(iA.set(XA[0], XA[1], XA[2]), fe.setFromEuler(kA.set(XA[3] * Nt, XA[4] * Nt, XA[5] * Nt, "YXZ")), WA), GA.multiply(xA));
     }
     FA.makeTranslation(-se.x, -se.y, -se.z), GA.multiply(FA), Me.copy(GA), Me.decompose(g.position, g.quaternion, g.scale), je = d || ve.orbit ? 1 : 1 - (OA.adsSquash || 0) * Ed(E.ads), tt = u.sockets.sight.position.z, je < 1 && (g.scale.z = je, iA.set(0, 0, tt * (1 - je)).applyQuaternion(g.quaternion), g.position.add(iA)), fs(HA), ni(u.gripR, we, QA), ni(u.gripL, me, uA), v && v.data.lh && (yA = v.data.lhW ? v.data.lhW.sample(R, XA)[0] : 1, yA > 0 && (v.data.lh.sample(R, ae, Ce), iA.copy(ae).applyMatrix4(Me), pe.setFromRotationMatrix(Me).multiply(Ce), me.lerp(iA, yA), uA.slerp(pe, yA))), v && v.data.rh && (VA = v.data.rhW ? v.data.rhW.sample(R, XA)[0] : 1, VA > 0 && (v.data.rh.sample(R, ae, Ce), iA.copy(ae).applyMatrix4(Me), pe.setFromRotationMatrix(Me).multiply(Ce), we.lerp(iA, VA), QA.slerp(pe, VA)));
+    // Beta 1.2: tactical sprint is one-handed like CoD: the right hand holds the gun up, the left lets go of it
+    // and drops out of view, pumping with the stride.
+    const vgTacL = v ? 0 : S;
+    if (vgTacL > 1e-3) {
+      const sw = Math.sin(X), k = Ed(Math.min(1, vgTacL));
+      vgTac.p.set(LA.x - 0.05 + sw * 0.015, LA.y - 0.26 + Math.max(0, sw) * 0.05, LA.z - 0.1 - sw * 0.12), me.lerp(vgTac.p, k);
+    }
     const le = E.action === "fire" || eA?.state === "fire" ? 1 : 0;
     W = vf(W, le, 30, HA);
     const ge = Math.max(x, U, E.reloading ? 1 : 0, v && v.name !== "fireMode" ? 0.8 : 0), Se = tn[OA.poseR] || tn.gripTrigger;
@@ -74939,7 +75903,7 @@ function b6(A) {
         SI(re, tn[Ue.a], tn[Ue.b], Ue.w), xf(Be, re);
       }
     }
-    ve.poseR && xf(Be, ve.poseR), ve.poseL && xf(zA, ve.poseL), B.solve(dA, we, QA, PA), h.solve(LA, me, uA, ee), B.grasp(Be, ke, Bt(u.colR, ke, ve.noGrasp ? 0 : 1 - VA * 0)), h.grasp(zA, Ye, Bt(u.colL, Ye, ve.noGrasp ? 0 : 1)), ve.backdrop && !de && (de = new Le(new Kn(4, 32, 16), new Vt({
+    ve.poseR && xf(Be, ve.poseR), ve.poseL && xf(zA, ve.poseL), vgTacL > 1e-3 && SI(zA, zA, tn.fist, Math.min(1, vgTacL)), B.solve(dA, we, QA, PA), h.solve(LA, me, uA, ee), B.grasp(Be, ke, Bt(u.colR, ke, ve.noGrasp ? 0 : 1 - VA * 0)), h.grasp(zA, Ye, Bt(u.colL, Ye, ve.noGrasp || vgTacL > 0.35 ? 0 : 1)), ve.backdrop && !de && (de = new Le(new Kn(4, 32, 16), new Vt({
       color: 5921886,
       roughness: 0.9,
       side: 1
@@ -74985,6 +75949,7 @@ function b6(A) {
     return xe;
   }
   let je = 1, tt = 0;
+  const vgTac = { p: new b() };
   function ni(HA, OA, oe) {
     OA.copy(HA.pos), je < 1 && (OA.z = tt + (OA.z - tt) * je), OA.applyMatrix4(Me), oe.setFromRotationMatrix(Me).multiply(HA.quat);
   }
