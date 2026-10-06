@@ -48881,7 +48881,7 @@ function vgBotName() {
   }
   return b.order[b.i++ % b.order.length];
 }
-var VGD = { label: "Beta 1.2", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 1.21", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -52428,10 +52428,10 @@ var vgFrCss = `
 .vg-burger i { display: block; height: 2px; background: #e9ece6; }
 .vg-burger b { position: absolute; right: -7px; top: -7px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #f2c14e; color: #111; font: 800 11px/18px ui-sans-serif, system-ui, sans-serif; text-align: center; }
 .vg-burger b:empty { display: none; }
-.vg-power { position: absolute; left: calc(var(--u) * 84); top: calc(var(--u) * 22); z-index: 30; width: calc(var(--u) * 46); height: calc(var(--u) * 40); display: grid; place-items: center; padding: 0; background: rgba(10,13,15,.6); border: 1px solid rgba(236,240,234,.18); color: #e9ece6; cursor: pointer; }
+.vg-power { position: absolute; left: calc(var(--u) * 136); top: calc(var(--u) * 22); z-index: 30; width: calc(var(--u) * 46); height: calc(var(--u) * 40); display: grid; place-items: center; padding: 0; background: rgba(10,13,15,.6); border: 1px solid rgba(236,240,234,.18); color: #e9ece6; cursor: pointer; }
 .vg-power:hover, .vg-power:focus-visible { border-color: #ff6b5b; color: #ff6b5b; outline: none; }
 .vg-power svg { width: calc(var(--u) * 20); height: calc(var(--u) * 20); }
-.vg-newsbtn { position: absolute; left: calc(var(--u) * 136); top: calc(var(--u) * 22); z-index: 30; width: calc(var(--u) * 46); height: calc(var(--u) * 40); display: grid; place-items: center; padding: 0; background: rgba(10,13,15,.6); border: 1px solid rgba(236,240,234,.18); color: #e9ece6; cursor: pointer; }
+.vg-newsbtn { position: absolute; left: calc(var(--u) * 84); top: calc(var(--u) * 22); z-index: 30; width: calc(var(--u) * 46); height: calc(var(--u) * 40); display: grid; place-items: center; padding: 0; background: rgba(10,13,15,.6); border: 1px solid rgba(236,240,234,.18); color: #e9ece6; cursor: pointer; }
 .vg-newsbtn:hover, .vg-newsbtn:focus-visible { border-color: #f2c14e; color: #f2c14e; outline: none; }
 .vg-newsbtn svg { width: calc(var(--u) * 21); height: calc(var(--u) * 21); }
 .vg-fr .tagf { font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #7fe08c; padding: 0 4px; }
@@ -52468,7 +52468,7 @@ function vgFriendsMount(host, opts = {}) {
     const st = document.createElement("style");
     st.id = "vg-fr-style", st.textContent = vgFrCss, document.head.appendChild(st);
   }
-  // The three-line friends button and, next to it, the power button (quit the game). Added to each menu screen.
+  // The three-line friends button, the News button, then the power button (quit the game). Added to each menu screen.
   const burgers = [];
   function addButtons(h) {
     const b = document.createElement("button");
@@ -52482,7 +52482,7 @@ function vgFriendsMount(host, opts = {}) {
       ev.stopPropagation(), vgQuitAsk();
     });
     const nw = document.createElement("button");
-    nw.type = "button", nw.className = "vg-newsbtn", nw.title = "News and patch notes", nw.setAttribute("aria-label", "News and patch notes"), nw.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M3.5 10v4l3 .5 9.5 4.5V5L6.5 9.5z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M7 14.5 8.3 20M19 9.5a3.2 3.2 0 0 1 0 5"/></svg>', h.appendChild(nw);
+    nw.type = "button", nw.className = "vg-newsbtn", nw.title = "News and patch notes", nw.setAttribute("aria-label", "News and patch notes"), nw.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M3.5 10v4l3 .5 9.5 4.5V5L6.5 9.5z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M7 14.5 8.3 20M19 9.5a3.2 3.2 0 0 1 0 5"/></svg>', h.insertBefore(nw, pw);
     nw.addEventListener("click", (ev) => {
       ev.stopPropagation(), vgNewsShow(!1);
     });
@@ -52990,10 +52990,9 @@ function vgReadyMsg(m) {
 }
 typeof window < "u" && vgNet.listeners.push((m) => vgReadyMsg(m));
 /* ------------------------------------------------------------------ Beta 1.2: news & patch notes */
+// Only the current version's notes are shown (Beta 1.21: older versions are no longer listed).
 var VG_PATCH_NOTES = [
-  { v: "Beta 1.2", items: ["Firing Range (new Practice category): an indoor range with seven booths and lanes from 10 to 100 m. Try every weapon with damage, hit zone, distance and shots-to-kill readouts.", "Killcam in online matches, and a Final Killcam that replays the match-winning kill for everyone.", "Spectating for moderators from the Vangaurd anti-cheat console.", "Party ready check: the leader's match search starts once everyone in the party is ready.", "Recently played in the friends panel, with Add friend.", "Three challenge camos: Headhunter (100 headshots), Farsight (50 longshots) and Deadeye (250 headshots and 100 longshots).", "Dive to prone: press prone while sprinting.", "Tactical sprint is one-handed: your right arm holds the gun up and your left hand lets go.", "Controller: aim and move response curve sliders; deadzone sliders now go up to 50%.", "Report in the pause menu: report a player during the match, or report a bug.", "News and patch notes after you sign in (this screen)."] },
-  { v: "Beta 1.1", items: ["Each level takes 500 more XP than the last (instead of 1,000 more).", "Bots have their own callsigns.", "\"Eliminated\" call-out at the bottom of the screen.", "Animated level-up."] },
-  { v: "Beta 1.05", items: ["Accounts are confirmed by email, sign-in sends a code, and Forgot password resets it by email."] }
+  { v: "Beta 1.21", items: ["Dive to prone from mid-air: press prone while jumping or falling.", "Fixed being able to mantle through some windows into buildings."] }
 ];
 var vgNewsUI = { open: !1, shown: !1, el: null };
 var vgNewsCss = `
@@ -53063,7 +53062,7 @@ async function vgNewsShow(auto) {
   const d = vgNewsUI.el = document.createElement("div");
   vgNewsUI.open = !0, d.className = "vg-news";
   const date = (t) => new Date(t).toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
-  d.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-news-h"><header><div class="kk">Vangaurd · ${vgEsc(VGD.label)}</div><h3 id="vg-news-h">News &amp; patch notes</h3></header><div class="body"><section class="nw"><h4>News</h4><div class="empty">Loading news…</div></section><section><h4>Patch notes</h4>${VG_PATCH_NOTES.map((n, i) => `<details${i === 0 ? " open" : ""}><summary>${vgEsc(n.v)}</summary><ul>${n.items.map((x) => `<li>${vgEsc(x)}</li>`).join("")}</ul></details>`).join("")}</section></div><footer><label><input type="checkbox" data-skip${sk && sk.v === VGD.label ? " checked" : ""}> Don't show this after sign-in until there's an update or news</label><button type="button" data-ok>Continue</button></footer></div>`;
+  d.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-news-h"><header><div class="kk">Vangaurd · ${vgEsc(VGD.label)}</div><h3 id="vg-news-h">News &amp; patch notes</h3></header><div class="body"><section class="nw"><h4>News</h4><div class="empty">Loading news…</div></section><section><h4>Patch notes</h4>${VG_PATCH_NOTES.slice(0, 1).map((n, i) => `<details${i === 0 ? " open" : ""}><summary>${vgEsc(n.v)}</summary><ul>${n.items.map((x) => `<li>${vgEsc(x)}</li>`).join("")}</ul></details>`).join("")}</section></div><footer><label><input type="checkbox" data-skip${sk && sk.v === VGD.label ? " checked" : ""}> Don't show this after sign-in until there's an update or news</label><button type="button" data-ok>Continue</button></footer></div>`;
   document.body.appendChild(d);
   const close = () => {
     try {
@@ -61894,7 +61893,7 @@ var eV, Hh, T5, tV = YA((() => {
       const B = t.ads, h = this.ctx.settings.data.player || {};
       s && this._handleStanceIntents(h, c, r), this._updateSprint(A, e, s, r, c, B, h);
       const I = s && i.jump > 0, u = this.grounded || this.mode === "air" && this.sinceGrounded < be.coyoteTime && this.vel.y <= 0.5;
-      if (I && this.mode !== "mantle" && (this.mode === "slide" ? (this._endSlide(!0), t.stance === "stand" && u && this._jump(), i.jump = 0) : t.stance === "prone" ? (this.setStance("stand") || this.setStance("crouch"), i.jump = 0) : t.stance === "crouch" && this.grounded ? (this._tryMantle(!0) || this.setStance("stand"), i.jump = 0) : this._tryMantle(!0) ? i.jump = 0 : u && t.stance === "stand" && (this._jump(), i.jump = 0)), this.mode === "mantle") {
+      if (I && this.mode !== "mantle" && (this.mode === "slide" ? (this._endSlide(!0), t.stance === "stand" && u && this._jump(), i.jump = 0) : t.stance === "prone" ? (this.diving || this.setStance("stand") || this.setStance("crouch"), i.jump = 0) : t.stance === "crouch" && this.grounded ? (this._tryMantle(!0) || this.setStance("stand"), i.jump = 0) : this._tryMantle(!0) ? i.jump = 0 : u && t.stance === "stand" && (this._jump(), i.jump = 0)), this.mode === "mantle") {
         this._consumeIntent(A), this._post(A, e);
         return;
       }
@@ -61933,7 +61932,7 @@ var eV, Hh, T5, tV = YA((() => {
     }
     _handleStanceIntents(A, e, t) {
       const i = this.state, a = this.intent, s = this.ctx.settings.data.controls.toggleCrouch !== !1;
-      a.crouch ? this.mode === "slide" ? this.slideTime > be.slideMinTime && this._endSlide(!0) : this.mode === "ground" && this.sprinting && A.slideOnCrouch !== !1 && Math.hypot(this.vel.x, this.vel.z) >= be.slideMinSpeed && this.stanceLock <= 0 ? this._startSlide() : i.stance === "crouch" ? s && this.setStance("stand") : this.setStance("crouch") : a.crouchRelease && !s && i.stance === "crouch" && this.mode !== "slide" && this.setStance("stand"), a.prone && this.mode !== "slide" && (i.stance === "prone" ? this.setStance("stand") || this.setStance("crouch") : this.grounded && (this.mode === "ground" && this.sprinting && A.diveToProne !== !1 && Math.hypot(this.vel.x, this.vel.z) >= be.diveMinSpeed && this.stanceLock <= 0 ? this._startDive() : this.setStance("prone")));
+      a.crouch ? this.mode === "slide" ? this.slideTime > be.slideMinTime && this._endSlide(!0) : this.mode === "ground" && this.sprinting && A.slideOnCrouch !== !1 && Math.hypot(this.vel.x, this.vel.z) >= be.slideMinSpeed && this.stanceLock <= 0 ? this._startSlide() : i.stance === "crouch" ? s && this.setStance("stand") : this.setStance("crouch") : a.crouchRelease && !s && i.stance === "crouch" && this.mode !== "slide" && this.setStance("stand"), a.prone && this.mode !== "slide" && (i.stance === "prone" ? this.setStance("stand") || this.setStance("crouch") : (this.grounded ? this.mode === "ground" && this.sprinting && A.diveToProne !== !1 && Math.hypot(this.vel.x, this.vel.z) >= be.diveMinSpeed && this.stanceLock <= 0 ? this._startDive() : this.setStance("prone") : this.mode === "air" && !this.diving && A.diveToProne !== !1 && this._startAirDive()));
     }
     _updateSprint(A, e, t, i, a, s, n) {
       const o = this.state, r = this.intent, c = n.sprintMode || "toggle", l = n.tacSprint || "doubleTap", g = i >= be.sprintMinForward && a > 0.5;
@@ -61992,6 +61991,16 @@ var eV, Hh, T5, tV = YA((() => {
     _startDive() {
       const A = this.vel, e = Math.hypot(A.x, A.z) || 1, t = Math.min(be.slideMaxEntry, e + be.diveBoost);
       A.x = A.x / e * t, A.z = A.z / e * t, A.y = be.diveUp, this.grounded = !1, this.mode = "air", this.jumpLock = 0.12, this.sinceGrounded = 1, this.maxFallSpeed = 0, this.fallStartY = this.pos.y;
+      const i = this.tac;
+      this.sprintLatched = !1, i && this._setTac(!1), this.sprinting = !1, this.diving = !0, this.diveSpeed = t, this.setStance("prone", !0), this.fb.diveStart = (this.fb.diveStart || 0) + 1;
+      const a = this._evSlide;
+      a.phase = "dive", a.position.copy(this.pos), a.speed = t, a.surface = this._surfaceBelow(), this.ctx.events.emit("player:dive", a);
+    }
+    // Beta 1.21: dive to prone from mid-air (after a jump or off a ledge): a forward lunge that keeps your
+    // momentum, a small lift if you are near the top of the jump, and a belly landing.
+    _startAirDive() {
+      const A = this.vel, e = Math.hypot(A.x, A.z), y = this.state.yaw || 0, fx = e > 1 ? A.x / e : -Math.sin(y), fz = e > 1 ? A.z / e : -Math.cos(y), t = Math.min(be.slideMaxEntry, Math.max(e, be.walk) + be.diveBoost * 0.7);
+      A.x = fx * t, A.z = fz * t, A.y > -2.5 && (A.y = Math.max(A.y, 1.4)), this.jumpLock = Math.max(this.jumpLock || 0, 0.12), this.intent && (this.intent.jump = 0);
       const i = this.tac;
       this.sprintLatched = !1, i && this._setTac(!1), this.sprinting = !1, this.diving = !0, this.diveSpeed = t, this.setStance("prone", !0), this.fb.diveStart = (this.fb.diveStart || 0) + 1;
       const a = this._evSlide;
@@ -62171,6 +62180,19 @@ var eV, Hh, T5, tV = YA((() => {
           else return !1;
         const E = this._o.set(A.x + e.x * Math.max(0, o - 0.02), B + 0.03, A.z + e.z * Math.max(0, o - 0.02));
         if (!this.fits(E, ya.crouch.height, 0.05)) return !1;
+      }
+      // Beta 1.21: the whole move has to be clear, not just half a metre past the edge. Behind windows sits the
+      // "fake room" wall; on thick-walled buildings the old check stopped short of it, so you could vault through
+      // some windows into sealed buildings. Sweep a crouch-sized body along the path just above the ledge.
+      {
+        const sw = this._sweepV || (this._sweepV = new b()), tx = d.x - A.x, tz = d.z - A.z, L = Math.hypot(tx, tz);
+        if (L > 1e-3) {
+          const s0 = Math.min(1, Math.max(0, o - a) / L), N = Math.max(2, Math.ceil(L * (1 - s0) / 0.18)), y0 = Math.max(B, d.y) + 0.16;
+          for (let k = 0; k <= N; k++) {
+            const w = s0 + (1 - s0) * k / N;
+            if (sw.set(A.x + tx * w, y0, A.z + tz * w), !this.fits(sw, ya.crouch.height - 0.14, 0.05)) return !1;
+          }
+        }
       }
       return t.height = h, t.vault = u, t.stance = f, t.topY = B, t.wallDist = o, t.target.copy(d), !0;
     }

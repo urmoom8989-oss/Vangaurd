@@ -20,9 +20,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUILD_LABEL: "Beta 1.2"
-  FILE_LABEL: "Beta-1.2"
-  RELEASE_TAG: "beta-1.2"
+  BUILD_LABEL: "Beta 1.21"
+  FILE_LABEL: "Beta-1.21"
+  RELEASE_TAG: "beta-1.21"
   # Every run gets a new build number. The game, the desktop apps and the server compare build numbers:
   # the desktop app offers to update, and the server only lets the newest build play online.
   BUILD_NUMBER: ${{ github.run_number }}
@@ -53,8 +53,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
-      - name: Stamp the app version (1.20.<build>; installers need plain numbers, players see "Beta 1.2")
-        run: npm pkg set version="1.20.${BUILD_NUMBER}"
+      - name: Stamp the app version (1.21.<build>; installers need plain numbers, players see "Beta 1.21")
+        run: npm pkg set version="1.21.${BUILD_NUMBER}"
       - name: Build Mac app (Apple Silicon + Intel)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -77,9 +77,9 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
-      - name: Stamp the app version (1.20.<build>; installers need plain numbers, players see "Beta 1.2")
+      - name: Stamp the app version (1.21.<build>; installers need plain numbers, players see "Beta 1.21")
         shell: bash
-        run: npm pkg set version="1.20.${BUILD_NUMBER}"
+        run: npm pkg set version="1.21.${BUILD_NUMBER}"
       - name: Build Windows app
         run: npx electron-builder --win nsis zip --x64 --publish never
       - uses: actions/upload-artifact@v4
@@ -104,7 +104,7 @@ jobs:
           cat > out/version.json <<JSON
           {
             "label": "${BUILD_LABEL}",
-            "version": "1.20.${BUILD_NUMBER}",
+            "version": "1.21.${BUILD_NUMBER}",
             "build": ${BUILD_NUMBER},
             "tag": "${RELEASE_TAG}",
             "commit": "${GITHUB_SHA::7}",
