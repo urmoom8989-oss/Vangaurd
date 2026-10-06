@@ -220,10 +220,17 @@ const mailer = createMailer(process.env);
 const EMAIL_REQUIRED = !/^(0|off|false|no)$/i.test(String(process.env.EMAIL_REQUIRED || 'on').trim());
 const emailState = { ok: mailer.enabled ? null : false, detail: mailer.enabled ? 'checking the email sender' : 'no email sender is set up' };
 if (mailer.enabled) {
-  mailer.check().then((r) => {
+  // A slow sender (the Gmail script can take a while to wake up) gets more tries: after 30 s, 1 min, then every
+  // 10 minutes until it answers or a code goes out. Until then sign-in skips the code (see onLogin).
+  let emailTries = 0;
+  const checkEmail = () => mailer.check().then((r) => {
+    if (emailState.ok) return; // a code already went out in the meantime
+    const was = emailState.checked;
     Object.assign(emailState, r, { checked: r.ok });
-    log(r.ok ? `email: ${r.detail}` : `email is NOT working: ${r.detail}`);
-  });
+    if (r.ok || was !== false) log(r.ok ? `email: ${r.detail}${emailTries ? ` (after ${emailTries + 1} tries)` : ''}` : `email is NOT working: ${r.detail} (trying again)`);
+    if (!r.ok) { emailTries++; setTimeout(checkEmail, emailTries < 3 ? 30e3 * emailTries : 10 * 60e3).unref?.(); }
+  }, (e) => { log(`email check failed: ${e?.message || e}`); });
+  checkEmail();
 } else log(`email: no sender set up (GMAIL_SCRIPT_URL, BREVO_API_KEY or SMTP_*), so ${EMAIL_REQUIRED ? 'new accounts are paused' : 'accounts are created without a code'} and sign-in needs no code`);
 const EMAIL_RE = /^[^\s@<>()",;:\\[\]]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,24}$/;
 const CODE_TTL = 10 * 60e3, CODE_TRIES = 5, RESEND_MS = 30e3;
