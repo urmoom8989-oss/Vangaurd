@@ -99,7 +99,58 @@ ipcMain.handle('vangaurd:check-update', async (event, reason) => {
   try { return updater ? await updater.check(win, String(reason || 'manual')) : { error: 'not ready' }; } catch (e) { log(`Update check error: ${e?.message || e}`); return { error: String(e?.message || e) }; }
 });
 ipcMain.handle('vangaurd:quit', () => { log('Quit from the game menu'); setTimeout(() => app.quit(), 50); return true; });
+
+// ---------- Steam (Beta 1.3) ----------
+// The Steam version ships with desktop/steam.json { "appId": <the game's Steam App ID>, "required": true }.
+// Steam sets SteamAppId when it starts the game. With steamworks.js bundled (the release workflow adds it), the
+// app checks that Steam is running and that this Steam user owns the game, and gets a session ticket the
+// Vangaurd server can verify with Steam. Without Steam the game can still sign in (the server decides: the
+// owner can let some players play without Steam), but it can't be played offline.
+const steamCfg = (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'steam.json'), 'utf8')) || {}; } catch { return {}; }
+})();
+const STEAM_APP_ID = Math.floor(Number(process.env.SteamAppId || process.env.SteamGameId || steamCfg.appId) || 0);
+let steamClient = null, steamApi = null, steamState = { present: false, required: steamCfg.required === true && STEAM_APP_ID > 0 };
+function loadSteamworks() {
+  for (const p of [path.join(process.resourcesPath || '', 'steamworks.js'), 'steamworks.js']) {
+    try { return require(p); } catch { /* next */ }
+  }
+  return null;
+}
+function initSteam() {
+  if (!STEAM_APP_ID) { log('Steam: no App ID set (not the Steam version)'); return; }
+  steamApi = loadSteamworks();
+  if (!steamApi) { log('Steam: steamworks.js is not bundled'); return; }
+  try {
+    // Started outside Steam: Steam restarts the game through itself (and this copy quits).
+    if (app.isPackaged && steamCfg.relaunch !== false && steamApi.restartAppIfNecessary?.(STEAM_APP_ID)) { log('Steam: restarting through Steam'); app.quit(); return; }
+  } catch (e) { log(`Steam: restart check failed: ${e?.message || e}`); }
+  try {
+    steamClient = steamApi.init(STEAM_APP_ID);
+    const sid = steamClient.localplayer.getSteamId();
+    steamState = { ...steamState, present: true, id: String(sid?.steamId64 ?? sid ?? ''), app: String(STEAM_APP_ID) };
+    try { steamApi.electronEnableSteamOverlay?.(); } catch { /* overlay is optional */ }
+    log(`Steam: running, user ${steamState.id}`);
+  } catch (e) {
+    steamClient = null;
+    log(`Steam: not running or the game is not owned (${e?.message || e})`);
+  }
+}
+let steamTicket = null;
+ipcMain.handle('vangaurd:steam', async () => {
+  if (!steamClient) return { ...steamState, present: false };
+  if (!steamTicket) {
+    try {
+      const auth = steamClient.auth;
+      const t = auth.getAuthTicketForWebApi ? await auth.getAuthTicketForWebApi('vangaurd') : await auth.getSessionTicket();
+      steamTicket = { hex: Buffer.from(t.getBytes()).toString('hex'), kind: auth.getAuthTicketForWebApi ? 'web' : 'session' };
+    } catch (e) { log(`Steam: could not get a ticket (${e?.message || e})`); }
+  }
+  return { ...steamState, ticket: steamTicket?.hex || null, kind: steamTicket?.kind || null };
+});
 ipcMain.handle('vangaurd:app-info', () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch }));
+// Beta 1.3: the game shows its start-up screen (Patching / Logging in) once its window is on screen.
+ipcMain.handle('vangaurd:revealed', () => gameRevealed);
 
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
@@ -296,6 +347,7 @@ function createWindow() {
       window.focus();
       gameRevealed = true;
       if (pendingDisplayMode) { applyDisplayMode(window, pendingDisplayMode); pendingDisplayMode = null; }
+      try { window.webContents.send('vangaurd:reveal'); } catch { /* closing */ }
     };
     const reveal = () => {
       if (window.isDestroyed() || revealing) return;
@@ -355,7 +407,8 @@ if (!hasAppLock) app.quit();
 app.whenReady().then(async () => {
   if (!hasAppLock) return;
   logFile = path.join(app.getPath('userData'), 'launch.log');
-  updater = createUpdater({ app, dialog, shell, log });
+  initSteam();
+  updater = createUpdater({ app, dialog, shell, log, steam: STEAM_APP_ID > 0 });
   createSplash();
   log(`Starting Vangaurd ${app.getVersion()} on ${process.platform} ${process.arch}; Electron ${process.versions.electron}, Chromium ${process.versions.chrome}`);
   log(`Game build directory: ${GAME_ROOT}`);

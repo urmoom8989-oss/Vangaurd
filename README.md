@@ -4,22 +4,25 @@ An original first-person shooter built with Three.js and Vite. You hold a city p
 enemy soldiers. It runs in a desktop browser with WebGL2 (Chrome or Edge recommended) and needs a mouse
 and keyboard.
 
-## Beta 1.21 downloads
+## Beta 1.3 builds
 
-The current game (Beta 1.21: dive to prone from mid-air, an indoor firing range (Practice), one-handed tactical sprint, killcams and final killcam, party ready check, challenge camos, news and bug reports, animated level-ups, named bots, "Eliminated" call-outs, email-verified accounts with sign-in codes and password reset, moderation with bans and player reports, cloud saves that follow your account, friends and parties, accounts, loadouts with perks and camos, levels, six maps with a map vote, online
-Team Deathmatch, controller support) is kept ready-built in `prebuilt/`, and GitHub Actions turns it into downloads on
-every push to `main` (or when you run the **Build Vangaurd** workflow by hand). Every run gets a new build number; the
-finished files are attached to the **Vangaurd Beta 1.21** release on the repository's Releases page:
+The current game (Beta 1.3: weapon levels, weapon mounting, killstreaks, daily and weekly challenges, animated level
+camos, a developer replay recorder, lobby announcements and maintenance mode, Steam detection, plus everything from
+earlier betas) is kept ready-built in `prebuilt/`. Vangaurd is sold on Steam from Beta 1.3, so **nothing is published
+on GitHub any more** (no releases, no HTML download), and this repository should be private.
 
-| File | What it is |
-| --- | --- |
-| `Vangaurd-Beta-1.21-arm64.dmg` / `Vangaurd-Beta-1.21-x64.dmg` | Mac app for Apple Silicon / Intel Macs |
-| `Vangaurd-Beta-1.21-Setup.exe` / `Vangaurd-Beta-1.21-win.zip` | Windows installer / portable Windows app |
-| `Vangaurd-Beta-1.21.html` | The whole game in one HTML file (open in Chrome or Edge) |
-| `version.json` | Newest build number, read by the desktop apps (auto-update) and the server (only the newest build plays online) |
+GitHub Actions (**Build Vangaurd**, on every push to `main` or by hand) builds the Mac and Windows apps and keeps them as
+private workflow artifacts for 30 days; upload those to Steam. The build number is fixed per version in
+`.github/workflows/release.yml` (`BUILD_NUMBER`, 26 for Beta 1.3) and must match `server/latest.json`, which tells the
+server the newest build (only that build may play online). When a new version is live on Steam, the owner can also
+set the newest build in the anti-cheat console (Server tab).
 
-To build the same files locally: `node tools/build-release.mjs --standalone Vangaurd-Beta-1.21.html` for the HTML
-(no dependencies needed), and `npm install && npm run desktop:mac` or `npm run desktop:win` for the apps.
+Steam: put the game's Steam App ID in `desktop/steam.json` (`"appId": 1234560, "required": true`) for the Steam build.
+The workflow bundles steamworks.js; the app then checks that Steam is running and gets a session ticket. Turn on
+**Require Steam** in the console (Server tab) to refuse players without Steam, and add players who may play without
+Steam to the list there. Set `STEAM_WEB_API_KEY` and `STEAM_APP_ID` on the server to check tickets with Steam.
+
+To build locally: `npm install && npm install --no-save steamworks.js && npm run desktop:mac` or `npm run desktop:win`.
 
 The Vite sources under `src/` are an older version of the game; `prebuilt/game-module.js` is the current one.
 

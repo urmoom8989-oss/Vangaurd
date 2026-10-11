@@ -96,7 +96,7 @@
   }
 
   // ---------- shell ----------
-  const TABS = [['reports', 'Reports'], ['players', 'Players'], ['bugs', 'Bugs'], ['bans', 'Bans'], ['news', 'News'], ['activity', 'Activity'], ['mods', 'Moderators']];
+  const TABS = [['reports', 'Reports'], ['players', 'Players'], ['bugs', 'Bugs'], ['bans', 'Bans'], ['news', 'News'], ['server', 'Server'], ['activity', 'Activity'], ['mods', 'Moderators']];
   const BUGCAT = { gameplay: 'Gameplay', graphics: 'Graphics', controls: 'Controls', online: 'Online', menus: 'Menus', performance: 'Performance', other: 'Other' };
   function shell() {
     app.innerHTML = `<header class="top"><div class="brand">${SHIELD}<div><b>VANGAURD</b><small>Anti-Cheat</small></div></div>
@@ -122,7 +122,7 @@
   function show(tab) {
     ui.tab = tab;
     $$('.tab').forEach((b) => { const on = b.dataset.tab === tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-    ({ reports: viewReports, players: viewPlayers, bugs: viewBugs, bans: viewBans, news: viewNews, activity: viewActivity, mods: viewMods })[tab]();
+    ({ reports: viewReports, players: viewPlayers, bugs: viewBugs, bans: viewBans, news: viewNews, server: viewServer, activity: viewActivity, mods: viewMods })[tab]();
   }
 
   // ---------- reports ----------
@@ -340,6 +340,83 @@
     } catch (e) { fail(e); }
   }
 
+  // ---------- server: lobby announcement, maintenance, Steam, developers, game version ----------
+  async function viewServer() {
+    const v = $('#view'), owner = ui.role === 'owner';
+    let o;
+    try { o = await api('ops'); } catch (e) { fail(e); return; }
+    const a = o.announcement, m = o.maintenance, live = o.live || {};
+    const when = (t) => (t ? `${fmt(t)} (${t > Date.now() ? `in ${Math.max(1, Math.round((t - Date.now()) / 60e3))} min` : 'passed'})` : '');
+    const people = (list, kind) => (list.length ? list.map((x) => `<div class="row static"><span class="main"><span class="nm">${esc(x.name)}</span></span>${owner ? `<button class="btn sm ghost-danger" data-rm-${kind}="${esc(x.name)}">Remove</button>` : ''}</div>`).join('') : '<div class="empty">Nobody yet.</div>');
+    v.innerHTML = `<div class="ops">
+      <section class="pane"><header><span class="k">Lobby announcement</span><span class="sp"></span>${a ? '<span class="tag hot">Showing in the game</span>' : '<span class="tag">None</span>'}</header>
+        ${a ? `<article class="report"><div class="top-line"><span class="tag ${a.kind === 'downtime' ? 'cheating' : ''}">${a.kind === 'downtime' ? 'Downtime warning' : 'Announcement'}</span><b>${esc(a.title)}</b><span class="when">${ago(a.at)}</span></div>${a.text ? `<p class="note">${esc(a.text)}</p>` : ''}<div class="meta"><span>${a.startsAt ? `Downtime starts ${esc(when(a.startsAt))}` : ''}${a.until ? ` · Hidden after ${esc(fmt(a.until))}` : ' · Shows until you clear it'}</span><button class="btn sm" id="anclear">Clear</button></div></article>` : ''}
+        <form id="anf" class="newsform">
+          <div class="seg" role="group" aria-label="Kind"><button type="button" data-kind="info" class="on">Announcement</button><button type="button" data-kind="downtime">Downtime warning</button></div>
+          <input class="input" name="title" maxlength="60" placeholder="Title (optional), e.g. Downtime begins soon" autocomplete="off">
+          <textarea class="input" name="text" maxlength="240" placeholder="What players see at the bottom of the lobby, e.g. Servers go down for the Beta 1.4 update."></textarea>
+          <div class="inline"><label data-dt hidden>Downtime starts in <input class="input" name="startsIn" type="number" min="0" max="10080" value="15"> min</label><label>Hide after <input class="input" name="minutes" type="number" min="0" max="10080" value="0"> min (0 = until cleared)</label></div>
+          <button class="btn pri" type="submit">Show in the lobby</button></form>
+        <p class="hint">Everyone signed in sees it at the bottom of the lobby straight away; players who sign in later see it too.</p></section>
+      <section class="pane"><header><span class="k">Maintenance</span><span class="sp"></span>${m.on ? '<span class="tag banned">On</span>' : '<span class="tag">Off</span>'}</header>
+        ${m.on ? `<p>Started ${esc(ago(m.since))}${m.by ? ` by ${esc(m.by)}` : ''}. Players see "Login failed" with your message and a Retry button. The owner, moderators and developers can still sign in.</p>` : '<p>While maintenance is on, everyone except the owner, moderators and developers is signed out, and the game shows "Login failed · Vangaurd is undergoing maintenance" with a Retry button.</p>'}
+        <form id="mtf" class="newsform"><textarea class="input" name="message" maxlength="240" placeholder="Vangaurd is undergoing maintenance. Please try again later.">${esc(m.message || '')}</textarea>
+          ${owner ? `<button class="btn ${m.on ? 'pri' : 'danger'}" type="submit">${m.on ? 'End maintenance' : 'Start maintenance'}</button>` : '<p class="hint">Only the owner can start or end maintenance.</p>'}</form></section>
+      <section class="pane"><header><span class="k">Steam</span><span class="sp"></span>${o.steam.required ? '<span class="tag hot">Steam required</span>' : '<span class="tag">Not required</span>'}</header>
+        <p>${o.steam.required ? 'Players have to start Vangaurd from Steam to sign in or play online.' : 'Anyone can sign in, with or without Steam.'} ${o.steam.verify ? 'Steam tickets are checked with Steam.' : 'The game reports whether Steam is running (set STEAM_WEB_API_KEY and STEAM_APP_ID on the server to check tickets with Steam too).'} You (the owner) can always play without Steam.</p>
+        ${owner ? `<button class="btn ${o.steam.required ? '' : 'pri'}" id="steamreq">${o.steam.required ? 'Stop requiring Steam' : 'Require Steam'}</button>` : ''}
+        <header><span class="k">Allowed to play without Steam (${o.steam.allow.length})</span></header>${people(o.steam.allow, 'steam')}
+        ${owner ? '<form id="steamf" class="addform"><input class="input" name="name" placeholder="Username" autocomplete="off" spellcheck="false"><button class="btn pri" type="submit">Allow</button></form>' : ''}</section>
+      <section class="pane"><header><span class="k">Developers</span></header>
+        <p>Developers get the in-game replay recorder (F8 to record, F9 to watch) for trailers, and can sign in during maintenance. The owner is always a developer.</p>
+        <div class="row static"><span class="main"><span class="nm">${esc(o.owner || '')}<span class="tag mod">owner</span></span></span></div>${people(o.devs, 'dev')}
+        ${owner ? '<form id="devf" class="addform"><input class="input" name="name" placeholder="Username" autocomplete="off" spellcheck="false"><button class="btn pri" type="submit">Add developer</button></form>' : ''}</section>
+      <section class="pane"><header><span class="k">Game version</span></header>
+        <p>Only <b>${esc(o.latest?.label || '')}</b> (build ${esc(o.latest?.build)}) and newer can play online. ${o.release ? `Last set ${esc(ago(o.release.at))} by ${esc(o.release.by)}.` : ''}</p>
+        ${owner ? '<form id="relf" class="inline"><label>Build <input class="input" name="build" type="number" min="1" placeholder="26"></label><label>Name <input class="input" name="label" placeholder="Beta 1.3" maxlength="40"></label><button class="btn" type="submit">Set latest build</button></form><p class="hint">Set this when a new version is live on Steam, so older versions are asked to update.</p>' : ''}</section>
+      <section class="pane"><header><span class="k">Matchmaking · ${esc(o.region || '')}</span></header>
+        ${Object.entries(live).map(([k, x]) => `<div class="row static"><span class="main"><span class="nm">${esc(MODES[k] || k)}</span><span class="sub">${x.inMatch ? `${x.inMatch} / ${x.max} in the match` : 'No match running'}${x.waiting ? ` · ${x.waiting} waiting for a spot` : ''}</span></span></div>`).join('')}</section>
+    </div>`;
+    let kind = 'info';
+    const af = $('#anf');
+    $$('[data-kind]', af).forEach((b) => { b.onclick = () => { kind = b.dataset.kind; $$('[data-kind]', af).forEach((x) => x.classList.toggle('on', x === b)); $('[data-dt]', af).hidden = kind !== 'downtime'; }; });
+    af.onsubmit = async (ev) => {
+      ev.preventDefault();
+      try { await api('ops/announce', { body: { kind, title: af.title.value, text: af.text.value, minutes: af.minutes.value, startsIn: kind === 'downtime' ? af.startsIn.value : '' } }); toast('Showing in the lobby.'); viewServer(); } catch (e) { fail(e); }
+    };
+    const ac = $('#anclear');
+    if (ac) ac.onclick = async () => { try { await api('ops/announce/clear', { body: {} }); toast('Announcement cleared.'); viewServer(); } catch (e) { fail(e); } };
+    const mf = $('#mtf');
+    mf.onsubmit = async (ev) => {
+      ev.preventDefault();
+      if (!owner) return;
+      const on = !m.on;
+      if (on && !confirm('Start maintenance? Everyone except the owner, moderators and developers is signed out right away.')) return;
+      try { const r = await api('ops/maintenance', { body: { on, message: mf.message.value } }); toast(on ? `Maintenance started. ${plural(r.kicked || 0, 'player')} signed out.` : 'Maintenance is over. Players can sign in again.'); viewServer(); } catch (e) { fail(e); }
+    };
+    const sr = $('#steamreq');
+    if (sr) sr.onclick = async () => {
+      if (!o.steam.required && !confirm('Require Steam? Players who start the game without Steam (and are not on the list) can no longer sign in.')) return;
+      try { await api('ops/steam', { body: { required: !o.steam.required } }); viewServer(); } catch (e) { fail(e); }
+    };
+    const listForm = (id, action, okText) => {
+      const f = $(id);
+      if (f) f.onsubmit = async (ev) => { ev.preventDefault(); const name = f.name.value.trim(); if (!name) return; try { await api(action, { body: { name, add: true } }); toast(okText(name)); viewServer(); } catch (e) { fail(e); } };
+    };
+    listForm('#steamf', 'ops/steam/allow', (n) => `${n} can play without Steam.`);
+    listForm('#devf', 'ops/devs', (n) => `${n} is now a developer.`);
+    $$('[data-rm-steam]', v).forEach((b) => { b.onclick = async () => { try { await api('ops/steam/allow', { body: { name: b.dataset.rmSteam, add: false } }); viewServer(); } catch (e) { fail(e); } }; });
+    $$('[data-rm-dev]', v).forEach((b) => { b.onclick = async () => { try { await api('ops/devs', { body: { name: b.dataset.rmDev, add: false } }); viewServer(); } catch (e) { fail(e); } }; });
+    const rf = $('#relf');
+    if (rf) rf.onsubmit = async (ev) => {
+      ev.preventDefault();
+      const build = Number(rf.build.value);
+      if (!(build > 0)) return toast('Enter the build number.', true);
+      if (!confirm(`Only build ${build} and newer may play online after this. Continue?`)) return;
+      try { await api('ops/release', { body: { build, label: rf.label.value } }); toast('Latest build updated.'); viewServer(); } catch (e) { fail(e); }
+    };
+  }
+
   // ---------- bans ----------
   async function viewBans() {
     const v = $('#view');
@@ -360,7 +437,7 @@
   }
 
   // ---------- activity ----------
-  const ACT = { spectate: 'spectated', news_add: 'posted news', news_delete: 'deleted a news post', bugs_close: 'closed', bugs_reopen: 'reopened', bugs_delete: 'deleted', progress: 'changed the progress of', ban: 'banned', unban: 'unbanned', kick: 'disconnected', dismiss: 'dismissed reports against', reopen: 'reopened reports against', mod_add: 'made a moderator:', mod_remove: 'removed moderator', setup: 'set up the console', ban_expired: 'ban ended for' };
+  const ACT = { announce: 'posted a lobby announcement', announce_clear: 'cleared the lobby announcement', maintenance_on: 'started maintenance', maintenance_off: 'ended maintenance', steam_required: 'turned on "Steam required"', steam_optional: 'turned off "Steam required"', steam_allow_add: 'let this player play without Steam:', steam_allow_remove: 'removed from the no-Steam list:', dev_add: 'made a developer:', dev_remove: 'removed developer', release: 'set the latest game build', spectate: 'spectated', news_add: 'posted news', news_delete: 'deleted a news post', bugs_close: 'closed', bugs_reopen: 'reopened', bugs_delete: 'deleted', progress: 'changed the progress of', ban: 'banned', unban: 'unbanned', kick: 'disconnected', dismiss: 'dismissed reports against', reopen: 'reopened reports against', mod_add: 'made a moderator:', mod_remove: 'removed moderator', setup: 'set up the console', ban_expired: 'ban ended for' };
   const logItem = (l) => `<div class="item"><time title="${esc(fmt(l.at))}">${esc(fmt(l.at))}</time><div><b>${esc(l.by)}</b> ${esc(ACT[l.action] || l.action)} ${l.action === 'setup' ? '' : `<b>${esc(l.target || '')}</b>`}${l.detail && l.action !== 'setup' ? ` <span class="muted">· ${esc(l.detail)}</span>` : ''}</div></div>`;
   async function viewActivity() {
     const v = $('#view');

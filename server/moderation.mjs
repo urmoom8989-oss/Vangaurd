@@ -143,6 +143,7 @@ export function createModeration(d) {
       d.kick(c, bannedMsg(banView(key, b, !mine)));
       n++;
     }
+    try { d.kickKey?.(key, bannedMsg(banView(key, b, false))); } catch { /* regional servers are optional */ }
     return n;
   }
   const userOf = d.userOf;
@@ -449,6 +450,7 @@ export function createModeration(d) {
         if (need(key, 'There is no player with that name.', 404)) return true;
         let n = 0;
         for (const c of d.clients.values()) if (c.accountKey === key) { d.kick(c, { type: 'kicked', message: 'A moderator disconnected you from the server.' }); n++; }
+        n += (await d.kickKey?.(key, { type: 'kicked', message: 'A moderator disconnected you from the server.' }).catch?.(() => 0)) || 0;
         if (n) { addLog(by, 'kick', key); save(false); }
         send(res, 200, { ok: true, kicked: n });
         return true;
@@ -561,9 +563,61 @@ export function createModeration(d) {
         send(res, 200, { ok: true, moderators: mod.admins.map((k) => ({ name: d.nameOf(k), status: d.statusOf(k) })) });
         return true;
       }
+      // ----- Beta 1.3 operations: lobby announcements, maintenance, Steam requirement, developers, latest build
+      case 'ops': send(res, 200, ops ? ops.view() : { error: 'Not available.' }); return true;
+      case 'ops/announce': {
+        if (need(post, 'Use POST.', 405)) return true;
+        const r = ops.announce(by, body);
+        if (need(!r.error, r.error)) return true;
+        addLog(by, 'announce', null, `${r.announcement.kind}: ${r.announcement.title} ${r.announcement.text}`); save(false);
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
+      case 'ops/announce/clear': {
+        if (need(post, 'Use POST.', 405)) return true;
+        ops.clearAnnouncement(); addLog(by, 'announce_clear', null); save(false);
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
+      case 'ops/maintenance': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can start or end maintenance.', 403)) return true;
+        const r = ops.maintenance(by, !!body.on, body.message);
+        addLog(by, body.on ? 'maintenance_on' : 'maintenance_off', null, body.on ? `${r.kicked} signed out` : ''); save(false);
+        send(res, 200, { ok: true, kicked: r.kicked, ...ops.view() });
+        return true;
+      }
+      case 'ops/steam': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;
+        ops.steamRequired(!!body.required); addLog(by, body.required ? 'steam_required' : 'steam_optional', null); save(false);
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
+      case 'ops/steam/allow': case 'ops/devs': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;
+        const key = findKey(body.name);
+        if (need(key, 'There is no player with that name.', 404)) return true;
+        const add = body.add !== false;
+        const changed = action === 'ops/devs' ? ops.dev(key, add) : ops.steamAllow(key, add);
+        if (changed) { addLog(by, `${action === 'ops/devs' ? 'dev' : 'steam_allow'}_${add ? 'add' : 'remove'}`, key); save(false); }
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
+      case 'ops/release': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;
+        const r = ops.release(by, body);
+        if (need(!r.error, r.error)) return true;
+        addLog(by, 'release', null, `build ${r.release.build} (${r.release.label})`); save(false);
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
       default: send(res, 404, { error: 'Unknown action.' }); return true;
     }
   }
 
-  return { checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, onBug, recentWith, newsPublic, roleOf, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
+  let ops = null;
+  return { attachOps: (o) => { ops = o; }, ownerKey: () => mod.owner, checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, onBug, recentWith, newsPublic, roleOf, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
 }

@@ -1,7 +1,7 @@
 {
   "name": "vangaurd",
   "private": true,
-  "version": "1.21.0",
+  "version": "1.30.0",
   "type": "module",
   "main": "desktop/main.cjs",
   "author": "Vangaurd",
@@ -17,7 +17,7 @@
     "shot": "node tools/shot.mjs",
     "perf": "node tools/perf.mjs",
     "audio": "node tools/audio.mjs",
-    "build:release": "node tools/build-release.mjs --standalone Vangaurd-Beta-1.21.html --dist dist"
+    "build:release": "node tools/build-release.mjs --dist dist"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.20.0",
@@ -45,12 +45,20 @@
       "package.json",
       "desktop/preload.cjs",
       "desktop/updater.cjs",
-      "desktop/splash.html"
+      "desktop/splash.html",
+      "desktop/steam.json"
     ],
     "extraResources": [
       {
         "from": "dist",
         "to": "game",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules/steamworks.js",
+        "to": "steamworks.js",
         "filter": [
           "**/*"
         ]
@@ -72,7 +80,7 @@
         "nsis",
         "zip"
       ],
-      "artifactName": "${productName}-Beta-1.21-win.${ext}"
+      "artifactName": "${productName}-Beta-1.3-win.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -80,9 +88,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "${productName}-Beta-1.21-Setup.${ext}"
+      "artifactName": "${productName}-Beta-1.3-Setup.${ext}"
     },
     "afterPack": "desktop/after-pack.cjs",
-    "artifactName": "${productName}-Beta-1.21-${arch}.${ext}"
+    "artifactName": "${productName}-Beta-1.3-${arch}.${ext}"
   }
 }

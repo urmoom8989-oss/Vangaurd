@@ -1,4 +1,9 @@
-name: Build Vangaurd (Mac, Windows, standalone HTML)
+name: Build Vangaurd (Mac, Windows)
+
+# From Beta 1.3 the game is sold on Steam, so nothing is published on GitHub any more: no release, no
+# standalone HTML. Each run builds the Mac and Windows apps and keeps them as private workflow artifacts
+# (Actions → this run → Artifacts) to upload to Steam. The game, the server and the desktop app all use
+# BUILD_NUMBER; server/latest.json holds the same number so the server knows the newest build.
 
 on:
   workflow_dispatch:
@@ -13,36 +18,21 @@ on:
       - '.github/workflows/release.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release
   cancel-in-progress: true
 
 env:
-  BUILD_LABEL: "Beta 1.21"
-  FILE_LABEL: "Beta-1.21"
-  RELEASE_TAG: "beta-1.21"
-  # Every run gets a new build number. The game, the desktop apps and the server compare build numbers:
-  # the desktop app offers to update, and the server only lets the newest build play online.
-  BUILD_NUMBER: ${{ github.run_number }}
+  BUILD_LABEL: "Beta 1.3"
+  FILE_LABEL: "Beta-1.3"
+  # Fixed per version (Beta 1.21 was build 25). Keep in step with server/latest.json.
+  BUILD_NUMBER: "26"
+  # steamworks.js (Steam detection) is added at build time and shipped next to the app.
+  STEAMWORKS_VERSION: "0.4.0"
 
 jobs:
-  standalone:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Build the standalone HTML
-        run: node tools/build-release.mjs --standalone "Vangaurd-${FILE_LABEL}.html"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: standalone
-          path: Vangaurd-*.html
-          if-no-files-found: error
-
   mac:
     runs-on: macos-latest
     steps:
@@ -51,10 +41,12 @@ jobs:
         with:
           node-version: 22
       - run: npm ci --no-audit --no-fund
+      - name: Add steamworks.js
+        run: npm install --no-save --no-audit --no-fund "steamworks.js@${STEAMWORKS_VERSION}"
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
-      - name: Stamp the app version (1.21.<build>; installers need plain numbers, players see "Beta 1.21")
-        run: npm pkg set version="1.21.${BUILD_NUMBER}"
+      - name: Stamp the app version (1.30.<build>; installers need plain numbers, players see "Beta 1.3")
+        run: npm pkg set version="1.30.${BUILD_NUMBER}"
       - name: Build Mac app (Apple Silicon + Intel)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -62,6 +54,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: mac
+          retention-days: 30
           path: |
             release/*.dmg
             release/*.zip
@@ -75,62 +68,51 @@ jobs:
         with:
           node-version: 22
       - run: npm ci --no-audit --no-fund
+      - name: Add steamworks.js
+        shell: bash
+        run: npm install --no-save --no-audit --no-fund "steamworks.js@${STEAMWORKS_VERSION}"
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
-      - name: Stamp the app version (1.21.<build>; installers need plain numbers, players see "Beta 1.21")
+      - name: Stamp the app version (1.30.<build>; installers need plain numbers, players see "Beta 1.3")
         shell: bash
-        run: npm pkg set version="1.21.${BUILD_NUMBER}"
+        run: npm pkg set version="1.30.${BUILD_NUMBER}"
       - name: Build Windows app
         run: npx electron-builder --win nsis zip --x64 --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: windows
+          retention-days: 30
           path: |
             release/*.exe
             release/*.zip
           if-no-files-found: error
 
-  release:
-    needs: [standalone, mac, windows]
+  summary:
+    needs: [mac, windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: out
-          merge-multiple: true
-      - run: ls -la out
-      - name: Write version.json (read by the desktop updater and the multiplayer server)
+      - name: Write version.json (kept with the build; the server reads server/latest.json)
         run: |
+          mkdir -p out
           cat > out/version.json <<JSON
           {
             "label": "${BUILD_LABEL}",
-            "version": "1.21.${BUILD_NUMBER}",
+            "version": "1.30.${BUILD_NUMBER}",
             "build": ${BUILD_NUMBER},
-            "tag": "${RELEASE_TAG}",
-            "commit": "${GITHUB_SHA::7}",
-            "files": {
-              "win": "Vangaurd-${FILE_LABEL}-Setup.exe",
-              "winZip": "Vangaurd-${FILE_LABEL}-win.zip",
-              "macArm": "Vangaurd-${FILE_LABEL}-arm64.dmg",
-              "macX64": "Vangaurd-${FILE_LABEL}-x64.dmg",
-              "html": "Vangaurd-${FILE_LABEL}.html"
-            }
+            "commit": "${GITHUB_SHA::7}"
           }
           JSON
           cat out/version.json
-      - name: Publish the release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: version
+          retention-days: 30
+          path: out/version.json
+      - name: Summary
         run: |
-          gh release delete "$RELEASE_TAG" --yes --cleanup-tag || true
-          cat > notes.md <<NOTES
-          Vangaurd ${BUILD_LABEL}.
-
-          - **Windows**: \`Vangaurd-${FILE_LABEL}-Setup.exe\` installs the game; \`Vangaurd-${FILE_LABEL}-win.zip\` runs without installing. If SmartScreen appears, choose **More info → Run anyway**.
-          - **Mac**: \`Vangaurd-${FILE_LABEL}-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-${FILE_LABEL}-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
-          - **Browser**: \`Vangaurd-${FILE_LABEL}.html\` is the whole game in one file. Open it in Chrome or Edge.
-
-          Online play requires this version. Games from Beta 0.92 on ask to update when they start and close if you do not; older ones need this download.
-          NOTES
-          gh release create "$RELEASE_TAG" out/* --target "$GITHUB_SHA" --latest --title "Vangaurd ${BUILD_LABEL}" --notes-file notes.md
+          {
+            echo "## Vangaurd ${BUILD_LABEL} (build ${BUILD_NUMBER})"
+            echo ""
+            echo "The Mac and Windows apps are in this run's **Artifacts** (private). Upload them to Steam."
+            echo "Nothing was published on GitHub."
+          } >> "$GITHUB_STEP_SUMMARY"

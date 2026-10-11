@@ -4,6 +4,7 @@
 import http from 'node:http';
 import { createModeration, cleanDevice } from './moderation.mjs';
 import { createMailer, codeEmail } from './mailer.mjs';
+import { createOps } from './ops.mjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import pathMod from 'node:path';
@@ -22,27 +23,50 @@ const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
 };
-const VERSION = '3.0.0';
+const VERSION = '3.1.0';
+// Where this server runs (shown in the game and on /health). The main server is NA East from Beta 1.3.
+const REGION = String(process.env.REGION || 'na-east').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 16) || 'na-east';
+const REGION_NAMES = { 'na-east': 'NA East', 'na-west': 'NA West', eu: 'Europe', 'eu-west': 'EU West' };
+// Regions (Beta 1.3). The main server keeps accounts, friends, parties and moderation. Regional match servers
+// (e.g. Europe) run the same code with MAIN_SERVER_URL and INTERNAL_KEY set: they only host matches and ask the
+// main server who a player is (and whether they're banned, Steam, maintenance). The main server lists them to the
+// game with REGIONS='[{"id":"eu","name":"Europe","url":"https://vangaurd-eu.up.railway.app"}]' (same INTERNAL_KEY).
+const INTERNAL_KEY = String(process.env.INTERNAL_KEY || '');
+const MAIN_URL = String(process.env.MAIN_SERVER_URL || '').replace(/\/+$/, '');
+const REGIONAL = !!(MAIN_URL && INTERNAL_KEY);
+let REGIONS = [];
+try {
+  REGIONS = (JSON.parse(process.env.REGIONS || '[]') || []).filter((r) => r && /^[a-z0-9-]{2,16}$/.test(r.id) && /^https?:\/\//.test(r.url))
+    .map((r) => ({ id: r.id, name: String(r.name || REGION_NAMES[r.id] || r.id).slice(0, 24), url: String(r.url).replace(/\/+$/, '') }));
+} catch { REGIONS = []; }
 // ---------- client version gate ----------
-// Only the newest game build may play online. The newest build number is read from the
-// version.json attached to the latest GitHub release (refreshed every 5 minutes).
-// MIN_CLIENT_BUILD sets a floor (and is used if GitHub cannot be reached); VERSION_GATE=off disables the check.
+// Only the newest game build may play online. From Beta 1.3 the game is no longer published on GitHub, so the
+// newest build comes from (the highest wins): server/latest.json (updated with every release, so deploying the
+// server raises it), the build the owner sets in the /admin console, MIN_CLIENT_BUILD, and, only when
+// LATEST_VERSION_URL is set, a version.json fetched from that address every 5 minutes. VERSION_GATE=off disables it.
 const GATE = String(process.env.VERSION_GATE || 'on').toLowerCase() !== 'off';
-const LATEST_URL = process.env.LATEST_VERSION_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest/download/version.json';
-const RELEASE_PAGE = process.env.RELEASE_PAGE_URL || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest';
+const LATEST_URL = process.env.LATEST_VERSION_URL || '';
+const RELEASE_PAGE = process.env.RELEASE_PAGE_URL || null;
 const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 1.04', checkedAt: 0, source: 'env' };
+function raiseLatest(build, label, source) {
+  const b = Math.floor(Number(build));
+  if (!(b > 0) || b < latest.build) return;
+  if (b !== latest.build) log(`latest client build ${latest.build} -> ${b} (${label || ''}, ${source})`);
+  latest.build = b; latest.label = typeof label === 'string' && label ? label.slice(0, 40) : latest.label; latest.source = source;
+}
+try {
+  const shipped = JSON.parse(fs.readFileSync(new URL('./latest.json', import.meta.url), 'utf8'));
+  raiseLatest(shipped.build, shipped.label, 'server');
+} catch (e) { if (e.code !== 'ENOENT') console.error('could not read latest.json:', e.message); }
 async function refreshLatest() {
-  if (!GATE || String(process.env.LATEST_VERSION_URL || '').toLowerCase() === 'off') return;
+  if (!GATE || !LATEST_URL || LATEST_URL.toLowerCase() === 'off') return;
   try {
     const res = await fetch(LATEST_URL, { redirect: 'follow', headers: { 'cache-control': 'no-cache' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const v = await res.json();
     const b = Math.floor(Number(v.build));
     if (Number.isFinite(b) && b > 0) {
-      if (b !== latest.build) log(`latest client build ${latest.build} -> ${b} (${v.label || ''})`);
-      latest.build = Math.max(b, Math.floor(Number(process.env.MIN_CLIENT_BUILD) || 0));
-      latest.label = typeof v.label === 'string' ? v.label.slice(0, 40) : latest.label;
-      latest.source = 'github';
+      raiseLatest(b, v.label, 'url');
     }
     latest.checkedAt = Date.now();
   } catch (e) {
@@ -57,8 +81,8 @@ function clientOutdated(c, msg) {
   c.build = b;
   if (b >= latest.build) return false;
   send(c, {
-    type: 'error', code: 'outdated', latestBuild: latest.build, latestLabel: latest.label, yourBuild: b || null, downloadUrl: RELEASE_PAGE,
-    message: `Your game is out of date. Update to Vangaurd ${latest.label} to play online.`,
+    type: 'error', code: 'outdated', latestBuild: latest.build, latestLabel: latest.label, yourBuild: b || null, downloadUrl: RELEASE_PAGE, steam: !RELEASE_PAGE,
+    message: RELEASE_PAGE ? `Your game is out of date. Update to Vangaurd ${latest.label} to play online.` : `Your game is out of date. Restart Steam to update Vangaurd to ${latest.label}, then play online.`,
   });
   log(`refused outdated client ${c.id} (build ${b || 'none'} < ${latest.build})`);
   return true;
@@ -95,6 +119,14 @@ function saveAccounts(urgent = true) {
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { if (saveTimer) writeAccounts(); if (savesTimer) writeSaves(); mod.flush(); process.exit(0); });
 const NAME_RE = /^[A-Za-z0-9_-]{3,16}$/;
 const RESERVED = new Set(['player', 'admin', 'administrator', 'moderator', 'server', 'vangaurd', 'system', 'bot', 'guest']);
+// Usernames can never contain "Parallel" or "Developer", however they are written: any case, digits for letters
+// (P4ra11el), - or _ in between, doubled letters. Existing accounts keep working; this only stops new ones.
+function nameBlocked(name) {
+  const leet = { 0: 'o', 1: 'l', 3: 'e', 4: 'a', 5: 's', 7: 't', 8: 'b', 9: 'g' };
+  const n = String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/[0-9]/g, (d) => leet[d] || d);
+  const sq = (s) => s.replace(/(.)\1+/g, '$1');
+  return [n, n.replace(/i/g, 'l')].some((v) => ['parallel', 'developer'].some((w) => v.includes(w) || sq(v).includes(sq(w))));
+}
 const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
 function scrypt(pw, salt) {
   return new Promise((res, rej) => crypto.scrypt(String(pw), Buffer.from(salt, 'hex'), 64, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (e, k) => (e ? rej(e) : res(k.toString('hex')))));
@@ -125,13 +157,20 @@ function failed(c) {
   if (!f || now() - f.t > 10 * 60e3) failures.set(c.ip, { n: 1, t: now() }); else f.n++;
 }
 function authOk(c, u, token, created = false) {
+  const key = keyOf(u.name), g = ops.gate(c, key);
+  if (g) return refuseGate(c, g);
   c.account = u.name;
   c.name = u.name;
-  send(c, { type: 'auth_ok', username: u.name, token, created });
+  send(c, { type: 'auth_ok', username: u.name, token, created, developer: ops.isDev(key), moderator: !!mod.roleOf(key) });
   mod.noteDevice(u, c.device);
   goOnline(c);
 }
 function authError(c, code, message) { send(c, { type: 'auth_error', code, message }); }
+// Maintenance or a missing Steam: the game shows its "Login failed" screen with a Retry button.
+function refuseGate(c, g) {
+  send(c, { type: 'auth_error', code: g.code, message: g.message });
+  if (g.code === 'maintenance') send(c, { type: 'maintenance', message: g.message });
+}
 // Banned: refuse (every game version shows the auth_error message; Beta 0.95+ also shows the ban screen).
 function refuseBanned(c, v) {
   const message = mod.banMessage(v);
@@ -142,9 +181,12 @@ async function onRegister(c, msg) {
   if (limited(c)) return authError(c, 'too_many', 'Too many attempts. Wait a few minutes and try again.');
   c.device = cleanDevice(msg.device) || c.device;
   { const b = mod.checkDevice(c.device); if (b) return refuseBanned(c, b); }
+  await ops.noteSteam(c, msg);
   const name = String(msg.username || '').trim(), pw = String(msg.password || '');
+  { const g = ops.gate(c, keyOf(name)); if (g) return refuseGate(c, g); }
   if (!NAME_RE.test(name)) return authError(c, 'bad_name', 'Usernames are 3 to 16 letters, numbers, - or _.');
   if (RESERVED.has(name.toLowerCase())) return authError(c, 'taken', 'That username is taken. Pick another one.');
+  if (nameBlocked(name)) return authError(c, 'bad_name', "That username isn't allowed. Pick another one.");
   if (pw.length < 6 || pw.length > 64) return authError(c, 'bad_password', 'Passwords must be 6 to 64 characters long.');
   const key = name.toLowerCase();
   if (accounts.users[key]) { failed(c); return authError(c, 'taken', 'That username is taken. If it is yours, sign in instead.'); }
@@ -181,6 +223,8 @@ async function onLogin(c, msg) {
   }
   c.device = cleanDevice(msg.device) || c.device;
   { const b = mod.checkAccount(keyOf(u.name), c.device); if (b) return refuseBanned(c, b); }
+  await ops.noteSteam(c, msg);
+  { const g = ops.gate(c, keyOf(u.name)); if (g) return refuseGate(c, g); }
   // (If the start-up check found the email sender broken, sign-in goes on without a code rather than locking
   // every player out; the log says so. Sign-up still needs a working sender.)
   if (mailer.enabled && emailState.checked === false) log(`${u.name} signed in without a code: the email sender is not working (${emailState.detail})`);
@@ -197,11 +241,12 @@ async function onLogin(c, msg) {
   saveAccounts();
   authOk(c, u, newSession(u.name));
 }
-function onResume(c, msg) {
+async function onResume(c, msg) {
   const u = sessionUser(msg.token);
   if (!u) return authError(c, 'session_expired', 'Your sign-in has expired. Please sign in again.');
   c.device = cleanDevice(msg.device) || c.device;
   { const b = mod.checkAccount(keyOf(u.name), c.device); if (b) return refuseBanned(c, b); }
+  await ops.noteSteam(c, msg);
   authOk(c, u, msg.token);
 }
 function onLogout(c, msg) {
@@ -689,7 +734,16 @@ function queueStatus(mode) {
   const q = queues[mode];
   const cd = countdowns[mode];
   const startsIn = cd ? Math.max(0, Math.ceil((cd.endsAt - now()) / 1000)) : null;
-  for (const id of q) send(clients.get(id), { type: 'queue_status', mode, queued: q.length, minimum: MIN_PLAYERS, maximum: MAX_PLAYERS, startsIn });
+  const live = modeMatch(mode), full = !!live && live.players.size >= MAX_PLAYERS;
+  q.forEach((id, i) => send(clients.get(id), { type: 'queue_status', mode, queued: q.length, minimum: MIN_PLAYERS, maximum: MAX_PLAYERS, startsIn: full ? null : startsIn, full, position: i + 1, inMatch: live ? live.players.size : 0, scoreLimit: live?.scoreLimit || null, score: live && !live.ffa ? { ...live.score } : null }));
+}
+// Beta 1.3: each mode has one match running at a time (one "server"). While it has room, players join it in the
+// middle of the game; while it is full (12), new players wait in line for a free spot or for the match to end,
+// and then the next match starts with the players who waited.
+function modeMatch(mode) {
+  let best = null;
+  for (const m of matches.values()) if (m.mode === mode && !m.ended && m.players.size > 0 && (!best || m.players.size > best.players.size)) best = m;
+  return best;
 }
 function removeFromQueue(c) {
   for (const mode of Object.keys(queues)) {
@@ -708,6 +762,19 @@ function stopCountdown(mode) {
 }
 function checkQueue(mode) {
   const q = queues[mode];
+  const live = modeMatch(mode);
+  if (live) {
+    stopCountdown(mode);
+    while (q.length && live.players.size < MAX_PLAYERS && !live.ended) {
+      const c = clients.get(q.shift());
+      if (!c) continue;
+      c.queuedMode = null;
+      addToMatch(live, c, true);
+      if (c.accountKey) pushAround(c.accountKey);
+    }
+    queueStatus(mode);
+    return;
+  }
   if (q.length >= MAX_PLAYERS) { stopCountdown(mode); startMatch(mode); return; }
   if (q.length >= MIN_PLAYERS && !countdowns[mode]) {
     if (COUNTDOWN_S === 0) { startMatch(mode); return; }
@@ -732,22 +799,28 @@ function openMatchFor(mode, c = null) {
       }
     }
   }
-  let best = null;
-  for (const m of matches.values()) {
-    if (m.mode !== mode || m.ended || m.players.size >= MAX_PLAYERS || m.players.size === 0) continue;
-    if (!best || m.players.size > best.players.size) best = m;
-  }
-  return best;
+  const live = modeMatch(mode);
+  return live && live.players.size < MAX_PLAYERS && !queues[mode].length ? live : null;
 }
-function joinQueue(c, msg) {
+async function joinQueue(c, msg) {
   if (clientOutdated(c, msg)) return;
   c.device = cleanDevice(msg.device) || c.device;
-  if (!c.account && msg.token) { const u = sessionUser(msg.token); if (u) { const b = mod.checkAccount(keyOf(u.name), c.device); if (b) return refuseBanned(c, b); c.account = u.name; goOnline(c); } }
-  if (c.account) { const b = mod.checkAccount(keyOf(c.account), c.device); if (b) return mod.kickNow(c, b); }
+  if (REGIONAL) {
+    // a regional match server: the main server checks the player (account, bans, Steam, maintenance)
+    const r = await regionalSession(c, msg);
+    if (r.error === 'banned') return refuseBanned(c, r.ban);
+    if (r.error === 'session_expired') return send(c, { type: 'error', code: 'login_required', message: r.message });
+    if (r.error) { send(c, { type: 'error', code: r.error, message: r.message }); if (r.error === 'maintenance') send(c, { type: 'maintenance', message: r.message }); return; }
+    c.account = r.name; c.accountKey = r.key; c.staff = !!r.staff;
+  }
+  await ops.noteSteam(c, msg);
+  if (!REGIONAL && !c.account && msg.token) { const u = sessionUser(msg.token); if (u) { const b = mod.checkAccount(keyOf(u.name), c.device); if (b) return refuseBanned(c, b); c.account = u.name; goOnline(c); } }
+  if (c.account && !REGIONAL) { const b = mod.checkAccount(keyOf(c.account), c.device); if (b) return mod.kickNow(c, b); }
   if (!c.account) {
     send(c, { type: 'error', code: 'login_required', message: 'Sign in to your Vangaurd account to play online.' });
     return;
   }
+  if (!REGIONAL) { const g = ops.gate(c, keyOf(c.account)); if (g) { send(c, { type: 'error', code: g.code, message: g.message }); if (g.code === 'maintenance') send(c, { type: 'maintenance', message: g.message }); return; } }
   if (c.matchId) leaveMatch(c, false);
   removeFromQueue(c);
   c.name = c.account;
@@ -759,6 +832,8 @@ function joinQueue(c, msg) {
   c.queuedMode = mode;
   if (c.accountKey) pushAround(c.accountKey);
   checkQueue(mode);
+  const lm = modeMatch(mode);
+  if (lm && queues[mode].includes(c.id)) log(`${c.name} is waiting for a spot in the full match ${lm.id} (${queues[mode].indexOf(c.id) + 1} in line)`);
 }
 
 // ---------- matches ----------
@@ -818,7 +893,7 @@ function addToMatch(match, c, inProgress) {
   const p = { id: c.id, key: c.accountKey || keyOf(c.account), name: c.name, team: pickTeam(match, c), health: 100, alive: true, kills: 0, deaths: 0, score: 0, state: null, pos: null, joinedAt: now(), spawnedAt: now() + (match.phase === 'vote' ? LOAD_GRACE_MS : 0), diedAt: 0 };
   match.players.set(c.id, p);
   c.matchId = match.id;
-  mod.matchSeen(match);
+  mod.matchSeen(match); regionSeen(match);
   if (inProgress) {
     sendMatchFound(match, c);
     broadcast(match, { type: 'player_joined', matchId: match.id, player: { id: p.id, name: p.name, team: p.team } }, c.id);
@@ -832,22 +907,24 @@ function leaveMatch(c, notify = true) {
   c.matchId = null;
   if (c.accountKey) setTimeout(() => pushAround(c.accountKey), 0);
   if (!match) return;
-  mod.matchSeen(match);
+  mod.matchSeen(match); regionSeen(match);
   match.players.delete(c.id);
   if (notify) send(c, { type: 'match_left', matchId: match.id });
   broadcast(match, { type: 'player_left', matchId: match.id, playerId: c.id });
   if (match.players.size > 0) { broadcast(match, { type: 'match_update', matchId: match.id, roster: rosterOf(match) }); broadcastVote(match); if (match.ffa) broadcast(match, scoreMsg(match)); }
   else { clearTimeout(match.vote?.timer); spectatorsOut(match, 'Everyone left the match.'); matches.delete(match.id); log(`match ${match.id} closed`); }
+  if (queues[match.mode]?.length) setTimeout(() => checkQueue(match.mode), 0); // a spot opened (or the match closed)
 }
 function endMatch(match, winner) {
   if (match.ended) return;
   match.ended = true;
-  mod.matchSeen(match);
+  mod.matchSeen(match); regionSeen(match);
   const msg = { type: 'match_ended', matchId: match.id, winner, score: { ...match.score } };
   if (match.ffa) { msg.ffa = true; msg.players = boardOf(match); msg.winnerName = match.players.get(winner)?.name || null; msg.scoreLimit = match.scoreLimit; }
   broadcast(match, msg);
   for (const p of match.players.values()) if (p.key) pushSocial(p.key); // "Recently played" now lists this match
   log(`match ${match.id} ended · winner ${winner}`);
+  if (queues[match.mode]?.length) setTimeout(() => checkQueue(match.mode), 0); // the players who waited start the next match
 }
 function addScore(match, team, pts) {
   if (match.ended) return;
@@ -867,7 +944,8 @@ function onHit(c, msg) {
   if (!match || match.ended || match.phase !== 'live') return;
   const attacker = match.players.get(c.id);
   const target = match.players.get(String(msg.targetId));
-  if (!attacker || !target || !target.alive || !attacker.alive || target.id === attacker.id) return;
+  const streak = typeof msg.streak === 'string' && STREAKS.has(msg.streak) && (attacker?.streakUntil || 0) > now();
+  if (!attacker || !target || !target.alive || !(attacker.alive || streak) || target.id === attacker.id) return;
   if (!match.ffa && target.team === attacker.team) return; // no friendly fire
   if (now() - target.spawnedAt < SPAWN_PROTECT_MS) return; // fresh spawn
   const amount = Math.max(0, Math.min(250, num(msg.amount)));
@@ -880,7 +958,7 @@ function onHit(c, msg) {
   target.diedAt = now();
   target.deaths++;
   attacker.kills++;
-  broadcast(match, { type: 'player_killed', matchId: match.id, attackerId: attacker.id, targetId: target.id, zone, attackerName: attacker.name, targetName: target.name });
+  broadcast(match, { type: 'player_killed', matchId: match.id, attackerId: attacker.id, targetId: target.id, zone, attackerName: attacker.name, targetName: target.name, ...(streak ? { streak: msg.streak } : {}) });
   if (match.mode === 'kc') {
     const pos = target.pos || { x: 0, y: 0, z: 0 };
     const tag = { id: newId('t'), x: pos.x, y: pos.y, z: pos.z, team: target.team, victimId: target.id, killerId: attacker.id, createdAt: now() };
@@ -893,6 +971,26 @@ function onHit(c, msg) {
 // Kill Confirmed is free-for-all: any tag except your own confirms a kill for you.
 function tagConfirms(match, tag, p) {
   return match.ffa ? tag.victimId !== p.id : tag.team !== p.team;
+}
+// Beta 1.3 killstreaks: the caller's game runs the streak (it decides hits); the server passes the event on so
+// everyone sees the UAV, airstrike, care package, sentry or helicopter, and lets that player's streak damage count
+// for a while even if they die meanwhile.
+const STREAKS = new Set(['uav', 'cuav', 'care', 'air', 'sentry', 'heli']);
+const STREAK_LIFE = { uav: 35e3, cuav: 30e3, care: 70e3, air: 12e3, sentry: 50e3, heli: 50e3 };
+function onStreak(c, msg) {
+  const match = matches.get(c.matchId);
+  if (!match || match.ended || match.phase !== 'live') return;
+  const p = match.players.get(c.id);
+  const kind = String(msg.kind || ''), phase = String(msg.phase || '').slice(0, 10);
+  if (!p || !STREAKS.has(kind) || !/^[a-z]+$/.test(phase)) return;
+  const t = now();
+  c.streakBucket = Math.min(12, (c.streakBucket ?? 12) + (t - (c.streakT || t)) / 1000 * 6); c.streakT = t;
+  if (c.streakBucket < 1) return; // at most ~6 a second
+  c.streakBucket -= 1;
+  let data = msg.data && typeof msg.data === 'object' && !Array.isArray(msg.data) ? msg.data : {};
+  try { if (JSON.stringify(data).length > 600) data = {}; } catch { data = {}; }
+  if (phase !== 'fire' && phase !== 'taken') p.streakUntil = Math.max(p.streakUntil || 0, t + (STREAK_LIFE[kind] || 30e3));
+  broadcast(match, { type: 'streak', matchId: match.id, playerId: c.id, name: p.name, team: p.team, kind, phase, data }, c.id);
 }
 function onTagPickup(c, msg) {
   const match = matches.get(c.matchId);
@@ -925,7 +1023,7 @@ function onState(c, msg) {
     position: { x, y, z }, x, y, z,
     yaw: num(s.yaw), pitch: num(s.pitch),
     stance: typeof s.stance === 'string' ? s.stance.slice(0, 12) : 'stand',
-    moving: !!s.moving, sprinting: !!s.sprinting, quiet: !!s.quiet,
+    moving: !!s.moving, sprinting: !!s.sprinting, sliding: !!s.sliding, quiet: !!s.quiet,
     weaponId: typeof s.weaponId === 'string' ? s.weaponId.slice(0, 24) : null,
     variant: typeof s.variant === 'string' ? s.variant.slice(0, 24) : null,
     alive: s.alive !== false && p.alive,
@@ -1061,7 +1159,7 @@ function kickClient(c, msg) {
 }
 const mod = createModeration({
   DATA_DIR, accounts, saveAccounts, online, clients, statusOf, keyOf, userOf, nameOf, scrypt, now, log, send,
-  kick: kickClient, saveOf: (key) => saves[key]?.blob || null, spectateOffer,
+  kick: kickClient, kickKey: (key, msg) => (REGIONS.length ? regionKick(key, msg) : Promise.resolve(0)), saveOf: (key) => saves[key]?.blob || null, spectateOffer,
   putSave(key, blob) {
     const cur = saves[key] || { rev: 0 };
     saves[key] = { rev: cur.rev + 1, at: now(), blob };
@@ -1071,12 +1169,115 @@ const mod = createModeration({
   },
 });
 mod.kickNow = (c, b) => kickClient(c, mod.bannedMsg(b));
+// ---------- operations: announcements, maintenance, Steam, developers, latest build (see ops.mjs) ----------
+const ops = createOps({ DATA_DIR, now, log, keyOf, nameOf, userOf, roleOf: (k) => mod.roleOf(k), ownerKey: () => mod.ownerKey(), env: process.env });
+if (ops.state.release) raiseLatest(ops.state.release.build, ops.state.release.label, 'console');
+function broadcastAll(msg) { for (const c of clients.values()) send(c, msg); }
+// ---------- regions: main <-> regional servers ----------
+async function internalPost(base, path, body, ms = 5000) {
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), ms);
+  try {
+    const res = await fetch(`${base}${path}`, { method: 'POST', signal: ctl.signal, headers: { 'content-type': 'application/json', 'x-internal-key': INTERNAL_KEY }, body: JSON.stringify(body) });
+    return await res.json();
+  } finally { clearTimeout(to); }
+}
+const internalOk = (req) => {
+  const given = String(req.headers['x-internal-key'] || '');
+  return !!INTERNAL_KEY && given.length === INTERNAL_KEY.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(INTERNAL_KEY));
+};
+// main: tell the regional servers to disconnect a player (moderator kick or ban); returns how many were kicked
+async function regionKick(key, msg) {
+  let n = 0;
+  await Promise.all(REGIONS.map(async (r) => { try { n += (await internalPost(r.url, '/internal/kick', { key, msg }))?.kicked | 0; } catch (e) { log(`region ${r.id} kick failed: ${e.message}`); } }));
+  return n;
+}
+function regionMaintenance(message) {
+  for (const r of REGIONS) internalPost(r.url, '/internal/maintenance', { message }).catch((e) => log(`region ${r.id} maintenance failed: ${e.message}`));
+}
+// main: who is this token? (asked by a regional server when a player queues there)
+async function internalSession(body) {
+  const u = sessionUser(body.token);
+  if (!u) return { error: 'session_expired', message: 'Your sign-in has expired. Please sign in again.' };
+  const key = keyOf(u.name), device = cleanDevice(body.device);
+  const b = mod.checkAccount(key, device);
+  if (b) return { error: 'banned', ban: b, message: mod.banMessage(b) };
+  const pc = { steam: null };
+  await ops.noteSteam(pc, body);
+  const g = ops.gate(pc, key);
+  if (g) return { error: g.code, message: g.message };
+  return { ok: true, name: u.name, key, staff: ops.staff(key), developer: ops.isDev(key) };
+}
+// regional: remember who played together so reports work on the main server
+const seenTimers = new Map();
+function regionSeen(match) {
+  if (!REGIONAL || seenTimers.has(match.id)) return;
+  seenTimers.set(match.id, setTimeout(() => {
+    seenTimers.delete(match.id);
+    const players = [...match.players.values()].map((p) => ({ key: p.key, name: p.name, team: p.team, kills: p.kills, deaths: p.deaths, score: p.score }));
+    internalPost(MAIN_URL, '/internal/seen', { match: { id: `${REGION}:${match.id}`, mode: match.mode, mapId: match.mapId, createdAt: match.createdAt, ended: match.ended, players } }).catch((e) => log(`could not tell the main server about match ${match.id}: ${e.message}`));
+  }, 1000));
+}
+const sessionCache = new Map();
+async function regionalSession(c, msg) {
+  const t = String(msg.token || '');
+  const hit = sessionCache.get(t);
+  if (hit && now() - hit.at < 60e3 && !msg.steam) return hit.r;
+  let r;
+  try { r = await internalPost(MAIN_URL, '/internal/session', { token: t, device: c.device, steam: msg.steam || null }); } catch (e) { r = { error: 'server', message: "Can't reach the Vangaurd account server. Try again." }; log(`session check failed: ${e.message}`); }
+  if (r?.ok) sessionCache.set(t, { at: now(), r });
+  return r || { error: 'server', message: 'Sign-in check failed.' };
+}
+
+// Maintenance started: everyone but the owner, moderators and developers is signed out and sees "Login failed".
+function maintenanceKick() {
+  const message = ops.maintenanceMessage();
+  let n = 0;
+  for (const c of [...clients.values()]) {
+    const key = c.account ? keyOf(c.account) : null;
+    if (key && ops.staff(key)) continue;
+    send(c, { type: 'maintenance', message });
+    removeFromQueue(c);
+    if (c.matchId) leaveMatch(c, false);
+    if (c.account) { goOffline(c); c.account = null; n++; }
+    setTimeout(() => { try { c.ws.close(4004, 'maintenance'); } catch { /* gone */ } }, 400);
+  }
+  log(`maintenance started: ${n} player(s) signed out`);
+  return n;
+}
+mod.attachOps({
+  view: () => ({ ...ops.view(), latest: { build: latest.build, label: latest.label, source: latest.source }, region: REGION, live: Object.fromEntries(Object.keys(MODES).map((m) => { const lm = modeMatch(m); return [m, { inMatch: lm ? lm.players.size : 0, waiting: queues[m].length, max: MAX_PLAYERS }]; })) }),
+  announce(by, body) {
+    const r = ops.setAnnouncement(by, body);
+    if (!r.error) broadcastAll({ type: 'announcement', announcement: r.announcement });
+    return r;
+  },
+  clearAnnouncement() { ops.clearAnnouncement(); broadcastAll({ type: 'announcement', announcement: null }); },
+  maintenance(by, on, message) {
+    const was = ops.state.maintenance.on, m = ops.setMaintenance(by, on, message);
+    let kicked = 0;
+    if (m.on && !was) { broadcastAll({ type: 'announcement', announcement: null }); kicked = maintenanceKick(); regionMaintenance(ops.maintenanceMessage()); }
+    if (!m.on && was) { broadcastAll({ type: 'maintenance_over' }); log('maintenance over'); }
+    return { maintenance: m, kicked };
+  },
+  steamRequired(on) { ops.setSteamRequired(on); return { required: !!on }; },
+  steamAllow: (key, add) => ops.steamAllowEdit(key, add),
+  dev(key, add) {
+    const changed = ops.devEdit(key, add);
+    for (const c of online.get(key) || []) send(c, { type: 'role', developer: ops.isDev(key), moderator: !!mod.roleOf(key) });
+    return changed;
+  },
+  release(by, body) {
+    const r = ops.setRelease(by, body);
+    if (!r.error) { const prev = latest.build; latest.build = 0; raiseLatest(Math.max(r.release.build, Math.floor(Number(process.env.MIN_CLIENT_BUILD) || 0)), r.release.label, 'console'); if (latest.build < prev) log(`latest client build lowered ${prev} -> ${latest.build} by the console`); }
+    return r;
+  },
+});
 function handle(c, raw) {
   let msg;
   try { msg = JSON.parse(raw); } catch { return; }
   if (!msg || typeof msg !== 'object') return;
   switch (msg.type) {
-    case 'join_queue': joinQueue(c, msg); break;
+    case 'join_queue': joinQueue(c, msg).catch((e) => log(`join error: ${e.message}`)); break;
     case 'cancel_queue': {
       removeFromQueue(c); send(c, { type: 'queue_cancelled' });
       const pt = c.accountKey && parties.get(partyOf.get(c.accountKey));
@@ -1102,6 +1303,7 @@ function handle(c, raw) {
     }
     case 'ping': send(c, { type: 'pong', t: msg.t, seq: msg.seq, serverTime: now() }); break;
     case 'mark': onMark(c, msg); break;
+    case 'streak': onStreak(c, msg); break;
     case 'hello': {
       c.build = Math.floor(num(msg.clientBuild, 0));
       const dev = cleanDevice(msg.device);
@@ -1111,7 +1313,7 @@ function handle(c, raw) {
     case 'report': mod.onReport(c, msg); break;
     case 'register': onRegister(c, msg).catch((e) => { log(`register error: ${e.message}`); authError(c, 'server', 'The server could not create the account. Try again.'); }); break;
     case 'login': onLogin(c, msg).catch((e) => { log(`login error: ${e.message}`); authError(c, 'server', 'The server could not sign you in. Try again.'); }); break;
-    case 'resume': onResume(c, msg); break;
+    case 'resume': onResume(c, msg).catch((e) => { log(`resume error: ${e.message}`); authError(c, 'server', 'The server could not sign you in. Try again.'); }); break;
     case 'social_state': case 'friend_add': case 'friend_accept': case 'friend_decline': case 'friend_remove':
     case 'party_invite': case 'party_accept': case 'party_decline': case 'party_leave': case 'party_kick':
     case 'party_ready_start': case 'party_ready_reply': case 'party_ready_cancel':
@@ -1157,11 +1359,66 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ news: mod.newsPublic() }));
     return;
   }
+  // Main <-> regional servers (need INTERNAL_KEY on both).
+  if (path.startsWith('/internal/') && req.method === 'POST') {
+    if (!internalOk(req)) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('not found'); return; }
+    let body = '';
+    req.on('data', (b) => { body += b; if (body.length > 64 * 1024) req.destroy(); });
+    req.on('end', async () => {
+      let v = null, out = { error: 'Unknown.' };
+      try { v = JSON.parse(body); } catch { /* bad */ }
+      try {
+        if (!v) out = { error: 'Bad JSON.' };
+        else if (path === '/internal/session' && !REGIONAL) out = await internalSession(v);
+        else if (path === '/internal/seen' && !REGIONAL && v.match?.id) {
+          const m = v.match;
+          mod.matchSeen({ id: String(m.id).slice(0, 40), mode: m.mode, mapId: m.mapId, createdAt: m.createdAt, ended: !!m.ended, players: new Map((Array.isArray(m.players) ? m.players : []).slice(0, 24).map((p) => [String(p.key), { key: String(p.key), name: String(p.name || p.key).slice(0, 20), team: p.team, kills: p.kills | 0, deaths: p.deaths | 0, score: p.score | 0 }])) });
+          out = { ok: true };
+        } else if (path === '/internal/kick' && REGIONAL) {
+          let n = 0;
+          const msg = v.msg && typeof v.msg === 'object' ? v.msg : { type: 'kicked', message: 'A moderator disconnected you from the server.' };
+          for (const c of [...clients.values()]) if (c.accountKey && c.accountKey === String(v.key)) { kickClient(c, msg); n++; }
+          for (const [t, e] of sessionCache) if (e.r?.key === String(v.key)) sessionCache.delete(t);
+          out = { ok: true, kicked: n };
+        } else if (path === '/internal/maintenance' && REGIONAL) {
+          const message = String(v.message || 'Vangaurd is undergoing maintenance. Please try again later.').slice(0, 240);
+          let n = 0;
+          for (const c of [...clients.values()]) {
+            if (c.staff) continue;
+            send(c, { type: 'maintenance', message }); removeFromQueue(c); if (c.matchId) leaveMatch(c, false);
+            setTimeout(() => { try { c.ws.close(4004, 'maintenance'); } catch { /* gone */ } }, 400); n++;
+          }
+          sessionCache.clear();
+          out = { ok: true, kicked: n };
+        }
+      } catch (e) { out = { error: e.message }; }
+      res.writeHead(out.error ? 400 : 200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(out));
+    });
+    return;
+  }
+  // The release pipeline can tell the server about a new build (needs RELEASE_KEY; off when it is not set).
+  if (path === '/release' && req.method === 'POST') {
+    const key = String(process.env.RELEASE_KEY || '');
+    const given = String(req.headers['x-release-key'] || '');
+    if (!key || given.length !== key.length || !crypto.timingSafeEqual(Buffer.from(given), Buffer.from(key))) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('not found'); return; }
+    let body = '';
+    req.on('data', (b) => { body += b; if (body.length > 4096) req.destroy(); });
+    req.on('end', () => {
+      let v = null;
+      try { v = JSON.parse(body); } catch { /* bad */ }
+      const r = v ? ops.setRelease('pipeline', v) : { error: 'Bad JSON.' };
+      if (!r.error) raiseLatest(r.release.build, r.release.label, 'pipeline');
+      res.writeHead(r.error ? 400 : 200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(r.error ? { error: r.error } : { ok: true, latest: { build: latest.build, label: latest.label } }));
+    });
+    return;
+  }
   if (path === '/' || path === '/health' || path === '/status') {
     let players = 0;
     for (const m of matches.values()) players += m.players.size;
     const body = JSON.stringify({
-      ok: true, service: 'vangaurd-matchmaking', version: VERSION,
+      ok: true, service: 'vangaurd-matchmaking', version: VERSION, region: REGION, regional: REGIONAL, regions: REGIONS.map((r) => r.id), maintenance: ops.state.maintenance.on, announcement: ops.announcementView(), requireSteam: !!ops.state.steam.required,
       queued: queues.tdm.length + queues.kc.length, queuedByMode: { tdm: queues.tdm.length, kc: queues.kc.length },
       matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, matches: matches.size, playersInMatches: players, connected: clients.size,
       maps: MAPS, mapVoteSeconds: VOTE_S, versionGate: GATE, accounts: Object.keys(accounts.users).length, saves: Object.keys(saves).length, email: mailer.enabled ? mailer.kind : false, emailReady: emailState.ok, emailStatus: emailState.detail, emailRequired: EMAIL_REQUIRED, online: online.size, parties: parties.size, accountsPersistent: !!process.env.DATA_DIR, minClientBuild: latest.build, latestLabel: latest.label, latestSource: latest.source, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
@@ -1197,7 +1454,10 @@ wss.on('connection', (ws, req) => {
     clients.delete(c.id);
   });
   ws.on('error', () => {});
-  send(c, { type: 'connected', playerId: c.id, version: VERSION, matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label, emailAuth: mailer.enabled });
+  send(c, {
+    type: 'connected', playerId: c.id, version: VERSION, matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label, emailAuth: mailer.enabled, steamUpdates: !RELEASE_PAGE,
+    region: REGION, regionName: REGION_NAMES[REGION] || REGION.toUpperCase(), regions: !REGIONAL && REGIONS.length ? [{ id: REGION, name: REGION_NAMES[REGION] || REGION, url: null }, ...REGIONS] : null, announcement: ops.announcementView(), maintenance: ops.state.maintenance.on ? { message: ops.maintenanceMessage() } : null, requireSteam: !!ops.state.steam.required,
+  });
 });
 setInterval(() => {
   for (const ws of wss.clients) {
@@ -1207,4 +1467,4 @@ setInterval(() => {
   }
 }, 30000);
 
-server.listen(PORT, () => log(`vangaurd matchmaking ${VERSION} on :${PORT} · min ${MIN_PLAYERS} · max ${MAX_PLAYERS}`));
+server.listen(PORT, () => log(`vangaurd matchmaking ${VERSION} on :${PORT} · ${REGION_NAMES[REGION] || REGION}${REGIONAL ? ` (match server for ${MAIN_URL})` : REGIONS.length ? ` · regions ${REGIONS.map((r) => r.id).join(', ')}` : ''} · min ${MIN_PLAYERS} · max ${MAX_PLAYERS}`));

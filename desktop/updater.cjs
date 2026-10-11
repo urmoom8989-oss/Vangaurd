@@ -58,11 +58,13 @@ async function download(url, file, onProgress, fetchImpl = fetch) {
   return file;
 }
 
-function createUpdater({ app, dialog, shell, log = () => {}, fetchImpl, platform = process.platform, arch = process.arch, run = spawn }) {
+function createUpdater({ app, dialog, shell, log = () => {}, fetchImpl, platform = process.platform, arch = process.arch, run = spawn, steam = false }) {
   let busy = false;
   const doFetch = fetchImpl || ((...a) => fetch(...a));
 
   async function check(win, reason = 'launch') {
+    // The Steam version is updated by Steam (Beta 1.3).
+    if (steam) return { steam: true };
     if (busy) return { busy: true };
     busy = true;
     const live = () => win && !win.isDestroyed();

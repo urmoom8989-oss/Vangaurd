@@ -1,14 +1,19 @@
-# Vangaurd matchmaking server 3.0
+# Vangaurd matchmaking server 3.1
 
-This is the online server for Vangaurd Beta 1.2. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
+This is the online server for Vangaurd Beta 1.3. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
 
 What it does:
 
 - **Map vote.** Every new match opens with a 10-second vote on 3 maps picked at random from the 6 in the game. The map with the most votes wins; ties and no-votes are settled at random. Everyone in the match gets the same choice, and players who join later are sent straight to the chosen map.
 - **Kill Confirmed is free-for-all.** No teams: every player scores on their own. Grabbing anyone else's dog tag scores for you, grabbing your own denies it. First to 20 wins.
 - **Team Deathmatch** is unchanged: two teams, server-side health and kills, first to 50.
-- Matches start with 2 players, and late joiners drop into a running match.
-- **Only the newest game build can play online.** The game sends its build number when it queues. The server reads the newest build from `version.json` on the latest GitHub release (every 5 minutes) and turns older builds away with an "update to play online" message. Builds from before Beta 0.9 send no build number and are always turned away.
+- **One match per mode (Beta 1.3).** Matches start with 2 players. While the match has room (fewer than 12), new players drop into it mid-game. While it is full, they wait in line and the game shows their place; they join when a spot opens, and when the match ends the players in line start the next match.
+- **Killstreaks (Beta 1.3).** UAV, Counter-UAV, care package, airstrike, sentry gun and attack helicopter call-ins are relayed to the match, and a player's killstreak can still damage others for a while after they die.
+- **Lobby announcements and maintenance (Beta 1.3).** The console's **Server** tab shows a banner at the bottom of every player's lobby (an announcement, or a "Downtime begins soon" warning with the start time) and switches maintenance on and off: everyone but the owner, moderators and developers is signed out and sees "Login failed · Vangaurd is undergoing maintenance" with a Retry button.
+- **Steam (Beta 1.3).** **Require Steam** in the Server tab refuses players whose game wasn't started from Steam, except the owner and the players on the "play without Steam" list there.
+- **Developers (Beta 1.3).** Developers (the owner, and anyone added in the Server tab) get the in-game replay recorder and can sign in during maintenance.
+- **Usernames** can never contain "Parallel" or "Developer" (any spelling with digits, - or _ in between). Existing accounts keep working.
+- **Only the newest game build can play online.** The game sends its build number when it queues. The newest build is the highest of `latest.json` in this folder (updated with every release, so deploying the server raises it), the build set in the console's Server tab, `MIN_CLIENT_BUILD`, and a `version.json` at `LATEST_VERSION_URL` if that is set. Older builds are turned away and told to update through Steam. Builds from before Beta 0.9 send no build number and are always turned away.
 - **Ping marks** (middle mouse in the game) are relayed to the player's teammates.
 - **Accounts.** The game asks players to sign in (or create an account) before the main menu. Usernames are unique (case-insensitive): a taken name can only be used by signing in to that account, and online play needs a signed-in account (the in-match name is always the account name). Passwords are stored only as salted scrypt hashes; the game keeps a sign-in token, never the password. Ten failed attempts from one address pause sign-in for ten minutes.
 - **Email codes.** Creating an account needs an email address and the 6-digit code sent to it; until an email sender is set up (see [Email codes](#email-codes)) new accounts are paused and the game says so. Every sign-in (with the username or the email, plus the password) asks for a fresh code sent to the account's email. Accounts made before email existed are asked to add one the next time they sign in. **Forgot password?** in the game sends a code to the account's email and sets a new password (and signs the account out everywhere else). Codes last 10 minutes and allow 5 tries; at most 6 codes an hour go to one address.
@@ -28,9 +33,11 @@ The Railway service `opus-of-duty` (project Vangaurd) deploys this folder automa
 
 The game points at `https://opus-of-duty-production-f963.up.railway.app` by default.
 
+From Beta 1.3 the main server runs in Railway's US East region (service **Settings → Region**) and `REGION` is `na-east`. To add Europe: create a second service from this folder in an EU region with its own volume, set `REGION=eu`, `MAIN_SERVER_URL=<main server address>` and `INTERNAL_KEY=<a long random secret>`, then on the main service set the same `INTERNAL_KEY` and `REGIONS=[{"id":"eu","name":"Europe","url":"<EU service address>"}]`. Games pick the closer region by ping.
+
 ## Check that it worked
 
-Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"3.0.0"`, `"email"` (`"gmail"`, `"smtp"` or `"brevo"` once email is set up, `false` before) with `"emailReady":true` and `"emailStatus"` saying why not if it is `false`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
+Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"3.1.0"`, `"region":"na-east"`, `"email"` (`"gmail"`, `"smtp"` or `"brevo"` once email is set up, `false` before) with `"emailReady":true` and `"emailStatus"` saying why not if it is `false`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
 
 ## Anti-cheat console (`/admin`)
 
@@ -72,8 +79,15 @@ Set these as Railway service variables if you want to change the defaults.
 | `KC_SCORE_LIMIT` | `20` | Confirmed kills needed to win Kill Confirmed |
 | `TDM_SCORE_LIMIT` | `50` | Kills needed to win Team Deathmatch |
 | `VERSION_GATE` | `on` | `off` lets every game build play online |
-| `MIN_CLIENT_BUILD` | `1` | Lowest game build allowed. Used when GitHub cannot be reached, and as a floor otherwise |
-| `LATEST_VERSION_URL` | latest release `version.json` | Where the newest build number is read from (`off` to only use `MIN_CLIENT_BUILD`) |
+| `MIN_CLIENT_BUILD` | `1` | Lowest game build allowed (a floor under `latest.json`) |
+| `LATEST_VERSION_URL` | unset | Optional address of a `version.json` to read the newest build from every 5 minutes |
+| `RELEASE_PAGE_URL` | unset | Download page shown to outdated games. Unset: they are told to update through Steam |
+| `RELEASE_KEY` | unset | Lets a release pipeline `POST /release` `{ "build": 27, "label": "Beta 1.4" }` with the header `x-release-key` |
+| `REGION` | `na-east` | The region this server is in (shown on `/health` and in the game) |
+| `REGIONS` | unset | Main server only: regional match servers, e.g. `[{"id":"eu","name":"Europe","url":"https://vangaurd-eu.up.railway.app"}]`. The game plays on the closest one (by ping); accounts, friends and moderation stay on the main server |
+| `MAIN_SERVER_URL` | unset | Makes this a regional match server for that main server (e.g. the Europe service). Needs `INTERNAL_KEY` |
+| `INTERNAL_KEY` | unset | Shared secret between the main server and its regional servers (same value on all of them) |
+| `STEAM_WEB_API_KEY` / `STEAM_APP_ID` | unset | With both set, "Require Steam" also checks each player's Steam ticket with Steam |
 | `DATA_DIR` | `./data` | Where `accounts.json`, `saves.json` and `moderation.json` are kept. **Must be on a volume** or accounts and saves are lost on every deploy (Railway: volume mounted at `/data`, `DATA_DIR=/data`) |
 | `SESSION_DAYS` | `60` | Days a "Stay signed in" token lasts without being used |
 | `ALLOWED_ORIGINS` | unset | Optional comma-separated WebSocket Origin allowlist. Leave unset for the standalone and desktop builds |

@@ -23386,7 +23386,8 @@ var Rv = "opus-of-duty.settings.v1", EP = class {
   "inspect",
   "scoreboard",
   "pause",
-  "ping"
+  "ping",
+  "killstreak"
 ], Gw = {
   moveForward: ["KeyW", "ArrowUp"],
   moveBack: ["KeyS", "ArrowDown"],
@@ -23413,7 +23414,8 @@ var Rv = "opus-of-duty.settings.v1", EP = class {
   inspect: ["KeyI"],
   scoreboard: ["Tab"],
   pause: ["KeyP"],
-  ping: ["Mouse1"]
+  ping: ["Mouse1"],
+  killstreak: ["Digit4"]
 }, pP = /* @__PURE__ */ new Set([
   "Space",
   "Tab",
@@ -27859,7 +27861,8 @@ var Pr, lH, IM, hc, Nt, eg = YA((() => {
     "network",
     "audio",
     "hud",
-    "gamemode"
+    "gamemode",
+    "extras"
   ]), hc = Object.freeze({
     radius: 0.35,
     standHeight: 1.8,
@@ -32921,6 +32924,20 @@ varying vec3 vCamoN;`).replace("base *= 1.0 + ( sWr.b - 0.5 ) * 1.6 * sMatC.y;",
     an.groundY = (x, y, z) => i.groundFast(x, y, z), an.onFootstep = (x, y) => {
       R.dead || R.quiet || !R.near || !x?.pos || A.events.emit("ai:footstep", { position: x.pos.clone(), speed: y, stance: R.crouch > 0.5 ? "crouch" : "stand", surface: "concrete", agent: null, friendly: !!R.friendly, key: R });
     };
+    // Beta 1.3: other players' prone and slide. The animator only knows stand and crouch, so the finished
+    // world-space pose is turned as a whole (lying forward for prone, leaning back for a slide) with the
+    // head, arms and gun turned back so they still aim where the player looks. Hitboxes follow the pose.
+    R.proneK = 0, R.slideK = 0;
+    const stV = [new b(), new b(), new b(), new b()], stQ = [new Oe(), new Oe()], upperB = ["neck", "head", "clavL", "upperarmL", "forearmL", "handL", "clavR", "upperarmR", "forearmR", "handR", "weapon", "mag"].map((n2) => ZA[n2]).filter((x) => x != null), stance = (dt, o) => {
+      const tp = o.prone ? 1 : 0, ts = o.slide && !o.prone ? 1 : 0, k2 = Math.min(1, dt * 7);
+      if (R.proneK += (tp - R.proneK) * k2, R.slideK += (ts - R.slideK) * Math.min(1, dt * 10), R.proneK < 0.01 && R.slideK < 0.01) return;
+      const P = body.pose, pv = ZA.pelvis, f = stV[0].set(Math.sin(R.bodyYaw), 0, Math.cos(R.bodyYaw)), ax = stV[1].set(f.z, 0, -f.x), th = 1.36 * R.proneK - 0.62 * R.slideK, back = th * 0.4, piv = stV[2].copy(P.p[pv]), q = stQ[0].setFromAxisAngle(ax, th);
+      for (let i2 = 0; i2 < P.p.length; i2++) P.p[i2].sub(piv).applyQuaternion(q).add(piv), P.q[i2].premultiply(q);
+      const nk = ZA.neck != null ? stV[3].copy(P.p[ZA.neck]) : stV[3].copy(piv), q2 = stQ[1].setFromAxisAngle(ax, -th * (R.proneK > 0.5 ? 1 : 0.75));
+      for (const i2 of upperB) P.p[i2].sub(nk).applyQuaternion(q2).add(nk), P.q[i2].premultiply(q2);
+      const gy = R.pos.y, drop = (piv.y - gy - 0.2) * R.proneK + 0.32 * R.slideK, sh = -0.62 * R.proneK + 0.18 * R.slideK + back * 0;
+      for (let i2 = 0; i2 < P.p.length; i2++) P.p[i2].y -= drop, P.p[i2].x += f.x * sh, P.p[i2].z += f.z * sh;
+    };
     const sync = () => {
       body.group.position.copy(R.pos), body.group.rotation.set(0, 0, 0), body.applyPose(), body.updateHitboxes(), body.updateAnchors(Ar.muzzle, Ar.eject);
     }, feed = (o) => {
@@ -32933,17 +32950,18 @@ varying vec3 vCamoN;`).replace("base *= 1.0 + ( sWr.b - 0.5 ) * 1.6 * sMatC.y;",
         const l2 = jo(ay - R.bodyYaw);
         Math.abs(l2) > 0.55 && (R.bodyYaw = oE(R.bodyYaw, ay - Math.sign(l2) * 0.25, 4 * dt));
       }
-      R.crouch = o.crouch || 0, n.pos.copy(R.pos), n.vel.set(vx, 0, vz), n.bodyYaw = R.bodyYaw, n.aimYaw = ay, n.aimPitch = vs(o.pitch || 0, -0.9, 0.9), n.crouch = R.crouch, n.lean = 0, n.weapon = o.sprint ? "low" : "aim", n.headYaw = null, n.headPitch = 0;
+      const lay = o.prone || o.slide;
+      R.crouch = o.prone ? 0 : o.slide ? 1 : o.crouch || 0, n.pos.copy(R.pos), lay ? n.vel.set(0, 0, 0) : n.vel.set(vx, 0, vz), n.bodyYaw = R.bodyYaw, n.aimYaw = ay, n.aimPitch = vs(o.pitch || 0, -0.9, 0.9), n.crouch = R.crouch, n.lean = 0, n.weapon = o.sprint ? "low" : "aim", n.headYaw = null, n.headPitch = 0;
     };
     return R.place = (o) => {
-      R.pos.copy(o.pos), R.bodyYaw = (o.yaw || 0) + Math.PI, feed({ ...o, vel: null }), an.initialized = !1, an.update(1 / 60, A.time.t), sync();
+      R.pos.copy(o.pos), R.bodyYaw = (o.yaw || 0) + Math.PI, feed({ ...o, vel: null }), an.initialized = !1, an.update(1 / 60, A.time.t), R.proneK = o.prone ? 1 : 0, R.slideK = o.slide ? 1 : 0, stance(1, o), sync();
     }, R.update = (o) => {
       const dt = Math.min(0.1, o.dt || 1 / 60);
       if (R.dead) {
         R.ragdoll.sleeping || (R.ragdoll.step(dt, i), R.ragdoll.writePose(body.pose), R.pos.copy(R.ragdoll.position).setY(R.pos.y), sync());
         return;
       }
-      R.pos.copy(o.pos), feed({ ...o, dt }), R.prevPose.copy(body.pose), an.update(dt, A.time.t), sync();
+      R.pos.copy(o.pos), feed({ ...o, dt }), R.prevPose.copy(body.pose), an.update(dt, A.time.t), stance(dt, o), sync();
     }, R.kill = (o = {}) => {
       if (R.dead) return;
       R.dead = !0, R.deadT = A.time.t;
@@ -45123,6 +45141,7 @@ var I3, b2, u3, Q3, E3, JB, go, dc, wI, p3, D2, G9 = YA((() => {
     ["leanLeft", "Lean left"],
     ["leanRight", "Lean right"],
     ["inspect", "Inspect weapon"],
+    ["killstreak", "Use killstreak"],
     ["scoreboard", "Mission stats"],
     ["pause", "Pause"]
   ], D2 = [
@@ -46995,7 +47014,7 @@ function T9(A) {
     c.stage === "match-dead" && (UA += `:RESPAWN:${Math.ceil(R)}`);
     const KA = c.stage === "matchmaking" ? `${N.queued}/${N.maximum}/${N.startsIn}/${N.minimum}/${r.kc}` : fA ? r.wave : -1;
     if (!(c.stage === AA && DA === CA && L === KA && F === UA)) {
-      AA = c.stage, CA = DA, L = KA, F = UA, r.matchType === "range" ? (gt.wave = "RNG", gt.hostiles = null, gt.timer = "INFINITE AMMO", gt.objective = "FIRING RANGE · PAUSE → LOADOUTS TO CHANGE WEAPONS") : c.stage === "matchmaking" ? (gt.wave = null, gt.hostiles = null, gt.timer = N.startsIn === null ? N.minimum && N.queued < N.minimum ? `WAITING FOR ${N.minimum - N.queued} MORE` : `SEARCHING · ${N.queued}/${N.maximum}` : N.startsIn > 0 ? `STARTING IN ${N.startsIn}` : "STARTING MATCH", gt.objective = `${r.kc ? "KILL CONFIRMED · FFA" : "TEAM DEATHMATCH"} · SEARCHING FOR PLAYERS`) : r.ffa ? (gt.wave = r.gg ? "GG" : "KC", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : r.gg ? `GUN ${Math.min(r.scoreLimit, (r.score[r.playerTeam] || 0) + 1)} OF ${r.scoreLimit}` : `FIRST TO ${r.scoreLimit}`, gt.objective = ffaLine()) : r.matchType === "tdm" || r.matchType === "domination" ? (gt.wave = r.matchType === "domination" ? "DOM" : r.kc ? "KC" : "TDM", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : `FIRST TO ${r.scoreLimit}`, gt.objective = r.matchType === "domination" ? `BLUE ${r.score.blue} — RED ${r.score.red}  ·  ${$A}` : `BLUE ${r.score.blue} — RED ${r.score.red}`) : c.stage === "warmup" ? (gt.wave = null, gt.hostiles = null, gt.timer = `Assault in ${cF(DA)}`, gt.objective = kA()) : c.stage === "intermission" ? (gt.wave = r.wave, gt.hostiles = null, gt.timer = c.lastWaveFinal ? "Relief column inbound" : `Next wave in ${cF(DA)}`, gt.objective = kA()) : (gt.wave = void 0, gt.hostiles = void 0, gt.timer = void 0, gt.objective = kA());
+      AA = c.stage, CA = DA, L = KA, F = UA, r.matchType === "range" ? (gt.wave = "RNG", gt.hostiles = null, gt.timer = "INFINITE AMMO", gt.objective = "FIRING RANGE · PAUSE → LOADOUTS TO CHANGE WEAPONS") : c.stage === "matchmaking" ? (gt.wave = null, gt.hostiles = null, gt.timer = N.full ? `MATCH FULL · #${N.position || 1} IN LINE` : N.startsIn === null ? N.minimum && N.queued < N.minimum ? `WAITING FOR ${N.minimum - N.queued} MORE` : `SEARCHING · ${N.queued}/${N.maximum}` : N.startsIn > 0 ? `STARTING IN ${N.startsIn}` : "STARTING MATCH", gt.objective = N.full ? `${r.kc ? "KILL CONFIRMED" : "TEAM DEATHMATCH"} · MATCH FULL (${N.inMatch || N.maximum || 12}/${N.maximum || 12}) · WAITING FOR A SPOT` : `${r.kc ? "KILL CONFIRMED · FFA" : "TEAM DEATHMATCH"} · SEARCHING FOR PLAYERS`) : r.ffa ? (gt.wave = r.gg ? "GG" : "KC", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : r.gg ? `GUN ${Math.min(r.scoreLimit, (r.score[r.playerTeam] || 0) + 1)} OF ${r.scoreLimit}` : `FIRST TO ${r.scoreLimit}`, gt.objective = ffaLine()) : r.matchType === "tdm" || r.matchType === "domination" ? (gt.wave = r.matchType === "domination" ? "DOM" : r.kc ? "KC" : "TDM", gt.hostiles = null, gt.timer = c.stage === "match-dead" ? `RESPAWNING IN ${Math.max(1, Math.ceil(R))}` : `FIRST TO ${r.scoreLimit}`, gt.objective = r.matchType === "domination" ? `BLUE ${r.score.blue} — RED ${r.score.red}  ·  ${$A}` : `BLUE ${r.score.blue} — RED ${r.score.red}`) : c.stage === "warmup" ? (gt.wave = null, gt.hostiles = null, gt.timer = `Assault in ${cF(DA)}`, gt.objective = kA()) : c.stage === "intermission" ? (gt.wave = r.wave, gt.hostiles = null, gt.timer = c.lastWaveFinal ? "Relief column inbound" : `Next wave in ${cF(DA)}`, gt.objective = kA()) : (gt.wave = void 0, gt.hostiles = void 0, gt.timer = void 0, gt.objective = kA());
       try {
         O.setMatchInfo(gt);
       } catch (he) {
@@ -47049,7 +47068,10 @@ function T9(A) {
         queued: Number.isFinite(O.queued) ? O.queued : N.queued,
         minimum: Number.isFinite(O.minimum) ? O.minimum : N.minimum,
         maximum: Number.isFinite(O.maximum) ? O.maximum : N.maximum,
-        startsIn: Number.isFinite(O.startsIn) ? O.startsIn : null
+        startsIn: Number.isFinite(O.startsIn) ? O.startsIn : null,
+        full: !!O.full,
+        position: Number.isFinite(O.position) ? O.position : null,
+        inMatch: Number.isFinite(O.inMatch) ? O.inMatch : null
       }, lA();
     }), EA("network:score", (O) => {
       if (tA && O.matchId === tA.matchId && r.ffa && (O.ffa || Array.isArray(O.players))) {
@@ -48881,7 +48903,7 @@ function vgBotName() {
   }
   return b.order[b.i++ % b.order.length];
 }
-var VGD = { label: "Beta 1.21", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 1.3", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -48895,24 +48917,34 @@ var camoDefs = [
   { id: "tiger", name: "Tiger Stripe", lv: 25, kind: "tiger", pal: ["#6f7448", "#3f4a26", "#1b1c14"], rough: 0.64, metal: 0.08, scale: 2.6, desc: "Jungle stripes that break up the outline." },
   { id: "digiwood", name: "Digital Woodland", lv: 30, kind: "digital", pal: ["#5c6b3d", "#3c4a2a", "#7e7b56", "#26261f"], thr: [0.5, 0.57, 0.63], P: [3, 3], px: 48, rough: 0.66, metal: 0.06, scale: 2.4, desc: "Pixelated forest greens." },
   { id: "digidesert", name: "Digital Desert", lv: 35, kind: "digital", pal: ["#cbb68b", "#a68e63", "#7d6b4f", "#ded2b0"], thr: [0.48, 0.57, 0.64], P: [3, 3], px: 48, rough: 0.68, metal: 0.06, scale: 2.4, desc: "Pixelated sand tones." },
+  { id: "circuit", name: "Circuit", lv: 12, kind: "circuit", rough: 0.42, metal: 0.3, glow: 0, fx: 1, scale: 2.4, live: !0, desc: "A circuit board with pulses of light racing along the traces (animated)." },
   { id: "splinter", name: "Splinter", lv: 40, kind: "splinter", pal: ["#8b8f73", "#5b6b3c", "#6f5b3f", "#9a9a80"], rain: "#34402a", rough: 0.62, metal: 0.08, scale: 2.4, desc: "Sharp shards with rain lines." },
   { id: "hex", name: "Hex Plate", lv: 45, kind: "hex", pal: ["#2c3034", "#3b4147", "#16181a"], rough: 0.42, metal: 0.35, scale: 5, desc: "Dark hexagon armour plating." },
+  { id: "aurora", name: "Aurora", lv: 22, kind: "aurora", rough: 0.36, metal: 0.2, glow: 0.9, flow: [0.03, 0], fx: 2, scale: 2.2, live: !0, desc: "Northern lights that drift and change colour (animated)." },
   { id: "redtiger", name: "Red Tiger", lv: 50, kind: "tiger", pal: ["#8a1f1f", "#5a1212", "#140d0d"], rough: 0.5, metal: 0.12, scale: 2.6, desc: "Blood red stripes." },
+  { id: "inferno", name: "Inferno", lv: 32, kind: "inferno", rough: 0.7, metal: 0.05, glow: 2.2, flow: [0, -0.08], fx: 3, scale: 2.2, live: !0, desc: "Flickering flames that climb the gun (animated)." },
   { id: "ocean", name: "Ocean", lv: 55, kind: "blotch", pal: ["#2a5276", "#183654", "#4a7ea4", "#0d1d31"], thr: [0.48, 0.57, 0.64], P: [3, 2], rough: 0.5, metal: 0.12, scale: 3, desc: "Deep sea blues." },
   { id: "nightops", name: "Night Ops", lv: 60, kind: "blotch", pal: ["#22262e", "#14161c", "#323846", "#0a0b0e"], thr: [0.5, 0.56, 0.64], P: [3, 2], rough: 0.55, metal: 0.15, scale: 3, desc: "Near-black for after dark." },
+  { id: "frost", name: "Frostbite", lv: 47, kind: "frost", rough: 0.22, metal: 0.25, glow: 0.12, fx: 4, scale: 2.6, live: !0, desc: "Cracked ice that glitters as it catches the light (animated)." },
   { id: "autumn", name: "Autumn Leaf", lv: 65, kind: "leaves", pal: ["#4a3524", "#c4621f", "#e0a33b", "#8a3b17", "#6b4a22"], rough: 0.66, metal: 0.05, scale: 2.4, desc: "Fallen leaves in orange and rust." },
   { id: "carbon", name: "Carbon Fiber", lv: 70, kind: "carbon", pal: ["#101113", "#4d525b"], rough: 0.3, metal: 0.25, scale: 9, desc: "Glossy woven carbon." },
+  { id: "plasma", name: "Plasma", lv: 62, kind: "plasma", rough: 0.3, metal: 0.2, glow: 2.1, flow: [0.02, 0.035], fx: 5, scale: 2.2, live: !0, desc: "Electric violet veins pulsing with energy (animated)." },
   { id: "cobalt", name: "Cobalt", lv: 75, kind: "brushed", pal: ["#2654b0", "#173a80"], rough: 0.3, metal: 0.85, scale: 2, desc: "Brushed blue anodised metal." },
   { id: "forged", name: "Forged Steel", lv: 80, kind: "forged", pal: ["#c9ccd0", "#4a4d52"], rough: 0.26, metal: 0.92, scale: 2.6, desc: "Folded steel with flowing layers." },
+  { id: "liquidgold", name: "Liquid Gold", lv: 77, kind: "liquid", rough: 0.14, metal: 1, glow: 0.1, flow: [0.01, 0.02], fx: 6, scale: 2, live: !0, desc: "Molten gold that ripples and flows (animated)." },
   { id: "gold", name: "Gold", lv: 85, kind: "brushed", pal: ["#e2b445", "#a8791f"], rough: 0.2, metal: 1, scale: 2, desc: "Polished gold. Earned, not bought." },
+  { id: "rain", name: "Digital Rain", lv: 92, kind: "rain", rough: 0.4, metal: 0.15, glow: 0.4, fx: 7, scale: 2.4, live: !0, desc: "Green code raining down the gun (animated)." },
   { id: "prism", name: "Prism", lv: 90, kind: "prism", rough: 0.18, metal: 0.65, glow: 0.18, flow: [0.06, 0.035], scale: 2.2, live: !0, desc: "Shifting holographic colours (animated)." },
   { id: "molten", name: "Molten", lv: 95, kind: "molten", rough: 0.78, metal: 0.05, glow: 2.6, flow: [0, 0.035], scale: 2.6, live: !0, desc: "Cooling rock over glowing lava (animated)." },
   { id: "nebula", name: "Nebula", lv: 100, kind: "nebula", rough: 0.32, metal: 0.25, glow: 1.6, flow: [0.018, 0.01], scale: 2.2, live: !0, desc: "A drifting starfield. Level 100 only (animated)." },
+  { id: "supernova", name: "Supernova", lv: 120, kind: "supernova", rough: 0.3, metal: 0.2, glow: 1.8, fx: 8, scale: 2.2, live: !0, desc: "Exploding stars that pulse and twinkle. Level 120 (animated)." },
   // Challenge camos (Beta 1.2): unlocked by headshot and longshot kills (35 m or more) instead of level.
   { id: "headhunter", name: "Headhunter", lv: 0, ch: { hs: 100 }, kind: "digital", pal: ["#8c1414", "#4a0b0b", "#b32a22", "#140707"], thr: [0.48, 0.57, 0.64], P: [3, 3], px: 40, rough: 0.5, metal: 0.12, scale: 2.4, desc: "Challenge: 100 headshot kills. Crimson digital for people who aim high." },
   { id: "farsight", name: "Farsight", lv: 0, ch: { ls: 50 }, kind: "hex", pal: ["#1d6c74", "#123f46", "#0a2125"], rough: 0.36, metal: 0.45, scale: 5, desc: "Challenge: 50 longshot kills (35 m or more). Deep teal plating." },
-  { id: "deadeye", name: "Deadeye", lv: 0, ch: { hs: 250, ls: 100 }, kind: "forged", pal: ["#f2c14e", "#2a1d08"], rough: 0.22, metal: 0.95, scale: 2.4, desc: "Master challenge: 250 headshot kills and 100 longshot kills. Gold-and-black folded steel." }
+  { id: "deadeye", name: "Deadeye", lv: 0, ch: { hs: 250, ls: 100 }, kind: "forged", pal: ["#f2c14e", "#2a1d08"], rough: 0.22, metal: 0.95, glow: 0.12, flow: [0.035, 0], fx: 9, scale: 2.4, live: !0, desc: "Master challenge: 250 headshot kills and 100 longshot kills. Gold-and-black folded steel with a glint that sweeps along the gun (animated)." }
 ];
+// Level camos in level order (Beta 1.3 added animated ones in between), challenge camos last.
+camoDefs.sort((a, b) => (a.ch ? 1 : 0) - (b.ch ? 1 : 0) || (a.ch ? 0 : a.lv - b.lv));
 // Challenge progress for a camo (null for level camos) and whether a camo is unlocked.
 function camoChallenge(d) {
   if (!d?.ch) return null;
@@ -49074,6 +49106,86 @@ function camoPixels(A, e = 256) {
       let w = [10 + C * 120 * m, 6 + C * 40, 22 + C * 170 * (1 - m * 0.5)];
       Q.has(d * e + f) && (w = [255, 250, 240]), a(f, d, w);
     }
+  } else if (A.kind === "circuit") {
+    // Beta 1.3: printed circuit board, copper traces and pads on dark green
+    const h = camoFbm(o, 6, 6, 3), I = camoRng(o + 3), G2 = 32, cs = e / G2, M2 = new Float32Array(e * e), seg = (x0, y0, x1, y1, w) => {
+      const minx = Math.max(0, Math.floor(Math.min(x0, x1) - w - 1)), maxx = Math.min(e - 1, Math.ceil(Math.max(x0, x1) + w + 1)), miny = Math.max(0, Math.floor(Math.min(y0, y1) - w - 1)), maxy = Math.min(e - 1, Math.ceil(Math.max(y0, y1) + w + 1)), dx = x1 - x0, dy = y1 - y0, L2 = dx * dx + dy * dy || 1;
+      for (let yy = miny; yy <= maxy; yy++) for (let xx = minx; xx <= maxx; xx++) {
+        const t2 = Math.max(0, Math.min(1, ((xx - x0) * dx + (yy - y0) * dy) / L2)), ex = x0 + dx * t2 - xx, ey = y0 + dy * t2 - yy, dd = Math.sqrt(ex * ex + ey * ey);
+        dd < w && (M2[yy * e + xx] = Math.max(M2[yy * e + xx], w > 2.6 ? 2 : 1));
+      }
+    };
+    for (let k = 0; k < 46; k++) {
+      let cx = Math.floor(I() * G2), cy = Math.floor(I() * G2), dir = I() < 0.5 ? 0 : 1;
+      const px0 = (cx + 0.5) * cs, py0 = (cy + 0.5) * cs;
+      seg(px0, py0, px0, py0, 3.2);
+      for (let st = 0, n2 = 2 + Math.floor(I() * 4); st < n2; st++) {
+        const len = 1 + Math.floor(I() * 5), sg = I() < 0.5 ? -1 : 1, nx = Math.max(0, Math.min(G2 - 1, cx + (dir ? 0 : sg * len))), ny = Math.max(0, Math.min(G2 - 1, cy + (dir ? sg * len : 0)));
+        seg((cx + 0.5) * cs, (cy + 0.5) * cs, (nx + 0.5) * cs, (ny + 0.5) * cs, 1.25), cx = nx, cy = ny, dir = 1 - dir;
+      }
+      seg((cx + 0.5) * cs, (cy + 0.5) * cs, (cx + 0.5) * cs, (cy + 0.5) * cs, 3.2);
+    }
+    const chips = [];
+    for (let k = 0; k < 5; k++) chips.push([I() * e, I() * e, 14 + I() * 22, 10 + I() * 16]);
+    for (let Q = 0; Q < e; Q++) for (let d = 0; d < e; d++) {
+      const v = h(d / e, Q / e), m = M2[Q * e + d];
+      let C = [16 + v * 14, 46 + v * 20, 32 + v * 14];
+      for (const [x2, y2, w2, h2] of chips) d > x2 && d < x2 + w2 && Q > y2 && Q < y2 + h2 && (C = [18, 20, 22], (d - x2 < 2 || Q - y2 < 2) && (C = [60, 64, 66]));
+      m === 1 && (C = [196 + v * 30, 132 + v * 20, 58]), m === 2 && (C = [232, 190, 102]), a(d, Q, C);
+    }
+  } else if (A.kind === "aurora") {
+    const h = camoFbm(o, 3, 2, 4), I = camoFbm(o + 4, 2, 2, 3), u = camoRng(o + 9), st = new Set();
+    for (let k = 0; k < 90; k++) st.add(Math.floor(u() * e) * e + Math.floor(u() * e));
+    for (let Q = 0; Q < e; Q++) for (let d = 0; d < e; d++) {
+      const f = d / e, p = Q / e, v = Math.sin((p * 3 + h(f, p) * 2.6) * Math.PI * 2) * 0.5 + 0.5, k2 = Math.pow(v, 5), c2 = I(f, p);
+      let C = s([8, 14, 34], s([40, 255, 160], [150, 80, 255], Math.min(1, Math.max(0, (c2 - 0.35) * 2.4))), k2);
+      st.has(Q * e + d) && k2 < 0.2 && (C = [230, 236, 255]), a(d, Q, C);
+    }
+  } else if (A.kind === "inferno") {
+    const h = camoFbm(o, 3, 2, 5), I = camoFbm(o + 6, 5, 3, 3);
+    for (let Q = 0; Q < e; Q++) for (let d = 0; d < e; d++) {
+      const f = d / e, p = Q / e, w = h(f + (I(f, p) - 0.5) * 0.35, p), t2 = Math.max(0, Math.min(1, Math.pow(w, 2.4) * 2.1 - 0.12));
+      a(d, Q, t2 < 0.33 ? s([12, 6, 6], [120, 16, 8], t2 / 0.33) : t2 < 0.66 ? s([120, 16, 8], [240, 110, 20], (t2 - 0.33) / 0.33) : s([240, 110, 20], [255, 236, 150], (t2 - 0.66) / 0.34));
+    }
+  } else if (A.kind === "frost") {
+    const h = camoVor(o, 34), I = camoFbm(o + 2, 6, 6, 3);
+    for (let Q = 0; Q < e; Q++) for (let d = 0; d < e; d++) {
+      const f = d / e, p = Q / e, [d1, d2, r] = h(f, p), edge = d2 - d1, n2 = I(f, p);
+      let C = s([120, 168, 205], [212, 234, 248], r * 0.7 + n2 * 0.3);
+      edge < 0.012 ? C = [250, 254, 255] : edge < 0.03 && (C = s(C, [236, 248, 255], 0.55)), a(d, Q, C);
+    }
+  } else if (A.kind === "plasma") {
+    const h = camoFbm(o, 3, 3, 5), I = camoFbm(o + 5, 4, 4, 4);
+    for (let Q = 0; Q < e; Q++) for (let d = 0; d < e; d++) {
+      const f = d / e, p = Q / e, r1 = 1 - Math.abs(h(f, p) - 0.5) * 2, r2 = 1 - Math.abs(I(f, p) - 0.5) * 2, v = Math.pow(Math.max(r1, r2 * 0.9), 9);
+      a(d, Q, v > 0.75 ? s([200, 130, 255], [255, 245, 255], (v - 0.75) * 4) : s([16, 6, 30], [200, 130, 255], v / 0.75));
+    }
+  } else if (A.kind === "liquid") {
+    const h = camoFbm(o, 3, 3, 5), I = camoFbm(o + 3, 2, 2, 3);
+    for (let Q = 0; Q < e; Q++) for (let d = 0; d < e; d++) {
+      const f = d / e, p = Q / e, v = Math.sin((f * 2 + p * 3 + h(f, p) * 4.5 + I(f, p) * 1.5) * Math.PI * 2) * 0.5 + 0.5;
+      a(d, Q, v < 0.5 ? s([96, 62, 12], [226, 170, 60], v * 2) : s([226, 170, 60], [255, 242, 186], Math.pow((v - 0.5) * 2, 2.2)));
+    }
+  } else if (A.kind === "rain") {
+    const I = camoRng(o + 1), cw = 8, ch = 10, cols = e / cw, rows = Math.ceil(e / ch), cells = [];
+    for (let k = 0; k < cols * rows; k++) {
+      let bits = 0;
+      for (let q = 0; q < 15; q++) I() < 0.5 && (bits |= 1 << q);
+      cells.push({ bits, b: I(), on: I() < 0.82 });
+    }
+    for (let Q = 0; Q < e; Q++) for (let d = 0; d < e; d++) {
+      const cx = Math.floor(d / cw), cy = Math.floor(Q / ch) % rows, c2 = cells[cy * cols + cx], lx = Math.floor((d % cw) / 2) - 1, ly = Math.floor((Q % ch) / 2) - 0;
+      let C = [2, 10, 5];
+      c2.on && lx >= 0 && lx < 3 && ly >= 0 && ly < 5 && c2.bits >> ly * 3 + lx & 1 && (C = c2.b > 0.85 ? [150, 255, 170] : s([12, 70, 30], [40, 190, 80], c2.b)), a(d, Q, C);
+    }
+  } else if (A.kind === "supernova") {
+    const h = camoFbm(o, 4, 4, 4), u = camoRng(o + 2), st = new Set();
+    for (let k = 0; k < 120; k++) st.add(Math.floor(u() * e) * e + Math.floor(u() * e));
+    for (let Q = 0; Q < e; Q++) for (let d = 0; d < e; d++) {
+      const f = d / e - 0.5, p = Q / e - 0.5, r = Math.hypot(f, p), ang = Math.atan2(p, f), n2 = h(d / e, Q / e), arm = Math.pow(Math.sin(ang * 5 + r * 26 - n2 * 5) * 0.5 + 0.5, 3) * Math.max(0, 1 - r * 2.1), core = Math.max(0, 1 - r * 7);
+      let C = s([6, 4, 18], s([255, 70, 140], [255, 170, 60], n2), Math.min(1, arm * 1.6));
+      C = s(C, [255, 250, 230], Math.min(1, core * 1.4)), st.has(Q * e + d) && r > 0.3 && (C = [255, 255, 255]), a(d, Q, C);
+    }
   }
   return t;
 }
@@ -49100,7 +49212,7 @@ function camoSwatch(A, e = 96) {
 }
 function camoUniforms(A) {
   const e = camoDef(A);
-  return { uCamoTex: { value: camoTexture(e.id) }, uCamoScale: { value: e.scale || 3 }, uCamoRough: { value: e.rough ?? 0.6 }, uCamoMetal: { value: e.metal ?? 0.1 }, uCamoGlow: { value: e.glow || 0 }, uCamoFlowX: { value: e.flow?.[0] || 0 }, uCamoFlowY: { value: e.flow?.[1] || 0 }, uCamoTime: camoTimeU };
+  return { uCamoTex: { value: camoTexture(e.id) }, uCamoScale: { value: e.scale || 3 }, uCamoRough: { value: e.rough ?? 0.6 }, uCamoMetal: { value: e.metal ?? 0.1 }, uCamoGlow: { value: e.glow || 0 }, uCamoFlowX: { value: e.flow?.[0] || 0 }, uCamoFlowY: { value: e.flow?.[1] || 0 }, uCamoFx: { value: e.fx || 0 }, uCamoTime: camoTimeU };
 }
 function camoShaderQ(A = {}) {
   return {
@@ -49114,10 +49226,55 @@ uniform float uCamoGlow;
 uniform float uCamoFlowX;
 uniform float uCamoFlowY;
 uniform float uCamoTime;
+uniform float uCamoFx;
+float camoHash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+float camoHash1(float x) { return fract(sin(x * 91.3458) * 47453.5453); }
+vec3 camoHue(vec3 c, float a) { const vec3 k = vec3(0.57735); float ca = cos(a); return c * ca + cross(k, c) * sin(a) + k * dot(k, c) * (1.0 - ca); }
 `,
     colorCode: `${A.colorCode || ""}
         vec3 camoP = vObjPos * uCamoScale + vec3(uCamoFlowX, uCamoFlowY, uCamoFlowX) * uCamoTime;
+        float camoT = uCamoTime;
+        if (uCamoFx > 5.5 && uCamoFx < 6.5) camoP += vec3(sin(camoP.y * 5.0 + camoT * 1.3), sin(camoP.z * 4.0 + camoT * 0.9), sin(camoP.x * 6.0 - camoT * 1.1)) * 0.05;
         vec3 camoC = wpnTri(uCamoTex, camoP, tw);
+        float camoL = max(camoC.r, max(camoC.g, camoC.b));
+        vec3 camoEC = vec3(0.0);
+        if (uCamoFx > 0.5) {
+          if (uCamoFx < 1.5) {
+            float camoTr = smoothstep(0.5, 0.7, camoL);
+            float camoW = fract(vObjPos.z * 1.6 + vObjPos.y * 0.8 - camoT * 0.45 + camoHash1(floor(vObjPos.x * 24.0)) * 0.3);
+            camoEC = vec3(0.25, 1.0, 0.85) * camoTr * (smoothstep(0.82, 0.98, camoW) * 3.0 + 0.12);
+          } else if (uCamoFx < 2.5) {
+            camoC = max(camoHue(camoC, sin(camoT * 0.35 + vObjPos.z * 2.0) * 0.9), vec3(0.0));
+          } else if (uCamoFx < 3.5) {
+            float camoFl = 0.72 + 0.28 * sin(camoT * 11.0 + camoP.x * 4.0) * sin(camoT * 6.3 + camoP.y * 3.0);
+            camoEC = camoC * smoothstep(0.35, 0.8, camoL) * camoFl * 0.9;
+          } else if (uCamoFx < 4.5) {
+            float camoH = camoHash(floor(camoP * 34.0));
+            camoEC = vec3(0.85, 0.95, 1.0) * pow(max(0.0, sin(camoT * 2.6 + camoH * 60.0)), 28.0) * step(0.8, camoH) * 4.0;
+          } else if (uCamoFx < 5.5) {
+            float camoPu = 0.55 + 0.45 * sin(camoT * 3.2 - vObjPos.z * 9.0);
+            camoEC = mix(camoC, vec3(1.0), 0.25) * smoothstep(0.45, 0.85, camoL) * camoPu * 1.6;
+          } else if (uCamoFx < 6.5) {
+            float camoB = vObjPos.z * 1.3 + vObjPos.y * 0.5 - (fract(camoT * 0.18) * 3.4 - 1.7);
+            camoEC = vec3(1.0, 0.86, 0.5) * exp(-camoB * camoB * 30.0) * 0.9 * smoothstep(0.4, 0.8, camoL);
+          } else if (uCamoFx < 7.5) {
+            float camoR = camoHash1(floor((camoP.x + camoP.z) * 11.0));
+            float camoPh = fract(-camoP.y * 0.8 + camoT * (0.3 + camoR * 0.5) + camoR * 7.0);
+            float camoTrl = pow(camoPh, 5.0);
+            float camoGm = smoothstep(0.2, 0.45, camoL);
+            camoC *= 0.35 + 0.65 * camoTrl;
+            camoEC = vec3(0.3, 1.0, 0.5) * camoGm * (camoTrl * 2.2 + step(0.97, camoPh) * 2.0);
+          } else if (uCamoFx < 8.5) {
+            float camoPu = 0.6 + 0.4 * sin(camoT * 1.7 + vObjPos.z * 3.0);
+            float camoH = camoHash(floor(camoP * 30.0));
+            camoEC = camoC * smoothstep(0.55, 0.95, camoL) * camoPu * 1.2 + vec3(1.0, 0.9, 0.8) * pow(max(0.0, sin(camoT * 3.1 + camoH * 50.0)), 30.0) * step(0.85, camoH) * 3.0;
+            camoC = max(camoHue(camoC, sin(camoT * 0.25) * 0.35), vec3(0.0));
+          } else {
+            float camoB = vObjPos.z * 1.2 + vObjPos.y * 0.6 - (fract(camoT * 0.2) * 3.2 - 1.6);
+            float camoGd = smoothstep(0.45, 0.8, camoL);
+            camoEC = vec3(1.0, 0.82, 0.42) * (exp(-camoB * camoB * 36.0) * 1.8 + 0.06 + 0.06 * sin(camoT * 2.0 + vObjPos.z * 6.0)) * camoGd;
+          }
+        }
         diffuseColor.rgb = camoC * (0.9 + G.r * 0.2);
 `,
     roughCode: `${A.roughCode || ""}
@@ -49127,7 +49284,7 @@ uniform float uCamoTime;
         metalnessFactor = mix(uCamoMetal, metalnessFactor, wear);
 `,
     emissiveCode: `${A.emissiveCode || ""}
-        totalEmissiveRadiance += camoC * uCamoGlow * smoothstep(0.45, 0.85, max(camoC.r, max(camoC.g, camoC.b))) * (0.8 + 0.2 * sin(uCamoTime * 2.2 + vObjPos.z * 14.0));
+        totalEmissiveRadiance += camoC * uCamoGlow * smoothstep(0.45, 0.85, max(camoC.r, max(camoC.g, camoC.b))) * (0.8 + 0.2 * sin(uCamoTime * 2.2 + vObjPos.z * 14.0)) + camoEC;
 `
   };
 }
@@ -49277,8 +49434,11 @@ function pgAttFits(A, e, t) {
   const s = A === "secondary" || A === "pistol" ? "pistol" : "rifle";
   return !(i.frames && !i.frames.includes(s) || a.frames && !a.frames.includes(s));
 }
-function pgAttOk(A, e, t) {
-  return pgAttFits(A, e, t) && pgLevel().level >= (pgAttOpt(e, t).lv || 1);
+function pgAttOk(A, e, t, gun = null) {
+  if (!pgAttFits(A, e, t)) return !1;
+  if (pgLevel().level >= (pgAttOpt(e, t).lv || 1)) return !0;
+  const g = gun || pgSlot()?.[A === "pistol" || A === "secondary" ? "secondary" : "primary"], wl = wpnAttLv(e, t);
+  return !!g && wl != null && wpnStat(g).level >= wl;
 }
 function pgSlots() {
   const A = lwData(), e = A.classes;
@@ -49352,7 +49512,7 @@ function pgAddXp(A, e = "", t = !0) {
     try {
       const hud = pgCtx?.services.hud;
       hud?.levelUp ? hud.levelUp({ level: a, from: i, unlocked: s }) : hud?.notify?.(`LEVEL UP · LEVEL ${a}${s.length ? ` · Unlocked: ${s.join(", ")}` : ""}`, { kind: "banner", duration: 4.5 });
-      pgCtx?.services.audio?.ui?.("success");
+      pgCtx?.services.audio?.ui?.("notify");
     } catch {
     }
     try {
@@ -49381,9 +49541,13 @@ function iJ(A, e = !1, dist = null) {
   Za.kills++, e && Za.headshots++, dist != null && dist >= 35 && (Za.longshots = (Za.longshots | 0) + 1);
   const t = String(A || "").startsWith("pistol") ? "pistol" : "rifle";
   Za.weapons[t] ||= { kills: 0 }, Za.weapons[t].kills++, om(), pgAddXp($3 + (e ? 50 : 0), "kill");
+  // Beta 1.3: weapon levels and challenges
+  const vid = wpnVariantFor(A), lng = dist != null && dist >= 35;
+  vid && wpnAddXp(vid, 100 + (e ? 50 : 0) + (lng ? 50 : 0));
+  chEvent("kill", { cls: vid ? WPN_CLASS[vid] || null : null, head: !!e, long: lng, nade: /grenade|frag/i.test(String(A || "")), mounted: typeof vgMount < "u" && !!vgMount.on });
   // challenge camos finished by this kill
   for (const c of camoDefs) if (c.ch && !before.includes(c) && camoUnlocked(c)) try {
-    pgCtx?.services.hud?.banner?.(`${c.name} camo unlocked`, { kicker: "Challenge complete", sub: c.desc.replace(/^[^:]*:\s*/, "").split(".")[0], duration: 4 }), pgCtx?.services.audio?.ui?.("success");
+    pgCtx?.services.hud?.banner?.(`${c.name} camo unlocked`, { kicker: "Challenge complete", sub: c.desc.replace(/^[^:]*:\s*/, "").split(".")[0], duration: 4 }), pgCtx?.services.audio?.ui?.("notify");
   } catch {
   }
   return Z3();
@@ -49391,13 +49555,1356 @@ function iJ(A, e = !1, dist = null) {
 function aJ() {
   Za.deaths++, om();
 }
+/* ------------------------------------------------------------------ Beta 1.3: weapon levels */
+// Every gun has its own level (1 – 20) earned with kills: 100 XP a kill, +50 for a headshot, +50 for a longshot.
+// A gun's level unlocks attachments for that gun early (they still unlock for every gun at the operator level).
+var WPN_MAX = 20;
+var WPN_ATT_LV = { "optic:reflex": 2, "suppressor:muzzle": 3, "grip:tactical": 4, "barrel:extended": 5, "optic:scope": 6, "suppressor:heavy": 8, "grip:heavy": 9, "barrel:precision": 11, "optic:night": 13 };
+var WPN_CLASS = { ar7: "ar", br4: "ar", smg9: "smg", lmg60: "lmg", dmr14: "sniper", sr50: "sniper", sg12: "shotgun", p9: "pistol", mp20: "pistol", hc50: "pistol", p3b: "pistol" };
+var WPN_CLASS_NAME = { ar: "assault rifles", smg: "SMGs", lmg: "LMGs", sniper: "marksman or sniper rifles", shotgun: "shotguns", pistol: "pistols" };
+function wpnCost(l) {
+  return 300 + 60 * (l - 1);
+}
+function wpnStat(id) {
+  const w = typeof Za == "object" && Za && Za.wpn && Za.wpn[id] || null, total = Math.max(0, Math.floor(w?.xp || 0));
+  let l = 1, x = total;
+  for (; l < WPN_MAX && x >= wpnCost(l); ) x -= wpnCost(l), l++;
+  const max = l >= WPN_MAX;
+  return { id, level: l, xp: max ? 0 : x, need: max ? 0 : wpnCost(l), progress: max ? 1 : x / wpnCost(l), kills: w?.kills | 0, total, max };
+}
+function wpnName(id) {
+  try {
+    return lwById("rifle", id)?.name || lwById("pistol", id)?.name || String(id || "").toUpperCase();
+  } catch {
+    return String(id || "");
+  }
+}
+// The variant behind a kill's weapon id ("rifle", "rifle:smg", "pistol" …): the gun in that slot right now.
+function wpnVariantFor(weaponId) {
+  const s = String(weaponId || "");
+  try {
+    if (s.startsWith("pistol")) return sB?.pistol?.variantId || null;
+    if (s.startsWith("rifle")) return sB?.rifle?.variantId || null;
+  } catch {
+  }
+  return null;
+}
+function wpnAttLv(slot, id) {
+  return WPN_ATT_LV[`${slot}:${id}`] ?? null;
+}
+// Unlocks reached at a weapon level (attachment names).
+function wpnUnlocksAt(level) {
+  const out = [];
+  for (const [k, v] of Object.entries(WPN_ATT_LV)) if (v === level) {
+    const [sl, id] = k.split(":");
+    out.push(pgAttOpt(sl, id)?.name || id);
+  }
+  return out;
+}
+function wpnAddXp(id, amount, kill = !0) {
+  if (!id || !(amount > 0) || typeof Za != "object" || !Za) return;
+  Za.wpn && typeof Za.wpn == "object" || (Za.wpn = {});
+  const w = Za.wpn[id] ||= { xp: 0, kills: 0 }, before = wpnStat(id).level;
+  w.xp = Math.max(0, (w.xp | 0) + Math.round(amount)), kill && (w.kills = (w.kills | 0) + 1), om();
+  const after = wpnStat(id).level;
+  if (after > before) {
+    const un = [];
+    for (let l = before + 1; l <= after; l++) un.push(...wpnUnlocksAt(l));
+    try {
+      pgCtx?.services.hud?.banner?.(`${wpnName(id)} · Level ${after}`, { kicker: after >= WPN_MAX ? "Weapon mastered" : "Weapon level up", sub: un.length ? `Unlocked for this gun: ${un.join(", ")}` : after >= WPN_MAX ? "Maximum weapon level" : `${(wpnStat(id).need - wpnStat(id).xp).toLocaleString()} XP to level ${after + 1}`, duration: 3.6 }), pgCtx?.services.audio?.ui?.("notify");
+    } catch {
+    }
+    for (let l = before + 1; l <= after; l++) chEvent("wlevel", {});
+    try {
+      pgCtx?.events.emit("progress:weapon-level", { id, level: after, from: before, unlocked: un });
+    } catch {
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ Beta 1.3: daily and weekly challenges */
+// Three daily challenges (new ones at local midnight) and three weekly ones (new on Monday). They are picked from
+// the date, so everyone gets the same set; progress is kept with your progression (and your cloud save).
+var CH_DAILY = [
+  { t: "kills", n: [15, 20, 25], xp: 1500, text: (n) => `Get ${n} kills` },
+  { t: "class", n: [8, 10, 12], xp: 2000, cls: ["ar", "smg", "lmg", "sniper", "shotgun", "pistol"], text: (n, c) => `Get ${n} kills with ${WPN_CLASS_NAME[c]}` },
+  { t: "head", n: [5, 8], xp: 2000, text: (n) => `Get ${n} headshot kills` },
+  { t: "long", n: [3, 5], xp: 2000, text: (n) => `Get ${n} longshot kills (35 m or more)` },
+  { t: "win", n: [1, 2], xp: 2000, text: (n) => n > 1 ? `Win ${n} matches` : "Win a match" },
+  { t: "play", n: [2, 3], xp: 1500, text: (n) => `Finish ${n} matches` },
+  { t: "streak", n: [5, 7], xp: 2500, text: (n) => `Get a ${n}-kill streak` },
+  { t: "ks", n: [2, 3], xp: 2000, text: (n) => `Call in ${n} killstreaks` },
+  { t: "mount", n: [3, 5], xp: 2000, text: (n) => `Get ${n} kills while mounted` },
+  { t: "nade", n: [2, 3], xp: 2000, text: (n) => `Get ${n} grenade kills` }
+];
+var CH_WEEKLY = [
+  { t: "kills", n: [120, 150], xp: 8000, text: (n) => `Get ${n} kills` },
+  { t: "class", n: [50, 60], xp: 9000, cls: ["ar", "smg", "lmg", "sniper", "shotgun", "pistol"], text: (n, c) => `Get ${n} kills with ${WPN_CLASS_NAME[c]}` },
+  { t: "head", n: [40, 50], xp: 9000, text: (n) => `Get ${n} headshot kills` },
+  { t: "long", n: [20, 25], xp: 9000, text: (n) => `Get ${n} longshot kills (35 m or more)` },
+  { t: "win", n: [8, 10], xp: 10000, text: (n) => `Win ${n} matches` },
+  { t: "ks", n: [12, 15], xp: 9000, text: (n) => `Call in ${n} killstreaks` },
+  { t: "wlevel", n: [5, 8], xp: 8000, text: (n) => `Earn ${n} weapon levels` },
+  { t: "mount", n: [15, 20], xp: 8000, text: (n) => `Get ${n} kills while mounted` }
+];
+function chDayKey(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function chWeekStart(d = new Date()) {
+  const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return s.setDate(s.getDate() - (s.getDay() + 6) % 7), s;
+}
+function chWeekKey(d = new Date()) {
+  return "w" + chDayKey(chWeekStart(d));
+}
+function chPick(pool, key, count) {
+  let s = 0;
+  for (const c of key) s = Math.imul(s ^ c.charCodeAt(0), 2654435761) >>> 0;
+  const r = () => (s = Math.imul(s ^ s >>> 15, 2246822519) + 3266489917 >>> 0, (s >>> 8) / 16777216), bag = pool.slice(), out = [];
+  for (; out.length < count && bag.length; ) {
+    const t = bag.splice(Math.floor(r() * bag.length), 1)[0], n = t.n[Math.floor(r() * t.n.length)], cls = t.cls ? t.cls[Math.floor(r() * t.cls.length)] : null;
+    out.push({ id: `${key}:${t.t}`, t: t.t, n, cls, xp: t.xp + (n === t.n[t.n.length - 1] && t.n.length > 1 ? 500 : 0), text: t.text(n, cls), prog: 0, done: !1 });
+  }
+  return out;
+}
+// Current daily and weekly sets (rolled over automatically), with saved progress.
+function chState() {
+  if (typeof Za != "object" || !Za) return { d: { key: "", list: [] }, w: { key: "", list: [] } };
+  Za.ch && typeof Za.ch == "object" || (Za.ch = {});
+  const dk = chDayKey(), wk = chWeekKey();
+  let dirty = !1;
+  (!Za.ch.d || Za.ch.d.key !== dk || !Array.isArray(Za.ch.d.list)) && (Za.ch.d = { key: dk, list: chPick(CH_DAILY, dk, 3) }, dirty = !0), (!Za.ch.w || Za.ch.w.key !== wk || !Array.isArray(Za.ch.w.list)) && (Za.ch.w = { key: wk, list: chPick(CH_WEEKLY, wk, 3) }, dirty = !0), dirty && om();
+  return Za.ch;
+}
+function chTimeLeft(weekly) {
+  const now = new Date(), end = weekly ? chWeekStart(now) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  end.setDate(end.getDate() + (weekly ? 7 : 1));
+  const ms = Math.max(0, end - now), h = Math.floor(ms / 36e5), d = Math.floor(h / 24);
+  return d >= 1 ? `${d}d ${h % 24}h` : h >= 1 ? `${h}h ${Math.floor(ms / 6e4) % 60}m` : `${Math.max(1, Math.floor(ms / 6e4))}m`;
+}
+// Game events feed the challenges: kill {cls, head, long, nade, mounted}, win, play, streak {n}, ks, mount, wlevel.
+function chEvent(type, e = {}) {
+  if (typeof Za != "object" || !Za) return;
+  let st;
+  try {
+    st = chState();
+  } catch {
+    return;
+  }
+  const done = [];
+  for (const c of [...st.d.list, ...st.w.list]) {
+    if (c.done) continue;
+    let add = 0, set = null;
+    type === "kill" ? (c.t === "kills" && (add = 1), c.t === "class" && e.cls === c.cls && (add = 1), c.t === "head" && e.head && (add = 1), c.t === "long" && e.long && (add = 1), c.t === "nade" && e.nade && (add = 1), c.t === "mount" && e.mounted && (add = 1)) : type === "streak" ? c.t === "streak" && (set = Math.max(c.prog | 0, e.n | 0)) : c.t === type && (add = 1);
+    if (!add && set == null) continue;
+    c.prog = Math.min(c.n, set != null ? set : (c.prog | 0) + add), c.prog >= c.n && (c.done = !0, done.push(c));
+  }
+  om();
+  for (const c of done) {
+    try {
+      pgCtx?.services.hud?.banner?.("Challenge complete", { kicker: st.w.list.includes(c) ? "Weekly challenge" : "Daily challenge", sub: `${c.text} · +${c.xp.toLocaleString()} XP`, duration: 3.8 }), pgCtx?.services.audio?.ui?.("notify");
+    } catch {
+    }
+    pgAddXp(c.xp, "Challenge complete", !1);
+    try {
+      pgCtx?.events.emit("progress:challenge", { id: c.id, text: c.text, xp: c.xp });
+    } catch {
+    }
+  }
+}
+/* ------------------------------------------------------------------ Beta 1.3: killstreaks */
+// Pick 3 per loadout. Earned by kills in a row (gun, grenade or melee kills; killstreak kills don't count) and
+// kept until used, even after you die. "Use killstreak" (4 / d-pad up) calls in the next one ready.
+var KS_DEFS = [
+  { id: "uav", name: "UAV", kills: 4, lv: 1, desc: "Shows every enemy on the minimap for 30 seconds. Online, your team sees them too." },
+  { id: "cuav", name: "Counter-UAV", kills: 5, lv: 5, desc: "Jams enemy minimaps and shuts down enemy UAVs for 25 seconds." },
+  { id: "care", name: "Care Package", kills: 6, lv: 1, desc: "Mark a spot and a crate drops there. Hold Interact on it for a random killstreak." },
+  { id: "air", name: "Airstrike", kills: 7, lv: 1, desc: "Mark a spot: two jets carpet-bomb a line through it." },
+  { id: "sentry", name: "Sentry Gun", kills: 8, lv: 10, desc: "An automatic turret in front of you that guards the spot for 45 seconds." },
+  { id: "heli", name: "Attack Helicopter", kills: 10, lv: 15, desc: "A gunship circles the map for 45 seconds and fires at enemies." }
+];
+var KS_DEFAULT = ["uav", "care", "air"];
+var KS_ICON = {
+  uav: '<path d="M12 3.5v17M4 11.5l8-2.4 8 2.4M8.2 19l3.8-1.2 3.8 1.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="7" r="1.4" fill="currentColor"/>',
+  cuav: '<circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 12l5-5M12 4.5v3M5 18l14-12" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  care: '<path d="M7 11h10v8H7z M7 14.5h10 M12 11v8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 9c1.2-4 12.8-4 14 0M7 11 5 9M17 11l2-2M12 11V5" fill="none" stroke="currentColor" stroke-width="1.3"/>',
+  air: '<path d="M12 3l1.4 6.2 7.6 3.6v1.6l-7.6-1.6-.6 4.6 2.6 1.8v1.4L12 19.6 8.6 20.6v-1.4l2.6-1.8-.6-4.6L3 14.4v-1.6l7.6-3.6z" fill="currentColor"/>',
+  sentry: '<path d="M8 10h7l3 1.2v1.6L15 14H8z M15 12h6" fill="currentColor"/><path d="M11.5 14v3l-4 3.5M11.5 17l4 3.5M11.5 17v4" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+  heli: '<path d="M3 6.5h18M12 6.5v3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6.5 13c0-2.2 2-3.5 5-3.5h3c2.6 0 4 1.4 4 3.5s-1.4 3.5-4 3.5h-3c-3 0-5-1.3-5-3.5zM6.5 13H2.5l-1-1.6" fill="currentColor"/><path d="M10 16.5v2.2M15 16.5v2.2M8 18.7h9" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+};
+function ksDef(id) {
+  return KS_DEFS.find((d) => d.id === id) || null;
+}
+function ksSvg(id, cls = "") {
+  return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${KS_ICON[id] || ""}</svg>`;
+}
+function ksUnlocked(id, level = pgLevel().level) {
+  const d = ksDef(id);
+  return !!d && level >= d.lv;
+}
+function pgStreaks(k = pgActive()) {
+  const L = pgSlots()[k];
+  if (!L) return KS_DEFAULT.slice();
+  Array.isArray(L.streaks) || (L.streaks = KS_DEFAULT.slice());
+  return L.streaks = [...new Set(L.streaks.filter((id) => ksDef(id)))].slice(0, 3).sort((a, b) => ksDef(a).kills - ksDef(b).kills), L.streaks.slice();
+}
+function pgToggleStreak(id, k = pgActive()) {
+  const L = pgSlots()[k];
+  if (!L || !ksDef(id)) return { ok: !1 };
+  const cur = pgStreaks(k);
+  if (cur.includes(id)) return L.streaks = cur.filter((x) => x !== id), om(), { ok: !0 };
+  if (!ksUnlocked(id)) return { ok: !1, msg: `${ksDef(id).name} unlocks at level ${ksDef(id).lv}.` };
+  if (cur.length >= 3) return { ok: !1, msg: "You can take three killstreaks. Remove one first." };
+  return L.streaks = [...cur, id].sort((a, b) => ksDef(a).kills - ksDef(b).kills), om(), { ok: !0 };
+}
+var vgKS = { blockFire: !1, jamUntil: 0, api: null };
+var vgKSCss = `
+.vg-ks { position: fixed; right: 26px; bottom: 150px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; font: 600 12px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif; color: #e9ece6; transition: opacity .2s; }
+.vg-ks.off { opacity: 0; }
+.vg-ks .row { display: flex; gap: 6px; }
+.vg-ks .s { position: relative; width: 42px; height: 42px; display: grid; place-items: center; background: rgba(8,11,13,.62); border: 1px solid rgba(236,240,234,.16); color: rgba(233,236,230,.55); }
+.vg-ks .s svg { width: 24px; height: 24px; }
+.vg-ks .s b { position: absolute; right: 2px; bottom: 1px; font-size: 10px; color: rgba(233,236,230,.65); }
+.vg-ks .s.ready { color: #111; background: #f2c14e; border-color: #f2c14e; box-shadow: 0 0 14px rgba(242,193,78,.55); animation: vgKsPulse 1.2s ease-in-out infinite; }
+.vg-ks .s.ready b { color: #111; }
+.vg-ks .s i { position: absolute; left: -1px; right: -1px; bottom: -4px; height: 3px; background: rgba(255,255,255,.12); }
+.vg-ks .s i u { display: block; height: 100%; background: #f2c14e; }
+.vg-ks .s em { position: absolute; top: -8px; right: -8px; min-width: 16px; height: 16px; padding: 0 3px; box-sizing: border-box; border-radius: 8px; background: #e9ece6; color: #111; font: 800 10px/16px system-ui, sans-serif; text-align: center; font-style: normal; }
+.vg-ks .hint { padding: 4px 8px; background: rgba(8,11,13,.7); border-left: 3px solid #f2c14e; letter-spacing: .06em; text-transform: uppercase; font-size: 11px; }
+.vg-ks .hint kbd { display: inline-block; min-width: 14px; padding: 0 4px; margin-right: 5px; border: 1px solid rgba(236,240,234,.5); font: 700 11px/16px system-ui, sans-serif; text-align: center; }
+.vg-ks .cnt { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: rgba(233,236,230,.7); }
+@keyframes vgKsPulse { 50% { box-shadow: 0 0 4px rgba(242,193,78,.25); } }
+.vg-ks-target { position: fixed; left: 50%; top: 58%; transform: translateX(-50%); z-index: 61; padding: 8px 14px; background: rgba(8,11,13,.78); border-top: 2px solid #f2c14e; color: #e9ece6; font: 600 13px/1.4 system-ui, sans-serif; letter-spacing: .05em; text-align: center; pointer-events: none; }
+.vg-ks-target b { color: #f2c14e; letter-spacing: .12em; text-transform: uppercase; }
+.vg-ks-jam { position: fixed; z-index: 59; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(200,210,205,.18) 0 2px, rgba(10,12,14,.55) 2px 4px); mix-blend-mode: screen; animation: vgKsJam .12s steps(2) infinite; display: grid; place-items: center; color: #ff6b5b; font: 800 11px/1 system-ui, sans-serif; letter-spacing: .2em; }
+@keyframes vgKsJam { 50% { background-position: 0 3px; } }
+`;
+/* ------------------------------------------------------------------ Beta 1.3: weapon mounting */
+// Aim down sights near a ledge, window sill, wall top or a wall corner and press Melee to rest the gun on it:
+// 60% less recoil, tighter spread. Moving, jumping, sprinting or letting go of the aim takes it off.
+var vgMount = { on: !1, can: !1, kind: null, y: 0, px: 0, pz: 0, stance: "stand", chk: 0, el: null, sig: "" };
+var vgMV = null;
+function vgMountMul(f) {
+  return vgMount.on ? f : 1;
+}
+function vgMountProbe(ctx) {
+  const W = ctx.services.world, ps = ctx.services.player?.state, cam = ctx.camera;
+  if (!W?.raycast || !ps || !cam || ps.stance === "prone" || ps.alive === !1) return null;
+  vgMV || (vgMV = [new b(), new b(), new b(), new b(), new b(), new b()]);
+  const e = cam.getWorldPosition(vgMV[0]), f = cam.getWorldDirection(vgMV[1]);
+  if (f.y = 0, f.lengthSq() < 1e-6) return null;
+  f.normalize();
+  const down = vgMV[2].set(0, -1, 0), o = vgMV[3];
+  // a flat top 0.2 – 0.65 m under the eye, up to 0.85 m ahead, with nothing right in front of the barrel
+  for (const d of [0.4, 0.6, 0.85]) {
+    o.copy(e).addScaledVector(f, d);
+    const h = W.raycast(o, down, 0.7);
+    if (!h || h.normal.y < 0.7) continue;
+    const dy = e.y - h.point.y;
+    if (dy < 0.2 || dy > 0.65) continue;
+    if (o.copy(e).addScaledVector(f, 0.15), o.y = h.point.y + 0.12, !W.raycast(o, f, Math.max(0.3, d + 0.35))) return { kind: "ledge", y: h.point.y };
+  }
+  // a wall corner / door frame right beside the gun, open ahead
+  const r = vgMV[4].set(-f.z, 0, f.x);
+  for (const sg of [1, -1]) {
+    const sd = vgMV[5].copy(r).multiplyScalar(sg);
+    o.copy(e), o.y -= 0.12;
+    const h = W.raycast(o, sd, 0.55);
+    if (!h || Math.abs(h.normal.y) > 0.35) continue;
+    if (o.addScaledVector(f, 0.45), W.raycast(o, f, 2.5)) continue;
+    if (o.copy(e), o.y -= 0.12, o.addScaledVector(f, 0.95), !W.raycast(o, sd, 0.9)) return { kind: "corner", y: e.y - 0.12, side: sg };
+  }
+  return null;
+}
+function vgMountSet(ctx, p) {
+  const was = vgMount.on, ps = ctx.services.player?.state;
+  vgMount.on = !!p, vgMount.kind = p?.kind || null, vgMount.y = p?.y ?? 0, vgMount.chk = 0.25;
+  p && ps && (vgMount.px = ps.position.x, vgMount.pz = ps.position.z, vgMount.stance = ps.stance);
+  try {
+    p && !was && (ctx.services.audio?.play?.("cloth_rustle", { volume: 0.75 }), ctx.services.player?.addShake?.(0.06, 0.12), ctx.events.emit("player:mount", { kind: p.kind })), !p && was && ctx.services.audio?.play?.("gear_rattle", { volume: 0.3 });
+  } catch {
+  }
+  vgMountUi(ctx);
+}
+// Melee while aiming mounts (or unmounts). Returns true when the press was used for that.
+function vgMountPress(ctx, ads) {
+  if (vgMount.on) return vgMountSet(ctx, null), !0;
+  if (!(ads > 0.5) || typeof vgDrone < "u" && vgDrone.on) return !1;
+  const p = vgMountProbe(ctx);
+  return p ? (vgMountSet(ctx, p), !0) : !1;
+}
+function vgMountTick(ctx, dt, E) {
+  const ps = ctx.services.player?.state;
+  if (!ps) return;
+  if (vgMount.chk -= dt, vgMount.on) {
+    const moved = Math.hypot(ps.position.x - vgMount.px, ps.position.z - vgMount.pz) > 0.3;
+    if (ps.alive === !1 || E.ads < 0.35 || ps.stance !== vgMount.stance || ps.grounded === !1 || ps.sprinting || moved || E.reloading && E.id === "pistol") return vgMountSet(ctx, null);
+    vgMount.chk <= 0 && (vgMount.chk = 0.3, vgMountProbe(ctx) || vgMountSet(ctx, null));
+  } else if (vgMount.chk <= 0) {
+    vgMount.chk = 0.15;
+    const can = E.ads > 0.6 && ps.alive !== !1 && !!vgMountProbe(ctx);
+    can !== vgMount.can && (vgMount.can = can, vgMountUi(ctx));
+  }
+}
+function vgMountUi(ctx) {
+  if (typeof document > "u") return;
+  if (!vgMount.el) {
+    const st = document.createElement("style");
+    st.textContent = `.vg-mount { position: fixed; left: 50%; top: calc(50% + 46px); transform: translateX(-50%); z-index: 58; display: flex; align-items: center; gap: 6px; padding: 3px 9px; background: rgba(8,11,13,.55); color: #e9ece6; font: 700 11px/1.4 system-ui, sans-serif; letter-spacing: .16em; text-transform: uppercase; pointer-events: none; opacity: 0; transition: opacity .12s; }
+.vg-mount.on { opacity: 1; }
+.vg-mount.m { color: #f2c14e; }
+.vg-mount kbd { padding: 0 4px; border: 1px solid rgba(236,240,234,.55); font: 700 10px/14px system-ui, sans-serif; letter-spacing: 0; }
+.vg-mount svg { width: 14px; height: 14px; }`, document.head.appendChild(st), vgMount.el = document.createElement("div"), vgMount.el.className = "vg-mount", document.body.appendChild(vgMount.el);
+  }
+  const key = (() => {
+    try {
+      return S2(ctx.input.bindings?.melee?.[0]);
+    } catch {
+      return "V";
+    }
+  })(), show = vgMount.on || vgMount.can, sig = `${vgMount.on}|${vgMount.can}|${key}`;
+  if (vgMount.el.classList.toggle("on", show), vgMount.el.classList.toggle("m", vgMount.on), sig === vgMount.sig) return;
+  vgMount.sig = sig, vgMount.el.innerHTML = vgMount.on ? '<svg viewBox="0 0 24 24"><path d="M3 17h18M6 17l3-6h6l3 6" fill="none" stroke="currentColor" stroke-width="2"/></svg>Mounted' : `<kbd>${Nn(key)}</kbd>Mount`;
+}
+
+/* ------------------------------------------------------------------ Beta 1.3: drone (F10, offline only) */
+var vgDrone = { on: !1 };
+
+/* ------------------------------------------------------------------ Beta 1.3: extras system */
+// Killstreaks, the mount prompt and the drone camera run as one more system after the game mode, so they see
+// the finished frame (camera, player, AI) and can override the camera last.
+function vgExtrasSystem(A) {
+  const S = A.services, ev = A.events, V = () => new b(), T = { a: V(), b: V(), c: V(), d: V(), e: V(), q: new Oe(), up: V().set(0, 1, 0) };
+  const K = { clock: 0, kills: 0, got: new Set(), earned: [], ents: [], target: null, releaseWait: !1, uavUntil: 0, cuavUntil: 0, euavUntil: 0, sweepT: 0, esweepT: 0, botK: new Map(), was: !1, ui: null, tgtEl: null, jamEl: null, sig: "", inter: !1, lastNote: 0 };
+  const gm = () => S.gamemode?.state || {}, net = () => S.network?.state?.active ? S.network.state : null, now = () => K.clock;
+  const myTeam = () => gm().playerTeam || "player", isEnemy = (t) => !!t && t !== myTeam() && t !== "friendly" && t !== "player";
+  const keyLabel = () => {
+    try {
+      return S2(A.input.bindings?.killstreak?.[0]) || "4";
+    } catch {
+      return "4";
+    }
+  };
+  function allowed() {
+    const g = gm();
+    return !g.gg && g.matchType !== "range" && ["match-live", "match-dead", "live", "intermission", "warmup"].includes(g.stage) && !(typeof vgSpec < "u" && vgSpec.active);
+  }
+  const hud = () => S.hud;
+  function banner(title, kicker, sub, dur = 3) {
+    try {
+      hud()?.banner?.(title, { kicker, sub, duration: dur });
+    } catch {
+    }
+  }
+  function netSend(kind, phase, data = {}) {
+    net() && ev.emit("network:send", { type: "streak", kind, phase, data });
+  }
+  // ---------------- shared materials and meshes
+  const M = {};
+  function mats() {
+    if (M.dark) return M;
+    return M.dark = new Vt({ color: 2895920, roughness: 0.55, metalness: 0.55 }), M.olive = new Vt({ color: 4672064, roughness: 0.62, metalness: 0.3 }), M.grey = new Vt({ color: 6974066, roughness: 0.5, metalness: 0.6 }), M.glass = new Vt({ color: 1449510, roughness: 0.15, metalness: 0.4 }), M.crate = new Vt({ color: 5925169, roughness: 0.75, metalness: 0.1 }), M.chute = new Vt({ color: 13421772, roughness: 0.9, metalness: 0, side: 2 }), M.flash = new ha({ color: new ue(1, 0.82, 0.45).multiplyScalar(3), transparent: !0, depthWrite: !1, blending: 2 }), M.ok = new ha({ color: 15909198, transparent: !0, opacity: 0.85, depthWrite: !1, side: 2 }), M.bad = new ha({ color: 16730426, transparent: !0, opacity: 0.85, depthWrite: !1, side: 2 }), M.beamOk = new ha({ color: 15909198, transparent: !0, opacity: 0.28, depthWrite: !1 }), M.beamBad = new ha({ color: 16730426, transparent: !0, opacity: 0.28, depthWrite: !1 }), M.light = new ha({ color: new ue(1, 0.25, 0.2).multiplyScalar(2.5) }), M;
+  }
+  const box = (m, w, h, d, x = 0, y = 0, z = 0, p = null) => {
+    const me = new Le(new wi(w, h, d), m);
+    return me.position.set(x, y, z), me.castShadow = !0, p && p.add(me), me;
+  }, cyl = (m, r1, r2, h, x = 0, y = 0, z = 0, p = null, seg = 10) => {
+    const me = new Le(new ta(r1, r2, h, seg), m);
+    return me.position.set(x, y, z), me.castShadow = !0, p && p.add(me), me;
+  };
+  function addRoot(g) {
+    return g.traverse((o) => o.layers?.set?.(A.layers?.WORLD ?? 0)), A.scene.add(g), g;
+  }
+  function freeRoot(g) {
+    g && (g.parent?.remove(g), g.traverse((o) => o.isMesh && o.geometry?.dispose()));
+  }
+  // ---------------- targets and damage
+  function enemies() {
+    const out = [];
+    for (const d of S.combat?.damageables || []) d.alive && !d.isPlayer && isEnemy(d.team) && d.object && out.push(d);
+    return out;
+  }
+  function chestOf(d, v) {
+    return d.object.getWorldPosition(v), v.y += d.isRemote ? 1.25 : 1.2, v;
+  }
+  function pickTarget(from, range) {
+    let best = null, bd = range;
+    for (const d of enemies()) {
+      chestOf(d, T.c);
+      const dist = T.c.distanceTo(from);
+      if (dist > bd) continue;
+      S.world.lineOfSight?.(from, T.c) !== !1 && (best = d, bd = dist);
+    }
+    return best;
+  }
+  function shoot(from, to, kind, dmg, spreadDeg, owner) {
+    const dir = T.d.copy(to).sub(from).normalize();
+    if (spreadDeg > 0) {
+      const s = spreadDeg * Math.PI / 180;
+      dir.x += (Math.random() - 0.5) * 2 * s, dir.y += (Math.random() - 0.5) * 2 * s, dir.z += (Math.random() - 0.5) * 2 * s, dir.normalize();
+    }
+    let end = T.e.copy(from).addScaledVector(dir, 90);
+    if (owner) try {
+      const R = S.combat.fireHitscan({ origin: from.clone(), direction: dir.clone(), damage: dmg, range: 90, source: `player~${kind}`, team: myTeam(), weaponId: "rifle", penetration: !1, spreadApplied: !0, pellets: 1, tracer: !1, streak: kind });
+      R?.hits?.length ? end = T.e.copy(R.hits[R.hits.length - 1].point) : R?.end && end.copy(R.end);
+    } catch (err) {
+      A.reportError?.("extras", "streak-shot", err);
+    }
+    else {
+      const h = S.world.raycast(from, dir, 90);
+      h && end.copy(h.point);
+    }
+    try {
+      S.vfx?.spawn?.("tracer", { from: from.clone(), to: end.clone(), force: !0 }), S.audio?.gunshot?.({ origin: from.clone(), weaponId: "lmg", suppressed: !1, source: "remote" });
+    } catch {
+    }
+    return end;
+  }
+  function boom(p, owner, kind = "air", radius = 7.5, dmg = 230) {
+    try {
+      ev.emit("combat:explosion", { position: p.clone(), radius, type: "rocket", surface: "default" });
+      const me = S.player?.state?.position;
+      if (me) {
+        const dist = me.distanceTo(p);
+        dist < 26 && S.player.addShake?.(Math.min(1, (1 - dist / 26) * 0.9 + 0.08), 0.5);
+      }
+    } catch {
+    }
+    if (!owner) return;
+    for (const d of enemies()) {
+      chestOf(d, T.c);
+      const dist = T.c.distanceTo(p);
+      if (dist > radius) continue;
+      T.d.copy(p), T.d.y += 0.6;
+      const los = S.world.lineOfSight?.(T.d, T.c) !== !1, f = Math.pow(1 - dist / radius, 0.7) * (los ? 1 : 0.35);
+      f > 0.02 && S.combat.applyDamage(d, dmg * f, { source: `player~${kind}`, weaponId: kind === "air" ? "airstrike" : kind, zone: "torso", kind: "explosion", headshot: !1, distance: dist, point: T.c.clone(), direction: T.c.clone().sub(p).normalize(), sourcePosition: p.clone(), attacker: "You", streak: kind });
+    }
+  }
+  function ground(x, z, from = 60) {
+    const g = S.world?.groundHeight?.(x, z, from);
+    return Number.isFinite(g) ? g : 0;
+  }
+  function openSky(p) {
+    return T.a.copy(p), T.a.y += 0.6, !S.world.raycast(T.a, T.up, 45);
+  }
+  // ---------------- entities
+  function airEnt(P, dir, owner) {
+    mats();
+    const side = V().set(-dir.z, 0, dir.x), alt = P.y + 55, jets = [0, 1].map((i) => {
+      const g = new yt(), body = cyl(M.grey, 0.55, 0.35, 9, 0, 0, 0, g, 12);
+      body.rotation.x = Math.PI / 2, box(M.grey, 9, 0.18, 2.6, 0, 0, 0.5, g), box(M.grey, 3.6, 0.14, 1.2, 0, 0.1, 4, g), box(M.grey, 0.14, 2, 1.6, 0, 0.9, 3.9, g), box(M.glass, 0.7, 0.45, 1.6, 0, 0.5, -2.2, g);
+      const fl = box(M.flash, 0.5, 0.5, 1.6, 0, 0, 4.9, g);
+      return fl.castShadow = !1, g.lookAt(dir.x, 0, dir.z), addRoot(g), { g, off: (i ? 1 : -1) * 6, lag: i * 0.25 };
+    });
+    jets.forEach((j) => j.g.lookAt(j.g.position.x + dir.x, j.g.position.y, j.g.position.z + dir.z));
+    const bombs = [];
+    for (let i = 0; i < 8; i++) {
+      const s = -21 + i * 6, lat = (i % 2 ? 1 : -1) * 1.6, x = P.x + dir.x * s + side.x * lat, z = P.z + dir.z * s + side.z * lat;
+      bombs.push({ p: V().set(x, ground(x, z, alt) + 0.2, z), at: 2.2 + (s + 21) / 120 + 0.55, done: !1 });
+    }
+    return {
+      kind: "air", t: 0, owner,
+      update(dt) {
+        this.t += dt;
+        for (const j of jets) {
+          const s = (this.t - 2.2 - j.lag) * 120;
+          j.g.visible = s > -260 && s < 260, j.g.position.set(P.x + dir.x * s + side.x * j.off, alt + j.off * 0.15, P.z + dir.z * s + side.z * j.off);
+          const rot = Math.atan2(dir.x, dir.z);
+          j.g.rotation.set(0, rot, 0);
+        }
+        Math.abs(this.t - 2.2) < dt && (() => {
+          try {
+            S.audio?.play?.("explosion_far", { volume: 0.5 });
+          } catch {
+          }
+        })();
+        for (const bb of bombs) !bb.done && this.t >= bb.at && (bb.done = !0, boom(bb.p, owner, "air"));
+        return this.t < 6;
+      },
+      dispose() {
+        jets.forEach((j) => freeRoot(j.g));
+      }
+    };
+  }
+  function sentryEnt(P, yaw, owner, dur = 45) {
+    mats();
+    const g = new yt(), head = new yt();
+    for (let i = 0; i < 3; i++) {
+      const a = i / 3 * Math.PI * 2, leg = box(M.dark, 0.06, 0.95, 0.06, Math.sin(a) * 0.28, 0.42, Math.cos(a) * 0.28, g);
+      leg.rotation.set(Math.cos(a) * 0.45, 0, -Math.sin(a) * 0.45);
+    }
+    cyl(M.dark, 0.12, 0.14, 0.25, 0, 0.92, 0, g), head.position.y = 1.08, g.add(head), box(M.olive, 0.34, 0.26, 0.62, 0, 0, 0, head), cyl(M.dark, 0.035, 0.035, 0.75, 0, 0.02, -0.65, head, 8).rotation.x = Math.PI / 2, box(M.olive, 0.22, 0.2, 0.22, 0.24, -0.04, 0.05, head), box(M.grey, 0.52, 0.34, 0.03, 0, 0.06, -0.3, head), box(M.light, 0.04, 0.04, 0.04, 0, 0.16, 0.2, head).castShadow = !1;
+    const fl = box(M.flash, 0.18, 0.18, 0.3, 0, 0.02, -1.08, head);
+    fl.castShadow = !1, fl.visible = !1, g.position.copy(P), g.rotation.y = yaw, addRoot(g);
+    const muzzle = V(), aimTo = V(), st = { t: 0, scan: 0, shot: 0, burst: 0, flash: 0, tgt: null, sendT: 0, yaw: 0, pitch: 0 };
+    return {
+      kind: "sentry", owner, g,
+      fire(to) {
+        aimTo.copy(to), st.remoteFireT = 0.3;
+      },
+      update(dt) {
+        st.t += dt, st.flash -= dt, fl.visible = st.flash > 0;
+        head.updateMatrixWorld(!0), muzzle.set(0, 0.02, -1.0).applyMatrix4(head.matrixWorld);
+        let want = null;
+        if (owner) {
+          if (st.scan -= dt, st.scan <= 0 && (st.scan = 0.2, st.tgt = pickTarget(muzzle, 45)), st.tgt && st.tgt.alive) want = chestOf(st.tgt, aimTo);
+          else st.tgt = null;
+        } else st.remoteFireT > 0 && (st.remoteFireT -= dt, want = aimTo);
+        if (want) {
+          T.a.copy(want), g.worldToLocal(T.a);
+          const ty = Math.atan2(-T.a.x, -T.a.z), tp = Math.atan2(T.a.y - 1.08, Math.hypot(T.a.x, T.a.z)), dy = Math.atan2(Math.sin(ty - st.yaw), Math.cos(ty - st.yaw));
+          st.yaw += Math.sign(dy) * Math.min(Math.abs(dy), 3.2 * dt), st.pitch += (tp - st.pitch) * Math.min(1, 6 * dt), head.rotation.set(st.pitch, st.yaw, 0, "YXZ");
+          if (Math.abs(dy) < 0.12 && (st.shot -= dt, st.shot <= 0)) {
+            st.burst++, st.shot = st.burst % 14 === 0 ? 0.7 : 0.1, st.flash = 0.04;
+            const end = shoot(muzzle, want, "sentry", 16, 1.6, owner);
+            owner && (st.sendT -= 0.1, st.sendT <= 0 && (st.sendT = 0.3, netSend("sentry", "fire", { to: [+end.x.toFixed(2), +end.y.toFixed(2), +end.z.toFixed(2)] })));
+          }
+        } else head.rotation.y = st.yaw += dt * 0.5;
+        return st.t < dur;
+      },
+      dispose() {
+        try {
+          S.vfx?.spawn?.("sparks", { point: g.position.clone().setY(g.position.y + 1), normal: T.up.clone(), count: 14 });
+        } catch {
+        }
+        freeRoot(g);
+      }
+    };
+  }
+  function heliEnt(o, owner) {
+    mats();
+    const g = new yt(), rotor = new yt(), tail = new yt();
+    box(M.olive, 1.5, 1.4, 3.6, 0, 0, 0, g), box(M.glass, 1.3, 0.8, 1.2, 0, 0.15, -1.95, g), box(M.olive, 0.36, 0.4, 4.2, 0, 0.25, 3.7, g), box(M.olive, 0.12, 1.3, 0.9, 0, 0.9, 5.6, g), box(M.dark, 0.1, 0.1, 3.4, -0.7, -1, 0, g), box(M.dark, 0.1, 0.1, 3.4, 0.7, -1, 0, g), cyl(M.dark, 0.1, 0.1, 0.9, 0, -0.75, -1.7, g, 8).rotation.x = Math.PI / 2, cyl(M.dark, 0.08, 0.08, 0.5, 0, 0.92, 0, g, 8);
+    rotor.position.y = 1.2, g.add(rotor), box(M.dark, 11, 0.05, 0.32, 0, 0, 0, rotor), box(M.dark, 0.32, 0.05, 11, 0, 0, 0, rotor), tail.position.set(0.25, 0.9, 5.6), g.add(tail), box(M.dark, 0.04, 1.6, 0.16, 0, 0, 0, tail), box(M.light, 0.08, 0.08, 0.08, 0, -0.62, -2.5, g).castShadow = !1;
+    const fl = box(M.flash, 0.3, 0.3, 0.5, 0, -0.75, -2.3, g);
+    fl.castShadow = !1, fl.visible = !1, addRoot(g);
+    const c = V().set(o.c[0], o.c[1], o.c[2]), w = Math.PI * 2 / 24, gun = V(), aimTo = V(), st = { t: 0, scan: 0, shot: 0, burst: 0, flash: 0, tgt: null, sendT: 0, remoteFireT: 0 }, posAt = (t, out) => {
+      const a = o.a0 + w * Math.max(0, t - 4), cx = c.x + Math.cos(a) * o.r, cz = c.z + Math.sin(a) * o.r;
+      if (t < 4) {
+        const k = 1 - t / 4, ea = o.a0 - 0.6;
+        return out.set(cx + Math.cos(ea) * 140 * k * k, o.h + 18 * k, cz + Math.sin(ea) * 140 * k * k);
+      }
+      if (t > o.dur - 4) {
+        const k = (t - (o.dur - 4)) / 4;
+        return out.set(cx + -Math.sin(a) * 150 * k * k, o.h + 25 * k, cz + Math.cos(a) * 150 * k * k);
+      }
+      return out.set(cx, o.h + Math.sin(t * 0.7) * 0.8, cz);
+    };
+    let prev = posAt(0, V());
+    return {
+      kind: "heli", owner, g,
+      fire(to) {
+        aimTo.copy(to), st.remoteFireT = 0.35;
+      },
+      update(dt) {
+        st.t += dt, rotor.rotation.y += dt * 24, tail.rotation.x += dt * 30, st.flash -= dt, fl.visible = st.flash > 0;
+        const p = posAt(st.t, T.a), vx = p.x - prev.x, vz = p.z - prev.z;
+        g.position.copy(p), Math.hypot(vx, vz) > 1e-4 && (g.rotation.set(0.12, Math.atan2(-vx, -vz), Math.sin(st.t * 0.5) * 0.06, "YXZ")), prev.copy(p), g.updateMatrixWorld(!0), gun.set(0, -1.1, -2.6).applyMatrix4(g.matrixWorld);
+        let want = null;
+        const flying = st.t > 4 && st.t < o.dur - 4;
+        owner ? flying && (st.scan -= dt, st.scan <= 0 && (st.scan = 0.25, st.tgt = pickTarget(gun, 85)), st.tgt && st.tgt.alive ? want = chestOf(st.tgt, aimTo) : st.tgt = null) : st.remoteFireT > 0 && (st.remoteFireT -= dt, want = aimTo);
+        if (want && (st.shot -= dt, st.shot <= 0)) {
+          st.burst++, st.shot = st.burst % 10 === 0 ? 1 : 0.12, st.flash = 0.05;
+          const end = shoot(gun, want, "heli", 24, 2.2, owner);
+          owner && (st.sendT -= 0.12, st.sendT <= 0 && (st.sendT = 0.3, netSend("heli", "fire", { to: [+end.x.toFixed(2), +end.y.toFixed(2), +end.z.toFixed(2)] })));
+        }
+        return st.t < o.dur;
+      },
+      dispose() {
+        freeRoot(g);
+      }
+    };
+  }
+  function careEnt(P, owner) {
+    mats();
+    const g = new yt(), chute = new yt(), cr = box(M.crate, 1.1, 0.8, 1.1, 0, 0.4, 0, g);
+    box(M.dark, 1.14, 0.08, 1.14, 0, 0.45, 0, g), box(M.dark, 0.08, 0.84, 1.14, 0, 0.4, 0, g), box(M.light, 0.1, 0.1, 0.1, 0.3, 0.86, 0.3, g).castShadow = !1;
+    const can = new Le(new iu(2.2, 1.2, 12, 1, !0), M.chute);
+    can.position.y = 4.4, chute.add(can);
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * Math.PI * 2 + 0.78, ln = box(M.dark, 0.02, 3.6, 0.02, Math.sin(a) * 1, 2.2, Math.cos(a) * 1, chute);
+      ln.rotation.set(Math.cos(a) * 0.27, 0, -Math.sin(a) * 0.27);
+    }
+    g.add(chute), g.visible = !1, addRoot(g);
+    try {
+      S.vfx?.spawn?.("smoke", { position: P.clone(), radius: 1.6, duration: 9 });
+    } catch {
+    }
+    const st = { t: 0, landed: !1, life: 60, hold: 0, taken: !1 };
+    return {
+      kind: "care", owner, g,
+      take() {
+        st.taken = !0;
+      },
+      update(dt) {
+        if (st.t += dt, st.taken) return !1;
+        if (st.t < 2.6) return !0;
+        if (g.visible = !0, !st.landed) {
+          const y = Math.max(P.y, P.y + 45 - (st.t - 2.6) * 13);
+          if (g.position.set(P.x, y, P.z), g.rotation.y += dt * 0.4, y <= P.y + 0.01) {
+            st.landed = !0, chute.visible = !1;
+            try {
+              S.vfx?.spawn?.("dust", { position: P.clone(), scale: 1.4 }), S.audio?.play?.("land_concrete_heavy", { volume: 0.6 });
+            } catch {
+            }
+          }
+          return !0;
+        }
+        if (st.life -= dt, st.life <= 0) return !1;
+        if (!owner) return !0;
+        const ps = S.player?.state, near = ps && ps.alive !== !1 && ps.position.distanceTo(g.position) < 2.4;
+        if (near) {
+          A.input.isDown("interact") ? st.hold += dt : st.hold = Math.max(0, st.hold - dt * 2), K.inter = !0, hud()?.setInteraction?.("Care package", { action: "interact", progress: st.hold / 1.2 });
+          if (st.hold >= 1.2) {
+            st.taken = !0, K.inter && (hud()?.setInteraction?.(null), K.inter = !1);
+            const pool = ["uav", "uav", "uav", "cuav", "cuav", "air", "air", "air", "sentry", "sentry", "heli"], id = pool[Math.floor(Math.random() * pool.length)];
+            return earn(id, "care"), netSend("care", "taken", {}), !1;
+          }
+        } else K.inter && st.hold > 0 && (st.hold = 0);
+        return !0;
+      },
+      near() {
+        const ps = S.player?.state;
+        return owner && st.landed && ps && ps.position.distanceTo(g.position) < 2.4;
+      },
+      dispose() {
+        freeRoot(g);
+      }
+    };
+  }
+  // ---------------- earning and using
+  function earn(id, how = "streak") {
+    const d = ksDef(id);
+    d && (K.earned.push(id), banner(`${d.name} ready`, how === "care" ? "Care package" : "Killstreak", `Press ${keyLabel()} to call it in`, 2.8), (() => {
+      try {
+        S.audio?.play?.("ui_killstreak");
+      } catch {
+      }
+    })(), ui(!0));
+  }
+  function onKill() {
+    K.kills++, chEvent("streak", { n: K.kills });
+    for (const id of pgStreaks()) {
+      const d = ksDef(id);
+      d && K.kills === d.kills && !K.got.has(id) && (K.got.add(id), earn(id));
+    }
+    ui(!0);
+  }
+  function startUav(dur, who) {
+    K.uavUntil = Math.max(K.uavUntil, now() + dur), K.sweepT = 0, banner(who === "me" ? "UAV online" : "Friendly UAV online", "Killstreak", "Enemies show on your minimap", 2.4);
+  }
+  function enemyUav(dur) {
+    if (now() < K.cuavUntil) return !1;
+    return K.euavUntil = now() + dur, K.esweepT = 0, banner("Enemy UAV overhead", "Warning", "Keep moving, they can see you", 2.6), !0;
+  }
+  function jam(dur) {
+    vgKS.jamUntil = performance.now() + dur * 1e3, banner("Radar jammed", "Enemy Counter-UAV", `Your minimap is down for ${dur} seconds`, 2.4);
+  }
+  function cancelTarget() {
+    const T2 = K.target;
+    T2 && (freeRoot(T2.g), K.target = null, K.tgtEl && (K.tgtEl.style.display = "none"), K.releaseWait = !0);
+  }
+  function use() {
+    if (K.target) return cancelTarget();
+    const ps = S.player?.state;
+    if (!allowed() || !ps || ps.alive === !1) return;
+    const id = K.earned[0];
+    if (!id) return;
+    if (id === "uav") K.earned.shift(), startUav(30, "me"), netSend("uav", "start", { dur: 30 });
+    else if (id === "cuav") K.earned.shift(), K.cuavUntil = now() + 25, K.euavUntil = 0, banner("Counter-UAV online", "Killstreak", "Enemy radar is jammed", 2.4), netSend("cuav", "start", { dur: 25 });
+    else if (id === "care" || id === "air") {
+      mats();
+      const g = new yt(), ring = new Le(new nC(1.2, 1.6, 28), M.ok), beam = new Le(new ta(0.18, 0.18, 60, 8, 1, !0), M.beamOk);
+      ring.rotation.x = -Math.PI / 2, ring.position.y = 0.06, beam.position.y = 30, g.add(ring, beam), addRoot(g), K.target = { id, g, ring, beam, ok: !1, p: V() }, vgKS.blockFire = !0, showTargetHint(id);
+      return;
+    } else if (id === "sentry") {
+      const f = T.a.set(-Math.sin(ps.yaw), 0, -Math.cos(ps.yaw)), o = T.b.copy(ps.position);
+      o.y += 1;
+      const h = S.world.raycast(o, f, 1.8), d = h ? Math.max(0.6, h.distance - 0.6) : 1.6, x = ps.position.x + f.x * d, z = ps.position.z + f.z * d, gy = ground(x, z, ps.position.y + 1.5);
+      if (!Number.isFinite(gy) || Math.abs(gy - ps.position.y) > 1.2) return hud()?.notify?.("No room for the sentry here", { kind: "info", duration: 1.6 });
+      K.earned.shift();
+      const P = V().set(x, gy, z);
+      K.ents.push(sentryEnt(P, ps.yaw, !0)), netSend("sentry", "place", { p: [+x.toFixed(2), +gy.toFixed(2), +z.toFixed(2)], yaw: +ps.yaw.toFixed(3), dur: 45 }), banner("Sentry gun placed", "Killstreak", "It guards this spot for 45 seconds", 2.2);
+    } else if (id === "heli") {
+      K.earned.shift();
+      const o = heliPath();
+      K.ents.push(heliEnt(o, !0)), netSend("heli", "start", o), banner("Attack helicopter inbound", "Killstreak", "It hunts enemies for 45 seconds", 2.4);
+    }
+    chEvent("ks"), ev.emit("killstreak:used", { id }), ui(!0);
+  }
+  function heliPath() {
+    const W = S.world, Bn = W?.bounds, cc = W?.map?.center || [0, 0], span = Bn ? Math.min(Bn.max.x - Bn.min.x, Bn.max.z - Bn.min.z) : 100, r = Math.max(18, Math.min(42, span * 0.3)), gy = ground(cc[0], cc[1]);
+    return { c: [cc[0], gy, cc[1]], r: +r.toFixed(1), h: +(gy + 30).toFixed(1), a0: +(Math.random() * Math.PI * 2).toFixed(3), dur: 45 };
+  }
+  function targetUpdate() {
+    const T2 = K.target;
+    if (!T2) return;
+    const ps = S.player?.state;
+    if (!allowed() || !ps || ps.alive === !1) return cancelTarget();
+    A.camera.getWorldPosition(T.a), A.camera.getWorldDirection(T.b);
+    const h = S.world.raycast(T.a, T.b, 140), far = h && T2.id === "care" && h.point.distanceTo(ps.position) > 70;
+    T2.ok = !!h && h.normal.y > 0.35 && !far && openSky(h.point), h && (T2.p.copy(h.point), T2.g.position.copy(h.point)), T2.g.visible = !!h, T2.ring.material = T2.ok ? M.ok : M.bad, T2.beam.material = T2.ok ? M.beamOk : M.beamBad;
+    const tip = K.tgtEl?.querySelector(".tip");
+    tip && (tip.textContent = !h ? "Aim at the ground" : far ? "Too far away" : !T2.ok ? "Needs open sky" : "");
+    if (A.input.pressed("fire") && T2.ok) {
+      const P = T2.p.clone(), id = T2.id, yaw = ps.yaw;
+      if (cancelTarget(), K.earned.shift(), id === "air") {
+        const dir = V().set(-Math.sin(yaw), 0, -Math.cos(yaw));
+        K.ents.push(airEnt(P, dir, !0)), netSend("air", "call", { p: [+P.x.toFixed(2), +P.y.toFixed(2), +P.z.toFixed(2)], d: [+dir.x.toFixed(3), +dir.z.toFixed(3)] }), banner("Airstrike inbound", "Killstreak", "Jets are on their way", 2);
+      } else K.ents.push(careEnt(P, !0)), netSend("care", "drop", { p: [+P.x.toFixed(2), +P.y.toFixed(2), +P.z.toFixed(2)] }), banner("Care package inbound", "Killstreak", "Hold Interact on the crate when it lands", 2.2);
+      chEvent("ks"), ev.emit("killstreak:used", { id }), ui(!0);
+    }
+  }
+  function showTargetHint(id) {
+    K.tgtEl || (K.tgtEl = document.createElement("div"), K.tgtEl.className = "vg-ks-target", document.body.appendChild(K.tgtEl)), K.tgtEl.style.display = "", K.tgtEl.innerHTML = `<b>${Nn(ksDef(id).name)}</b><br>Aim at the spot and press Fire · ${Nn(keyLabel())} to cancel<br><span class="tip"></span>`;
+  }
+  // ---------------- remote players' killstreaks (online)
+  const remote = new Map();
+  function onRemote(m) {
+    const N = net();
+    if (!N || m.matchId && N.matchId && String(m.matchId) !== String(N.matchId) || String(m.playerId) === String(N.selfId) || !allowed()) return;
+    const foe = N.ffa || N.localTeam === "ffa" || !N.localTeam || m.team !== N.localTeam, d = m.data || {}, who = String(m.name || "Enemy").slice(0, 20), key = `${m.playerId}:${m.kind}`, P3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite) ? V().set(a[0], a[1], a[2]) : null;
+    switch (m.kind) {
+      case "uav":
+        foe ? banner("Enemy UAV overhead", who, "Keep moving, they can see you", 2.4) : startUav(Math.min(40, +d.dur || 30), "friend");
+        break;
+      case "cuav":
+        foe ? jam(Math.min(30, +d.dur || 25)) : banner("Friendly Counter-UAV", who, "Enemy radar is jammed", 2);
+        break;
+      case "air": {
+        const P = P3(d.p), dd = Array.isArray(d.d) ? V().set(+d.d[0] || 0, 0, +d.d[1] || 1).normalize() : null;
+        P && dd && (K.ents.push(airEnt(P, dd, !1)), foe && banner("Enemy airstrike inbound", who, "Get under cover", 2));
+        break;
+      }
+      case "care": {
+        if (m.phase === "drop") {
+          const P = P3(d.p);
+          P && (remote.get(key)?.take(), K.ents.push(remote.set(key, careEnt(P, !1)).get(key)));
+        } else m.phase === "taken" && (remote.get(key)?.take(), remote.delete(key));
+        break;
+      }
+      case "sentry": {
+        if (m.phase === "place") {
+          const P = P3(d.p);
+          P && (K.ents.push(remote.set(key, sentryEnt(P, +d.yaw || 0, !1, Math.min(60, +d.dur || 45))).get(key)), foe && banner("Enemy sentry gun", who, "Avoid its line of fire", 2));
+        } else if (m.phase === "fire") {
+          const to = P3(d.to);
+          to && remote.get(key)?.fire(to);
+        }
+        break;
+      }
+      case "heli": {
+        if (m.phase === "start" && Array.isArray(d.c)) K.ents.push(remote.set(key, heliEnt({ c: d.c.map(Number), r: +d.r || 30, h: +d.h || 30, a0: +d.a0 || 0, dur: Math.min(60, +d.dur || 45) }, !1)).get(key)), foe && banner("Enemy attack helicopter", who, "Stay inside", 2.2);
+        else if (m.phase === "fire") {
+          const to = P3(d.to);
+          to && remote.get(key)?.fire(to);
+        }
+        break;
+      }
+    }
+  }
+  // ---------------- HUD tray
+  function ui(force = !1) {
+    if (typeof document > "u") return;
+    if (!K.ui) {
+      const st = document.createElement("style");
+      st.textContent = vgKSCss, document.head.appendChild(st), K.ui = document.createElement("div"), K.ui.className = "vg-ks off", document.body.appendChild(K.ui), K.jamEl = document.createElement("div"), K.jamEl.className = "vg-ks-jam", K.jamEl.textContent = "JAMMED", K.jamEl.style.display = "none", document.body.appendChild(K.jamEl);
+    }
+    const show = allowed() && hud()?.menu === "none" && !vgDrone.on && !(typeof vgReplay < "u" && vgReplay.playing);
+    K.ui.classList.toggle("off", !show);
+    const list = pgStreaks(), cnt = (id) => K.earned.filter((x) => x === id).length, next = K.earned[0], sig = `${list.join()}|${K.kills}|${K.earned.join()}|${keyLabel()}`;
+    if (!force && sig === K.sig) return;
+    K.sig = sig;
+    const slots = list.map((id) => {
+      const d = ksDef(id), n = cnt(id), prog = Math.min(1, K.kills / d.kills);
+      return `<div class="s${n ? " ready" : ""}" title="${Nn(d.name)}">${ksSvg(id)}<b>${d.kills}</b>${n > 1 ? `<em>${n}</em>` : ""}${n ? "" : `<i><u style="width:${(prog * 100).toFixed(0)}%"></u></i>`}</div>`;
+    }).join("");
+    K.ui.innerHTML = `${next ? `<div class="hint"><kbd>${Nn(keyLabel())}</kbd>${Nn(ksDef(next).name)}</div>` : ""}<div class="row">${slots}</div><div class="cnt">Streak ${K.kills}</div>`;
+  }
+  // ---------------- drone (F10)
+  const D = { pos: V(), vel: V(), yaw: 0, pitch: 0, el: null, inv: !1, t: 0 };
+  function droneAllowed() {
+    const g = gm();
+    return !net() && hud()?.menu === "none" && ["match-live", "match-dead", "live", "intermission", "warmup", "range", "sandbox"].includes(g.stage) && !(typeof vgReplay < "u" && vgReplay.playing);
+  }
+  function droneToggle() {
+    if (vgDrone.on) return droneExit();
+    if (net()) return hud()?.notify?.("Drone mode works offline only", { kind: "info", duration: 1.6 });
+    if (!droneAllowed()) return;
+    const cam = A.camera;
+    cam.getWorldPosition(D.pos);
+    const e = new ga().setFromQuaternion(cam.getWorldQuaternion(T.q), "YXZ");
+    D.yaw = e.y, D.pitch = e.x, D.vel.set(0, 0, 0), vgDrone.on = !0, vgMount.on && vgMountSet(A, null), K.target && cancelTarget();
+    try {
+      S.player.setMovementEnabled(!1), D.inv = gm().stage !== "range", D.inv && S.player.setInvulnerable?.(!0);
+    } catch {
+    }
+    const sens = () => (A.settings.get("controls.sensitivity", 3) || 3) * 7e-4;
+    A.input.setLookHandler((dx, dy) => {
+      D.yaw -= dx * sens(), D.pitch = Math.max(-1.5, Math.min(1.5, D.pitch - dy * sens()));
+    }), vgKS.blockFire = !0;
+    try {
+      A.camera.layers.disable(A.layers.VIEWMODEL), S.hud?.setVisible?.(!1);
+    } catch {
+    }
+    if (!D.el) {
+      const st = document.createElement("style");
+      st.textContent = `.vg-drone { position: fixed; inset: 0; z-index: 70; pointer-events: none; color: #e9ece6; font: 600 12px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .08em; }
+.vg-drone .c { position: absolute; width: 46px; height: 46px; border: 2px solid rgba(233,236,230,.8); }
+.vg-drone .tl { left: 24px; top: 24px; border-right: 0; border-bottom: 0; } .vg-drone .tr { right: 24px; top: 24px; border-left: 0; border-bottom: 0; }
+.vg-drone .bl { left: 24px; bottom: 24px; border-right: 0; border-top: 0; } .vg-drone .br { right: 24px; bottom: 24px; border-left: 0; border-top: 0; }
+.vg-drone .x { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 1px solid rgba(233,236,230,.55); border-radius: 50%; }
+.vg-drone .x::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; background: #f2c14e; }
+.vg-drone .tag { position: absolute; left: 40px; top: 36px; } .vg-drone .tag b { color: #f2c14e; letter-spacing: .3em; } .vg-drone .tag i { display: inline-block; width: 8px; height: 8px; margin-left: 10px; border-radius: 50%; background: #ff4a3a; animation: vgDrn 1s steps(2) infinite; }
+.vg-drone .tel { position: absolute; right: 40px; top: 36px; text-align: right; line-height: 1.7; }
+.vg-drone .help { position: absolute; left: 0; right: 0; bottom: 36px; text-align: center; color: rgba(233,236,230,.7); font-size: 11px; }
+@keyframes vgDrn { 50% { opacity: .15; } }`, document.head.appendChild(st), D.el = document.createElement("div"), D.el.className = "vg-drone", D.el.innerHTML = '<div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div><div class="x"></div><div class="tag"><b>DRONE</b><i></i></div><div class="tel"></div><div class="help">WASD fly · SPACE up · C down · SHIFT fast · AIM slow · F10 exit</div>', document.body.appendChild(D.el);
+    }
+    D.el.style.display = "", ev.emit("drone:toggle", { on: !0 });
+  }
+  function droneExit() {
+    if (!vgDrone.on) return;
+    vgDrone.on = !1, A.input.setLookHandler(null), vgKS.blockFire = !1;
+    try {
+      S.player.setMovementEnabled(!0), D.inv && S.player.setInvulnerable?.(!1), A.camera.layers.enable(A.layers.VIEWMODEL), S.hud?.setVisible?.(!0);
+    } catch {
+    }
+    D.el && (D.el.style.display = "none"), ev.emit("drone:toggle", { on: !1 });
+  }
+  function droneLate(dt) {
+    if (!vgDrone.on) return;
+    if (!droneAllowed() && hud()?.menu !== "none") return droneExit();
+    const mv = A.input.getMove?.() || { x: 0, y: 0 }, fast = A.input.isDown("sprint"), slow = A.input.isDown("ads"), sp = fast ? 22 : slow ? 2.5 : 8, f = T.a.set(-Math.sin(D.yaw) * Math.cos(D.pitch), Math.sin(D.pitch), -Math.cos(D.yaw) * Math.cos(D.pitch)), r = T.b.set(Math.cos(D.yaw), 0, -Math.sin(D.yaw)), want = T.c.set(0, 0, 0);
+    want.addScaledVector(f, mv.y || 0).addScaledVector(r, mv.x || 0), A.input.isDown("jump") && (want.y += 1), A.input.isDown("crouch") && (want.y -= 1), want.lengthSq() > 1 && want.normalize(), want.multiplyScalar(sp), D.vel.lerp(want, 1 - Math.exp(-5 * dt)), D.pos.addScaledVector(D.vel, dt);
+    const Bn = S.world?.bounds;
+    Bn && (D.pos.x = Math.max(Bn.min.x - 30, Math.min(Bn.max.x + 30, D.pos.x)), D.pos.z = Math.max(Bn.min.z - 30, Math.min(Bn.max.z + 30, D.pos.z)));
+    const gy = ground(D.pos.x, D.pos.z, D.pos.y + 0.5);
+    D.pos.y = Math.max(gy + 0.35, Math.min(gy + 160, D.pos.y));
+    const cam = A.camera;
+    cam.position.copy(D.pos), cam.parent && cam.parent !== A.scene && cam.parent.worldToLocal?.(cam.position), cam.rotation.set(D.pitch, D.yaw, 0, "YXZ"), cam.updateMatrixWorld(!0);
+    if (D.t -= dt, D.t <= 0 && D.el) {
+      D.t = 0.1;
+      const hdg = ((-D.yaw * 180 / Math.PI) % 360 + 360) % 360;
+      D.el.querySelector(".tel").innerHTML = `ALT ${(D.pos.y - gy).toFixed(1)} M<br>SPD ${D.vel.length().toFixed(1)} M/S<br>HDG ${hdg.toFixed(0).padStart(3, "0")}°`;
+    }
+  }
+  // ---------------- lifecycle
+  function resetAll() {
+    for (const e of K.ents) try {
+      e.dispose();
+    } catch {
+    }
+    K.ents.length = 0, remote.clear(), cancelTarget(), K.releaseWait = !1, vgKS.blockFire = vgDrone.on || vgReplay.playing, K.kills = 0, K.got.clear(), K.earned.length = 0, K.uavUntil = K.cuavUntil = K.euavUntil = 0, K.botK.clear(), vgKS.jamUntil = 0, K.inter && (hud()?.setInteraction?.(null), K.inter = !1), ui(!0);
+  }
+  function update(dt) {
+    const g = gm(), paused = !!g.paused, ok = allowed();
+    if (ok !== K.was && (resetAll(), K.was = ok), !ok) {
+      ui();
+      return;
+    }
+    if (paused) return;
+    if (vgReplay.playing) return ui();
+    K.clock += dt, A.input.pressed("killstreak") && use(), targetUpdate(), K.releaseWait && !A.input.isDown("fire") && (K.releaseWait = !1, vgKS.blockFire = !!K.target || vgDrone.on);
+    // UAV sweeps (yours or a teammate's), enemy UAV (bots in singleplayer)
+    if (now() < K.uavUntil && performance.now() > vgKS.jamUntil && (K.sweepT -= dt, K.sweepT <= 0)) {
+      K.sweepT = 2;
+      for (const ag of S.ai?.agents || []) ag?.alive && isEnemy(ag.team) && hud()?.revealEnemy?.(ag, 2.3);
+      for (const d of enemies()) d.isRemote && (d.object.getWorldPosition(T.a), hud()?.ping?.(T.a, { kind: "enemy", duration: 2.3 }));
+    }
+    if (now() < K.euavUntil && !net() && (K.esweepT -= dt, K.esweepT <= 0)) {
+      K.esweepT = 2;
+      const ps = S.player?.state;
+      if (ps?.alive !== !1 && ps?.position) for (const ag of S.ai?.agents || []) ag?.alive && isEnemy(ag.team) && ag.know?.(T.a.copy(ps.position).setY(ps.position.y + 1.2), A.time.t, !1);
+    }
+    let inter = !1;
+    for (let i = K.ents.length - 1; i >= 0; i--) {
+      const e = K.ents[i];
+      let alive = !0;
+      try {
+        alive = e.update(dt);
+      } catch (err) {
+        alive = !1, A.reportError?.("extras", `streak-${e.kind}`, err);
+      }
+      e.kind === "care" && e.near?.() && (inter = !0), alive || (e.dispose(), K.ents.splice(i, 1));
+    }
+    !inter && K.inter && (hud()?.setInteraction?.(null), K.inter = !1);
+    const jam2 = performance.now() < vgKS.jamUntil, mm = jam2 && document.querySelector(".od-minimap");
+    if (K.jamEl) if (mm && hud()?.menu === "none") {
+      const r = mm.getBoundingClientRect();
+      Object.assign(K.jamEl.style, { display: "", left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    } else K.jamEl.style.display = "none";
+    ui();
+  }
+  const onKillEv = (k) => {
+    if (!allowed()) return;
+    const src = String(k?.source || ""), tgt = k?.target;
+    if (!tgt || tgt.isPlayer) return;
+    if (src === "player") isEnemy(tgt.team) && onKill();
+    else if (src.startsWith("player~")) isEnemy(tgt.team) && pgAddXp(50, "kill");
+    else if (src.startsWith("ai:") && !net()) {
+      const ag = (S.ai?.agents || []).find((x) => x.key === src);
+      if (!ag) return;
+      const n = (K.botK.get(src) || 0) + 1;
+      K.botK.set(src, n), n === 4 && (isEnemy(ag.team) ? enemyUav(30) : gm().matchType !== "protection" && startUav(30, "friend"));
+    }
+  };
+  return {
+    name: "extras",
+    init() {
+      ev.on("combat:kill", onKillEv), ev.on("player:died", () => {
+        K.kills = 0, K.got.clear(), K.target && cancelTarget(), vgMount.on && vgMountSet(A, null), ui(!0);
+      }), ev.on("ai:death", (o) => o?.agent?.key && K.botK.delete(o.agent.key)), ev.on("network:message", (m) => m?.type === "streak" && onRemote(m)), ev.on("loadout:changed", () => ui(!0));
+      typeof window < "u" && window.addEventListener("keydown", (e) => {
+        e.code === "F10" && !e.repeat && (e.preventDefault(), e.stopPropagation(), droneToggle());
+      }, !0);
+      try {
+        const rs = vgReplaySystem(A);
+        rs.init(), vgReplay.tick = rs.tick, vgReplay.late = rs.late;
+      } catch (err) {
+        A.reportError?.("extras", "replay-init", err);
+      }
+      vgKS.api = { use, earn, state: K, allowed, reset: resetAll, entities: () => K.ents.map((e) => e.kind), drone: { toggle: droneToggle, exit: droneExit, state: D }, mount: { probe: () => vgMountProbe(A), press: (ads) => vgMountPress(A, ads), state: vgMount, mul: vgMountMul } }, typeof window < "u" && (window.__VGKS__ = vgKS);
+    },
+    update(dt) {
+      try {
+        update(dt);
+      } catch (err) {
+        A.reportError?.("extras", "update", err);
+      }
+      try {
+        typeof vgReplay < "u" && vgReplay.tick?.(A, dt);
+      } catch (err) {
+        A.reportError?.("extras", "replay", err);
+      }
+    },
+    lateUpdate(dt) {
+      try {
+        droneLate(dt);
+      } catch (err) {
+        A.reportError?.("extras", "drone", err);
+      }
+      try {
+        typeof vgReplay < "u" && vgReplay.late?.(A, dt);
+      } catch (err) {
+        A.reportError?.("extras", "replay-late", err);
+      }
+    },
+    dispose() {
+      resetAll(), droneExit();
+    }
+  };
+}
+/* ------------------------------------------------------------------ Beta 1.3: replay recorder (developers) */
+// For game trailers. Developers only (set in the anti-cheat console; the owner always is one).
+//   F8  start / stop recording (up to 10 minutes): every soldier (you, bots, other players), their shots,
+//       bullet impacts and explosions, 20 times a second.
+//   F9  open the replay studio (offline, on the map the replay was recorded on): play, pause, scrub, slow
+//       motion, free / follow / orbit / first-person cameras, hide the interface, export and import.
+// Separate from the F10 drone.
+var vgReplay = { rec: null, list: [], playing: !1, studio: null, api: null };
+function vgReplaySystem(A) {
+  const S = A.services, ev = A.events, V = () => new b();
+  const R = vgReplay, MAX_S = 600, STEP = 0.05;
+  const isDev = () => !!vgAuth.dev;
+  const r2 = (n) => Math.round(n * 100) / 100, r3 = (n) => Math.round(n * 1e3) / 1e3, v3 = (p) => p ? [r2(p.x), r2(p.y), r2(p.z)] : null;
+  const ST = { stand: 0, crouch: 1, prone: 2, slide: 3 }, STN = ["stand", "crouch", "prone", "slide"];
+  const gm = () => S.gamemode?.state || {}, net = () => S.network?.state?.active ? S.network : null;
+  function toast(t, d = 1.8) {
+    try {
+      S.hud?.notify?.(t, { kind: "info", duration: d });
+    } catch {
+    }
+  }
+  // ---------------- recording
+  function actorsNow() {
+    const out = [], ps = S.player?.state;
+    if (ps?.position) out.push(["me", r2(ps.position.x), r2(ps.position.y), r2(ps.position.z), r3(ps.yaw || 0), r3(ps.pitch || 0), ps.sliding && ps.stance !== "prone" ? 3 : ST[ps.stance] ?? 0, ps.alive === !1 ? 0 : 1]);
+    for (const ag of S.ai?.agents || []) {
+      if (!ag?.position || !ag.key) continue;
+      const cr = ag.anim?.in?.crouch ?? ag.body?.anim?.in?.crouch ?? 0;
+      out.push([ag.key, r2(ag.position.x), r2(ag.position.y), r2(ag.position.z), r3((ag.aimYaw || 0) - Math.PI), r3(ag.aimPitch || 0), cr > 0.5 ? 1 : 0, ag.alive ? 1 : 0]);
+    }
+    const N = net();
+    if (N) for (const id of N.ids?.() || []) {
+      const p = N.pose(id);
+      p?.hasState && out.push([`n:${id}`, r2(p.x), r2(p.y), r2(p.z), r3(p.yaw || 0), r3(p.pitch || 0), ST[p.stance] ?? 0, p.alive ? 1 : 0]);
+    }
+    return out;
+  }
+  function meta(id) {
+    const ps = S.player?.state;
+    if (id === "me") return { name: vgAuth.user || Uc(), team: gm().playerTeam || "player", kind: "me" };
+    if (id.startsWith("n:")) {
+      const p = net()?.pose(id.slice(2));
+      return { name: p?.name || "Player", team: p?.team || "", kind: "net" };
+    }
+    const ag = (S.ai?.agents || []).find((x) => x.key === id);
+    return { name: ag?.name || "Soldier", team: ag?.team || "", kind: "ai" };
+  }
+  function recStart() {
+    if (!isDev()) return;
+    if (R.playing) return;
+    R.rec = { v: 1, map: S.world?.mapId || "", mode: gm().matchType || "", at: Date.now(), by: vgAuth.user || "", t0: A.time.t, acc: 0, actors: {}, frames: [], ev: [] }, toast("Replay recording · F8 to stop", 2.2), recUi();
+  }
+  function recStop(keep = !0) {
+    const r = R.rec;
+    if (!r) return;
+    if (R.rec = null, recUi(), keep && r.frames.length > 4) {
+      const out = { v: 1, map: r.map, mode: r.mode, at: r.at, by: r.by, dur: r3(r.frames[r.frames.length - 1].t), actors: r.actors, frames: r.frames, ev: r.ev };
+      R.list.unshift(out), R.list.length > 8 && (R.list.length = 8), toast(`Replay saved (${fmtT(out.dur)}) · F9 to watch`, 2.6);
+    }
+  }
+  function recTick() {
+    const r = R.rec;
+    if (!r) return;
+    const t = A.time.t - r.t0;
+    if (t > MAX_S) return recStop();
+    if (r.frames.length && t - r.frames[r.frames.length - 1].t < STEP) return;
+    const a = actorsNow();
+    for (const x of a) r.actors[x[0]] || (r.actors[x[0]] = meta(x[0]));
+    r.frames.push({ t: r3(t), a });
+  }
+  const evT = () => r3(A.time.t - R.rec.t0);
+  function onShot(w) {
+    R.rec && w?.origin && w?.end && R.rec.ev.push({ t: evT(), k: "shot", f: v3(w.origin), e: v3(w.end), w: String(w.weaponId || "rifle").slice(0, 24), s: String(w.source || "").slice(0, 24) });
+  }
+  function onBoom(x) {
+    R.rec && x?.position && !x.__replay && R.rec.ev.push({ t: evT(), k: "boom", p: v3(x.position), r: r2(x.radius || 6), y: String(x.type || "").slice(0, 16), u: String(x.surface || "default").slice(0, 16) });
+  }
+  function onNet(m) {
+    R.rec && m?.type === "weapon_fired" && m.playerId != null && R.rec.ev.push({ t: evT(), k: "nshot", id: `n:${m.playerId}`, w: String(m.weaponId || "rifle").slice(0, 24) });
+  }
+  let vfxOrig = null;
+  function wrapVfx() {
+    if (vfxOrig || !S.vfx?.spawn) return;
+    vfxOrig = S.vfx.spawn;
+    S.vfx.spawn = function(kind, o) {
+      try {
+        if (R.rec && !R.playing && (kind === "impact" || kind === "sparks" || kind === "dust") && o) {
+          const p = {};
+          for (const [k2, v2] of Object.entries(o)) v2?.isVector3 ? p[k2] = { v: v3(v2) } : typeof v2 == "number" ? p[k2] = r3(v2) : typeof v2 == "string" || typeof v2 == "boolean" ? p[k2] = v2 : 0;
+          R.rec.ev.push({ t: evT(), k: "fx", n: kind, p });
+        }
+      } catch {
+      }
+      return vfxOrig.call(this, kind, o);
+    };
+  }
+  // ---------------- playback
+  const P = { data: null, t: 0, speed: 1, play: !1, cam: "follow", target: "me", ghosts: new Map(), evI: 0, hidden: [], ui: null, uiHidden: !1, pos: V(), yaw: 0, pitch: -0.15, vel: V(), orbit: 0, dist: 3.4, fly: !1, last: 0, scaleWas: null, keyH: null, look: null };
+  function fmtT(s) {
+    s = Math.max(0, s);
+    return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}.${Math.floor(s % 1 * 10)}`;
+  }
+  function frameAt(t) {
+    const F = P.data.frames;
+    let lo = 0, hi = F.length - 1;
+    for (; lo < hi; ) {
+      const mid = lo + hi + 1 >> 1;
+      F[mid].t <= t ? lo = mid : hi = mid - 1;
+    }
+    return lo;
+  }
+  function actorPose(id, t, out = {}) {
+    const F = P.data.frames, i = frameAt(t), f0 = F[i], f1 = F[Math.min(F.length - 1, i + 1)], a0 = f0.a.find((x) => x[0] === id), a1 = f1.a.find((x) => x[0] === id) || a0;
+    if (!a0) return null;
+    const w = f1.t > f0.t ? Math.max(0, Math.min(1, (t - f0.t) / (f1.t - f0.t))) : 0, dy = Math.atan2(Math.sin(a1[4] - a0[4]), Math.cos(a1[4] - a0[4]));
+    return out.x = a0[1] + (a1[1] - a0[1]) * w, out.y = a0[2] + (a1[2] - a0[2]) * w, out.z = a0[3] + (a1[3] - a0[3]) * w, out.yaw = a0[4] + dy * w, out.pitch = a0[5] + (a1[5] - a0[5]) * w, out.st = STN[w < 0.5 ? a0[6] : a1[6]] || "stand", out.alive = (w < 0.5 ? a0[7] : a1[7]) === 1, out;
+  }
+  function ghostOf(id) {
+    let g = P.ghosts.get(id);
+    if (g) return g;
+    let sol = null;
+    try {
+      sol = S.ai?.netSoldier?.(`replay-${id}`, [...id].reduce((h, c) => h * 31 + c.charCodeAt(0) >>> 0, 7) % 97) || null;
+    } catch {
+    }
+    return g = { sol, placed: !1, dead: !1, prev: V(), vel: V() }, sol && (A.scene.add(sol.group), sol.group.visible = !0), P.ghosts.set(id, g), g;
+  }
+  function ghostsClear() {
+    for (const g of P.ghosts.values()) try {
+      g.sol && (g.sol.group.parent?.remove(g.sol.group), g.sol.dispose?.());
+    } catch {
+    }
+    P.ghosts.clear();
+  }
+  const tmp = {}, gp = V();
+  function ghostsUpdate(dt, snap) {
+    for (const id of Object.keys(P.data.actors)) {
+      const p = actorPose(id, P.t, tmp), g = ghostOf(id);
+      if (!g.sol) continue;
+      const vis = !!p && !(P.cam === "pov" && P.target === id);
+      if (!p) {
+        g.sol.group.visible = !1;
+        continue;
+      }
+      gp.set(p.x, p.y, p.z);
+      if (!p.alive) {
+        snap || !g.placed ? (g.sol.group.visible = !1, g.dead = !0) : g.dead || (g.dead = !0, g.sol.kill?.({ zone: "torso" })), g.sol.dead && g.sol.update({ dt: Math.max(1e-3, dt), pos: gp, vel: g.vel, yaw: p.yaw, pitch: p.pitch });
+        continue;
+      }
+      if (g.dead || snap || !g.placed) g.dead && g.sol.revive?.(), g.dead = !1, g.placed = !0, g.sol.place({ pos: gp, yaw: p.yaw, pitch: p.pitch, crouch: p.st === "crouch" ? 1 : 0, prone: p.st === "prone", slide: p.st === "slide" }), g.prev.copy(gp), g.vel.set(0, 0, 0);
+      else {
+        const k2 = dt > 1e-4 ? 1 / dt : 0;
+        g.vel.copy(gp).sub(g.prev).multiplyScalar(k2), g.prev.copy(gp), g.sol.update({ dt: Math.max(1e-3, dt), pos: gp, vel: g.vel, yaw: p.yaw, pitch: p.pitch, crouch: p.st === "crouch" || p.st === "slide" ? 1 : 0, prone: p.st === "prone", slide: p.st === "slide", sprint: g.vel.length() > 5 });
+      }
+      g.sol.group.visible = vis;
+    }
+  }
+  const tv = [V(), V(), V()];
+  function eventsFire(from, to) {
+    const E = P.data.ev;
+    for (; P.evI < E.length && E[P.evI].t <= to; P.evI++) {
+      const e = E[P.evI];
+      if (e.t < from) continue;
+      try {
+        if (e.k === "shot" && e.f && e.e) {
+          tv[0].fromArray(e.f), tv[1].fromArray(e.e), S.vfx?.spawn?.("tracer", { from: tv[0].clone(), to: tv[1].clone(), force: !0 }), S.audio?.gunshot?.({ origin: tv[0].clone(), weaponId: /pistol/.test(e.w) ? "pistol" : "rifle", suppressed: !1, source: "remote" });
+        } else if (e.k === "nshot") {
+          const p = actorPose(e.id, e.t, {});
+          if (p) {
+            const cp = Math.cos(p.pitch);
+            tv[0].set(p.x, p.y + (p.st === "prone" ? 0.35 : p.st === "stand" ? 1.45 : 1), p.z), tv[2].set(-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp);
+            const h = S.world?.raycast?.(tv[0], tv[2], 120);
+            tv[1].copy(tv[0]).addScaledVector(tv[2], h ? h.distance : 120), S.vfx?.spawn?.("tracer", { from: tv[0].clone(), to: tv[1].clone(), force: !0 }), S.audio?.gunshot?.({ origin: tv[0].clone(), weaponId: e.w, suppressed: !1, source: "remote" });
+          }
+        } else if (e.k === "boom" && e.p) ev.emit("combat:explosion", { position: tv[0].fromArray(e.p).clone(), radius: e.r || 6, type: e.y || "grenade", surface: e.u || "default", __replay: !0 });
+        else if (e.k === "fx" && e.n) {
+          const o = {};
+          for (const [k2, v2] of Object.entries(e.p || {})) o[k2] = v2 && typeof v2 == "object" && Array.isArray(v2.v) ? V().fromArray(v2.v) : v2;
+          (vfxOrig || S.vfx.spawn).call(S.vfx, e.n, o);
+        }
+      } catch {
+      }
+    }
+  }
+  function seek(t) {
+    P.t = Math.max(0, Math.min(P.data.dur, t));
+    const E = P.data.ev;
+    let i = 0;
+    for (; i < E.length && E[i].t < P.t; ) i++;
+    P.evI = i, ghostsUpdate(0, !0), ui(!0);
+  }
+  function studioOpen(idx = 0) {
+    if (!isDev()) return;
+    if (P.data) return studioClose();
+    if (R.rec) recStop();
+    if (net()) return toast("Leave the online match to watch replays (recording works online).", 2.6);
+    const d = R.list[idx];
+    if (!d) return studioUi(), void 0;
+    if (d.map && S.world?.mapId !== d.map) return toast(`This replay was recorded on ${mapName(d.map)}. Start a match there to watch it.`, 3), studioUi(idx);
+    vgDrone.on && vgKS.api?.drone?.exit?.(), vgMount.on && vgMountSet(A, null), P.data = d, P.idx = idx, P.t = 0, P.evI = 0, P.speed = 1, P.play = !0, P.cam = P.cam || "follow", P.target = d.actors.me ? "me" : Object.keys(d.actors)[0], R.playing = !0, vgKS.blockFire = !0;
+    P.scaleWas = A.time.scale, A.time.scale = 0, P.hidden = [];
+    for (const ag of S.ai?.agents || []) ag?.object && ag.object.visible && (ag.object.visible = !1, P.hidden.push(ag.object));
+    try {
+      S.player?.setMovementEnabled?.(!1), A.camera.layers.disable(A.layers.VIEWMODEL), S.hud?.setVisible?.(!1);
+    } catch {
+    }
+    const ps = S.player?.state;
+    ps?.position && (P.pos.copy(ps.position), P.pos.y += 1.7, P.yaw = ps.yaw || 0, P.pitch = ps.pitch || 0), A.input.setLookHandler((dx, dy) => {
+      const k2 = (A.settings.get("controls.sensitivity", 3) || 3) * 7e-4;
+      P.cam === "free" ? (P.yaw -= dx * k2, P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - dy * k2))) : (P.orbit -= dx * k2, P.pitch = Math.max(-1.2, Math.min(1.2, P.pitch - dy * k2)));
+    }), P.last = performance.now(), seek(0), studioUi(idx), ev.emit("replay:studio", { open: !0 });
+  }
+  function studioClose() {
+    if (!P.data) return studioUi(-1);
+    ghostsClear(), P.data = null, R.playing = !1, vgKS.blockFire = vgDrone.on, A.time.scale = P.scaleWas || 1;
+    for (const o of P.hidden) o.visible = !0;
+    P.hidden = [];
+    try {
+      A.input.setLookHandler(null), S.player?.setMovementEnabled?.(!0), A.camera.layers.enable(A.layers.VIEWMODEL), S.hud?.setVisible?.(!0);
+    } catch {
+    }
+    studioUi(-1), ev.emit("replay:studio", { open: !1 });
+  }
+  function mapName(id) {
+    try {
+      return S.world?.maps?.().find((m) => m.id === id)?.name || id;
+    } catch {
+      return id;
+    }
+  }
+  // ---------------- cameras
+  const cv = [V(), V(), V()];
+  function camUpdate(dt) {
+    const cam = A.camera, p = actorPose(P.target, P.t, tmp);
+    if (P.cam === "free" || !p) {
+      const mv = A.input.getMove?.() || { x: 0, y: 0 }, sp = A.input.isDown("sprint") ? 16 : A.input.isDown("ads") ? 1.6 : 5, f = cv[0].set(-Math.sin(P.yaw) * Math.cos(P.pitch), Math.sin(P.pitch), -Math.cos(P.yaw) * Math.cos(P.pitch)), r = cv[1].set(Math.cos(P.yaw), 0, -Math.sin(P.yaw)), want = cv[2].set(0, 0, 0);
+      want.addScaledVector(f, mv.y || 0).addScaledVector(r, mv.x || 0), A.input.isDown("jump") && (want.y += 1), A.input.isDown("crouch") && (want.y -= 1), want.lengthSq() > 1 && want.normalize(), P.vel.lerp(want.multiplyScalar(sp), 1 - Math.exp(-6 * dt)), P.pos.addScaledVector(P.vel, dt), cam.position.copy(P.pos), cam.rotation.set(P.pitch, P.yaw, 0, "YXZ");
+    } else if (P.cam === "pov") {
+      const eye = p.st === "prone" ? 0.4 : p.st === "crouch" || p.st === "slide" ? 1.1 : 1.64;
+      cam.position.set(p.x, p.y + eye, p.z), cam.rotation.set(p.pitch, p.yaw, 0, "YXZ"), P.pos.copy(cam.position), P.yaw = p.yaw;
+    } else {
+      P.cam === "orbit" && P.play && (P.orbit += dt * 0.35 * Math.min(2, P.speed));
+      const yaw = (P.cam === "orbit" ? 0 : p.yaw) + P.orbit, pit = P.cam === "orbit" ? -0.25 : P.pitch * 0.6 - 0.12, h = p.st === "prone" ? 0.5 : p.st === "stand" ? 1.55 : 1.15, tgt = cv[0].set(p.x, p.y + h, p.z), back = cv[1].set(Math.sin(yaw) * Math.cos(pit), -Math.sin(pit), Math.cos(yaw) * Math.cos(pit)), side = cv[2].set(Math.cos(yaw), 0, -Math.sin(yaw));
+      let d = P.cam === "orbit" ? P.dist * 1.6 : P.dist;
+      const from = tgt.clone().addScaledVector(side, P.cam === "orbit" ? 0 : 0.55), h2 = S.world?.raycast?.(from, back, d);
+      h2 && (d = Math.max(0.6, h2.distance - 0.2)), cam.position.copy(from).addScaledVector(back, d), cam.lookAt(tgt.x + side.x * (P.cam === "orbit" ? 0 : 0.55), tgt.y, tgt.z + side.z * (P.cam === "orbit" ? 0 : 0.55)), P.pos.copy(cam.position);
+    }
+    cam.parent && cam.parent !== A.scene && cam.parent.worldToLocal?.(cam.position), cam.updateMatrixWorld(!0);
+  }
+  // ---------------- studio UI
+  const css = `.vg-rp { position: fixed; inset: 0; z-index: 72; pointer-events: none; color: #e9ece6; font: 600 12px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.vg-rp .bar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(980px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px 14px 12px; background: rgba(8,11,13,.86); border: 1px solid rgba(236,240,234,.14); border-top: 2px solid #f2c14e; pointer-events: auto; }
+.vg-rp .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vg-rp .tl { position: relative; height: 18px; margin: 4px 0 8px; cursor: pointer; }
+.vg-rp .tl i { position: absolute; left: 0; right: 0; top: 7px; height: 4px; background: rgba(236,240,234,.16); }
+.vg-rp .tl u { position: absolute; left: 0; top: 7px; height: 4px; background: #f2c14e; }
+.vg-rp .tl b { position: absolute; top: 2px; width: 3px; height: 14px; margin-left: -1px; background: #fff; }
+.vg-rp .tl em { position: absolute; top: 5px; width: 2px; height: 8px; background: #ff6b5b; opacity: .8; }
+.vg-rp button, .vg-rp select { padding: 6px 10px; background: rgba(255,255,255,.06); border: 1px solid rgba(236,240,234,.2); color: #e9ece6; font: 700 11px/1 inherit; font-family: inherit; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+.vg-rp button.on { background: #f2c14e; border-color: #f2c14e; color: #111; }
+.vg-rp select { text-transform: none; letter-spacing: 0; max-width: 220px; }
+.vg-rp select option { background: #111; }
+.vg-rp .tm { min-width: 128px; font: 700 13px/1 ui-monospace, Menlo, Consolas, monospace; }
+.vg-rp .sp { flex: 1; }
+.vg-rp .hd { position: absolute; left: 22px; top: 18px; padding: 8px 12px; background: rgba(8,11,13,.7); border-left: 3px solid #f2c14e; line-height: 1.6; color: rgba(233,236,230,.8); }
+.vg-rp .hd b { color: #f2c14e; letter-spacing: .24em; }
+.vg-rp .hd kbd { display: inline-block; min-width: 14px; padding: 0 4px; border: 1px solid rgba(236,240,234,.45); font: 700 10px/14px system-ui, sans-serif; text-align: center; }
+.vg-rp.clean .bar, .vg-rp.clean .hd { display: none; }
+.vg-rp .lst { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100vw - 32px)); padding: 18px 20px; background: rgba(10,13,15,.95); border: 1px solid rgba(236,240,234,.14); border-top: 3px solid #f2c14e; pointer-events: auto; }
+.vg-rp .lst h3 { margin: 0 0 10px; letter-spacing: .14em; text-transform: uppercase; font-size: 16px; }
+.vg-rp .lst .it { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid rgba(236,240,234,.08); }
+.vg-rp .lst .it span { flex: 1; }
+.vg-rp .lst p { color: #aeb5ad; line-height: 1.5; }
+.vg-rec { position: fixed; right: 22px; top: 18px; z-index: 72; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(8,11,13,.7); color: #e9ece6; font: 700 12px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; pointer-events: none; }
+.vg-rec i { width: 10px; height: 10px; border-radius: 50%; background: #ff4a3a; animation: vgRecB 1s steps(2) infinite; }
+@keyframes vgRecB { 50% { opacity: .2; } }`;
+  function ensureCss() {
+    if (document.getElementById("vg-rp-style")) return;
+    const st = document.createElement("style");
+    st.id = "vg-rp-style", st.textContent = css, document.head.appendChild(st);
+  }
+  let recEl = null, recSig = "";
+  function recUi() {
+    if (typeof document > "u") return;
+    ensureCss();
+    if (!R.rec) return recEl && (recEl.style.display = "none"), void 0;
+    recEl || (recEl = document.createElement("div"), recEl.className = "vg-rec", document.body.appendChild(recEl)), recEl.style.display = "";
+    const t = A.time.t - R.rec.t0, sig = `${Math.floor(t)}`;
+    sig !== recSig && (recSig = sig, recEl.innerHTML = `<i></i>REC ${fmtT(t).slice(0, -2)}`);
+  }
+  function studioUi(idx) {
+    ensureCss();
+    if (idx === -1 && !P.data) return P.ui?.remove(), P.ui = null, void 0;
+    if (!P.ui) {
+      P.ui = document.createElement("div"), P.ui.className = "vg-rp", document.body.appendChild(P.ui);
+      for (const t of ["mousedown", "pointerdown", "click", "wheel"]) P.ui.addEventListener(t, (e) => {
+        e.target.closest?.(".bar, .lst") && e.stopPropagation();
+      });
+    }
+    if (!P.data) {
+      try {
+        document.pointerLockElement && document.exitPointerLock();
+      } catch {
+      }
+      P.ui.classList.remove("clean"), P.ui.innerHTML = `<div class="lst"><h3>Replay studio</h3>${R.list.length ? R.list.map((d, i) => `<div class="it"><span><b>${vgEsc(mapName(d.map))}</b> · ${vgEsc(d.mode || "")} · ${fmtT(d.dur)} · ${new Date(d.at).toLocaleTimeString()}</span><button data-w="${i}">Watch</button><button data-x="${i}">Export</button></div>`).join("") : "<p>No replays yet. Press <b>F8</b> in a match to start recording and F8 again to stop.</p>"}<div class="row" style="margin-top:12px"><button data-imp>Import…</button><span class="sp"></span><button data-close>Close</button></div><input type="file" accept=".json,application/json" hidden data-file></div>`;
+      P.ui.querySelectorAll("[data-w]").forEach((x) => x.addEventListener("click", () => {
+        P.ui.remove(), P.ui = null, studioOpen(+x.dataset.w);
+      })), P.ui.querySelectorAll("[data-x]").forEach((x) => x.addEventListener("click", () => exportRp(R.list[+x.dataset.x]))), P.ui.querySelector("[data-close]").addEventListener("click", () => (P.ui.remove(), P.ui = null));
+      const file = P.ui.querySelector("[data-file]");
+      P.ui.querySelector("[data-imp]").addEventListener("click", () => file.click()), file.addEventListener("change", async () => {
+        try {
+          const d = JSON.parse(await file.files[0].text());
+          if (!d || d.v !== 1 || !Array.isArray(d.frames) || !d.actors) throw new Error("not a Vangaurd replay");
+          R.list.unshift(d), studioUi(0);
+        } catch (err) {
+          toast(`Could not import: ${err.message}`, 2.6);
+        }
+      });
+      return;
+    }
+    const d = P.data, names = Object.entries(d.actors).map(([id, m]) => `<option value="${vgEsc(id)}"${id === P.target ? " selected" : ""}>${vgEsc(m.name)}${m.kind === "me" ? " (you)" : ""}</option>`).join(""), kills = d.ev.filter((e) => e.k === "boom").map((e) => `<em style="left:${(e.t / d.dur * 100).toFixed(2)}%"></em>`).join("");
+    P.ui.innerHTML = `<div class="hd"><b>REPLAY STUDIO</b> · ${vgEsc(mapName(d.map))}<br><kbd>K</kbd> play/pause <kbd>J</kbd><kbd>L</kbd> ∓5 s <kbd>,</kbd><kbd>.</kbd> step <kbd>[</kbd><kbd>]</kbd> speed <kbd>1</kbd>-<kbd>4</kbd> camera <kbd>N</kbd> next soldier <kbd>Tab</kbd> mouse <kbd>H</kbd> hide UI <kbd>F9</kbd> exit</div><div class="bar"><div class="tl" data-tl><i></i><u></u>${kills}<b></b></div><div class="row"><button data-pp>${P.play ? "Pause" : "Play"}</button><span class="tm"></span>${[0.1, 0.25, 0.5, 1, 2].map((s) => `<button data-sp="${s}" class="${P.speed === s ? "on" : ""}">${s}×</button>`).join("")}<span class="sp"></span>${[["follow", "Follow"], ["orbit", "Orbit"], ["pov", "First person"], ["free", "Free"]].map(([k2, t]) => `<button data-cam="${k2}" class="${P.cam === k2 ? "on" : ""}">${t}</button>`).join("")}<select data-act>${names}</select><button data-exp>Export</button><button data-close>Exit</button></div></div>`;
+    const tl = P.ui.querySelector("[data-tl]"), scrub = (e) => {
+      const r = tl.getBoundingClientRect();
+      seek((e.clientX - r.left) / r.width * d.dur);
+    };
+    tl.addEventListener("pointerdown", (e) => {
+      scrub(e), tl.setPointerCapture?.(e.pointerId);
+      const mv = (e2) => scrub(e2), up = () => (tl.removeEventListener("pointermove", mv), tl.removeEventListener("pointerup", up));
+      tl.addEventListener("pointermove", mv), tl.addEventListener("pointerup", up);
+    }), P.ui.querySelector("[data-pp]").addEventListener("click", () => togglePlay()), P.ui.querySelectorAll("[data-sp]").forEach((x) => x.addEventListener("click", () => (P.speed = +x.dataset.sp, studioUi()))), P.ui.querySelectorAll("[data-cam]").forEach((x) => x.addEventListener("click", () => setCam(x.dataset.cam))), P.ui.querySelector("[data-act]").addEventListener("change", (e) => (P.target = e.target.value, ghostsUpdate(0, !1))), P.ui.querySelector("[data-exp]").addEventListener("click", () => exportRp(d)), P.ui.querySelector("[data-close]").addEventListener("click", () => studioClose()), ui(!0);
+  }
+  let uiSig = "";
+  function ui(force = !1) {
+    if (!P.ui || !P.data) return;
+    const d = P.data, sig = `${P.t.toFixed(1)}|${P.play}`;
+    if (!force && sig === uiSig) return;
+    uiSig = sig;
+    const pct = (P.t / Math.max(0.01, d.dur) * 100).toFixed(2) + "%", u = P.ui.querySelector(".tl u"), bb = P.ui.querySelector(".tl b"), tm = P.ui.querySelector(".tm"), pp = P.ui.querySelector("[data-pp]");
+    u && (u.style.width = pct), bb && (bb.style.left = pct), tm && (tm.textContent = `${fmtT(P.t)} / ${fmtT(d.dur)}`), pp && (pp.textContent = P.play ? "Pause" : "Play");
+  }
+  function togglePlay() {
+    P.play = !P.play, P.play && P.t >= P.data.dur - 0.01 && seek(0), ui(!0);
+  }
+  function setCam(c) {
+    P.cam = c, c === "free" && (P.vel.set(0, 0, 0)), c !== "free" && (P.orbit = 0, P.pitch = -0.15), ghostsUpdate(0, !1), studioUi();
+  }
+  function exportRp(d) {
+    try {
+      const blob = new Blob([JSON.stringify(d)], { type: "application/json" }), a = document.createElement("a");
+      a.href = URL.createObjectURL(blob), a.download = `vangaurd-replay-${d.map}-${new Date(d.at).toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`, document.body.appendChild(a), a.click(), setTimeout(() => (URL.revokeObjectURL(a.href), a.remove()), 2e3), toast("Replay exported", 1.6);
+    } catch (err) {
+      toast(`Export failed: ${err.message}`, 2.4);
+    }
+  }
+  function onKey(e) {
+    if (!isDev()) return;
+    if (e.code === "F8" && !e.repeat) return e.preventDefault(), e.stopPropagation(), R.rec ? recStop() : recStart();
+    if (e.code === "F9" && !e.repeat) return e.preventDefault(), e.stopPropagation(), P.data ? studioClose() : P.ui ? (P.ui.remove(), P.ui = null) : studioOpen(0);
+    if (!P.data || e.repeat && !/^(KeyJ|KeyL|Comma|Period)$/.test(e.code)) return;
+    const k = e.code;
+    let used = !0;
+    if (k === "KeyK") togglePlay();
+    else if (k === "KeyJ") seek(P.t - 5);
+    else if (k === "KeyL") seek(P.t + 5);
+    else if (k === "Comma") P.play = !1, seek(P.t - 1 / 30);
+    else if (k === "Period") P.play = !1, seek(P.t + 1 / 30);
+    else if (k === "BracketLeft" || k === "BracketRight") {
+      const L = [0.1, 0.25, 0.5, 1, 2], i = L.indexOf(P.speed);
+      P.speed = L[Math.max(0, Math.min(L.length - 1, (i < 0 ? 3 : i) + (k === "BracketLeft" ? -1 : 1)))], studioUi();
+    } else if (/^Digit[1-4]$/.test(k)) setCam(["follow", "orbit", "pov", "free"][+k.slice(5) - 1]);
+    else if (k === "KeyN" || k === "KeyB") {
+      const ids = Object.keys(P.data.actors), i = ids.indexOf(P.target);
+      P.target = ids[(i + (k === "KeyN" ? 1 : ids.length - 1)) % ids.length], ghostsUpdate(0, !1), studioUi();
+    } else if (k === "KeyH") P.ui?.classList.toggle("clean");
+    else if (k === "Tab") {
+      try {
+        document.pointerLockElement ? document.exitPointerLock() : A.ui.requestPointerLock()?.catch?.(() => {
+        });
+      } catch {
+      }
+    } else if (k === "Escape") studioClose();
+    else used = !1;
+    used && (e.preventDefault(), e.stopPropagation());
+  }
+  function onWheel(e) {
+    P.data && (P.cam === "follow" || P.cam === "orbit") && (P.dist = Math.max(1.2, Math.min(14, P.dist * (e.deltaY > 0 ? 1.1 : 0.9))));
+  }
+  return {
+    init() {
+      ev.on("combat:shot", onShot), ev.on("combat:explosion", onBoom), ev.on("network:message", onNet), wrapVfx(), typeof window < "u" && (window.addEventListener("keydown", onKey, !0), window.addEventListener("wheel", onWheel, { passive: !0 })), R.api = { start: recStart, stop: recStop, open: studioOpen, close: studioClose, seek, state: P, setCam, togglePlay, dev: (on) => (vgAuth.dev = !!on) }, typeof window < "u" && (window.__VGRP__ = R);
+    },
+    tick() {
+      R.rec && (recTick(), recUi());
+    },
+    late() {
+      if (!P.data) return;
+      const now = performance.now(), dt = Math.min(0.1, (now - P.last) / 1e3);
+      P.last = now;
+      const before = P.t;
+      P.play && (P.t = Math.min(P.data.dur, P.t + dt * P.speed), P.t >= P.data.dur && (P.play = !1)), eventsFire(before, P.t), ghostsUpdate(dt * (P.play ? P.speed : 0), !1), camUpdate(dt), ui();
+    }
+  };
+}
 var ggOn = null;
 function kc(A, e = pgActive()) {
   if (ggOn) return pgBlankAtt();
   const t = A === "pistol" || A === "secondary" ? "secondary" : "primary", i = pgSlots()[e], a = {};
   for (const s of Object.keys(_c)) {
     const n = i?.att?.[t]?.[s] || "none";
-    a[s] = pgAttOk(t, s, n) ? n : "none";
+    a[s] = pgAttOk(t, s, n, i?.[t]) ? n : "none";
   }
   return a;
 }
@@ -49405,12 +50912,12 @@ function sJ(A, e, t, i = pgActive()) {
   const a = A === "pistol" || A === "secondary" ? "secondary" : "primary", s = a === "secondary" ? "pistol" : "rifle";
   if (!_c[e]) return kc(s, i);
   const n = pgSlots()[i];
-  return n.att[a][e] = pgAttOk(a, e, t) ? t : "none", om(), kc(s, i);
+  return n.att[a][e] = pgAttOk(a, e, t, n[a]) ? t : "none", om(), kc(s, i);
 }
 function X3() {
   return rm.slice();
 }
-typeof window < "u" && (window.__PG__ = { sJ: (...A) => sJ(...A), kc: (...A) => kc(...A), level: () => pgLevel(), slots: () => pgSlots(), equip: (A) => pgEquip(A), set: (A, e) => lwSet(A, e), addXp: (A, e) => pgAddXp(A, e), profile: () => Za });
+typeof window < "u" && (window.__PG__ = { sJ: (...A) => sJ(...A), kc: (...A) => kc(...A), wpn: (id) => wpnStat(id), ch: () => chState(), streaks: (k) => pgStreaks(k), toggleStreak: (id, k) => pgToggleStreak(id, k), level: () => pgLevel(), slots: () => pgSlots(), equip: (A) => pgEquip(A), set: (A, e) => lwSet(A, e), addXp: (A, e) => pgAddXp(A, e), profile: () => Za });
 function q3() {
   return pgSlot()?.grenade || "frag";
 }
@@ -49963,7 +51470,7 @@ function padSystem(A, H) {
     const x = A.settings.get("pad." + k, d);
     return x === void 0 ? d : x;
   };
-  const ACT = { 0: "jump", 1: "crouch", 2: "reload", 3: "swapWeapon", 4: "tactical", 5: "grenade", 8: "scoreboard", 11: "melee", 12: "ping", 13: "prone", 14: "inspect", 15: "interact" };
+  const ACT = { 0: "jump", 1: "crouch", 2: "reload", 3: "swapWeapon", 4: "tactical", 5: "grenade", 8: "scoreboard", 11: "melee", 12: ["ping", "killstreak"], 13: "prone", 14: "inspect", 15: "interact" };
   function pads() {
     try {
       return [...navigator.getGamepads?.() || []].filter((g) => g && g.connected);
@@ -50082,7 +51589,7 @@ function padSystem(A, H) {
       H.lock();
       const mx = mcurve(ax[0], zL), my = -mcurve(ax[1], zL);
       mx || my ? (inp.injectMove(mx, my), st.moving = !0) : st.moving && (inp.injectMove(null), st.moving = !1);
-      for (const i in ACT) setAct(ACT[i], !!b[i]);
+      for (const i in ACT) for (const a2 of [].concat(ACT[i])) setAct(a2, !!b[i]);
       setAct("ads", (bv[6] || 0) > 0.35), setAct("fire", (bv[7] || 0) > 0.35), b[9] && !st.prev[9] && H.pause();
       b[10] && !st.prev[10] && (st.sprint = !st.sprint), (my < 0.35 || st.held.ads || st.held.fire) && (st.sprint = !1), setAct("sprint", st.sprint);
       let rx = curve(ax[2], zR), ry = curve(ax[3], zR);
@@ -51473,6 +52980,33 @@ var loCss = `
 .od-lo-att h4 { margin: 0 0 calc(var(--u) * 6); color: var(--fg); font-size: calc(var(--u) * 12); letter-spacing: .18em; text-transform: uppercase; }
 .od-lo-att p { margin: calc(var(--u) * 5) 0 0; font-size: calc(var(--u) * 12); }
 .od-lo-gren { grid-column: 1 / -1; }
+.od-lo-gun i.wl { font-style: normal; margin-left: calc(var(--u) * 6); padding: 0 calc(var(--u) * 4); border: 1px solid currentColor; font-size: calc(var(--u) * 9.5); opacity: .7; }
+.od-lo-wlv { margin: calc(var(--u) * 12) 0 calc(var(--u) * 4); padding: calc(var(--u) * 10) calc(var(--u) * 12); background: rgba(0,0,0,.28); }
+.od-lo-wlv .hd { display: flex; justify-content: space-between; gap: calc(var(--u) * 10); margin-bottom: calc(var(--u) * 6); font-size: calc(var(--u) * 12); }
+.od-lo-wlv .hd b { color: var(--accent); letter-spacing: .14em; text-transform: uppercase; }
+.od-lo-wlv small { display: block; margin-top: calc(var(--u) * 6); font-size: calc(var(--u) * 11.5); }
+.od-lo-ks { grid-column: 1 / -1; }
+.od-lo-ks h3 small { margin-left: calc(var(--u) * 8); color: var(--accent); font-size: calc(var(--u) * 12); letter-spacing: .16em; }
+.od-lo-kslist { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(var(--u) * 8); }
+.od-lo .od-btn.od-lo-ksbtn { display: flex; align-items: center; gap: calc(var(--u) * 10); padding: calc(var(--u) * 9) calc(var(--u) * 10); text-align: left; letter-spacing: .06em; min-width: 0; }
+.od-lo-ksbtn svg { flex: none; width: calc(var(--u) * 28); height: calc(var(--u) * 28); }
+.od-lo-ksbtn span { min-width: 0; }
+.od-lo-ksbtn b { display: block; font-size: calc(var(--u) * 11.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.od-lo-ksbtn small { display: block; font-size: calc(var(--u) * 10.5); opacity: .8; }
+.od-lo .od-btn.od-lo-ksbtn.lock { opacity: .45; }
+.od-lo-ksmsg { min-height: 1.4em; }
+.od-ch { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: calc(var(--u) * 6) calc(var(--u) * 14); padding: calc(var(--u) * 10) 0; border-top: 1px solid rgba(236,240,234,.08); }
+.od-ch .t { display: flex; justify-content: space-between; gap: calc(var(--u) * 12); grid-column: 1; }
+.od-ch .t b { color: var(--fg); font-weight: 600; }
+.od-ch .od-armory-bar { grid-column: 1; }
+.od-ch em { grid-column: 2; grid-row: 1 / span 2; font-style: normal; color: var(--accent); font-weight: 800; letter-spacing: .08em; white-space: nowrap; }
+.od-ch.done { opacity: .6; }
+.od-ch.done .t span { color: var(--accent); letter-spacing: .14em; text-transform: uppercase; font-size: calc(var(--u) * 11); }
+.od-ch-left { color: var(--fg3); font-size: calc(var(--u) * 12); letter-spacing: .12em; text-transform: uppercase; }
+.od-wl-track { margin-top: calc(var(--u) * 6); font-size: calc(var(--u) * 12); }
+.od-wl-track summary { cursor: pointer; color: var(--fg); letter-spacing: .12em; text-transform: uppercase; font-size: calc(var(--u) * 11); padding: calc(var(--u) * 4) 0; }
+.od-ks-ic { width: calc(var(--u) * 16); height: calc(var(--u) * 16); vertical-align: -0.2em; margin-right: calc(var(--u) * 6); color: var(--accent); }
+@media (max-width: 900px) { .od-lo-kslist { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .od-lo-perks { grid-column: 1 / -1; }
 .od-lo-perkcols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--u) * 18); }
 .od-lo-note { margin-top: calc(var(--u) * 14); color: var(--accent); }
@@ -52160,14 +53694,17 @@ function vgNetStart() {
         vgNet.stopped = !0, ws.close();
         return;
       }
-      ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build, device: vgDevice() }));
+      ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build, device: vgDevice(), steam: vgBoot.steam || void 0 })), vgAnnFrom(m), vgRegionsFrom(m);
     }
-    else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, ws.send(JSON.stringify({ type: "social_state" })), vgSyncBegin();
+    else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, vgAuth.dev = !!m.developer, ws.send(JSON.stringify({ type: "social_state" })), vgSyncBegin();
+    else if (m.type === "role") vgAuth.dev = !!m.developer;
+    else if (m.type === "announcement") vgAnnFrom(m);
+    else if (m.type === "maintenance") return vgMaintenance(m.message);
     else if (m.type === "banned" || m.type === "auth_error") {
-      vgNet.stopped = !0, ws.close(), (m.type === "banned" || m.code === "banned") && vgBanned(m.ban, m.message);
+      vgNet.stopped = !0, ws.close(), (m.type === "banned" || m.code === "banned") && vgBanned(m.ban, m.message), (m.code === "maintenance" || m.code === "steam_required") && vgBootFail(m.code, m.message);
       return;
     } else if (m.type === "kicked") {
-      vgToast(m.message || "A moderator disconnected you."), vgNet.retry = Math.max(vgNet.retry, 4);
+      vgKick.fn ? vgKick.fn(m.message, "social") : vgToast(m.message || "A moderator disconnected you."), vgNet.retry = Math.max(vgNet.retry, 4);
       return;
     } else if (m.type === "pong" && vgNet.sent.has(m.seq)) {
       const t0 = vgNet.sent.get(m.seq);
@@ -52697,11 +54234,46 @@ function vgBanOffline() {
   if (!m.permanent && !(m.until > Date.now())) return vgBanClear();
   vgBanned(m, "", !0);
 }
+/* Beta 1.3: usernames can never contain "Parallel" or "Developer" (also spelled with digits, - or _ in between,
+   or doubled letters). The server checks the same thing. */
+function vgNameBlocked(name) {
+  const leet = { 0: "o", 1: "l", 3: "e", 4: "a", 5: "s", 7: "t", 8: "b", 9: "g" }, n = String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "").replace(/[0-9]/g, (d) => leet[d] || d), sq = (t) => t.replace(/(.)\1+/g, "$1");
+  return [n, n.replace(/i/g, "l")].some((v) => ["parallel", "developer"].some((w) => v.includes(w) || sq(v).includes(sq(w))));
+}
+/* Beta 1.3: a moderator disconnected you. Online play stops and you go back to the lobby with a notice. */
+var vgKick = { fn: null, at: -1e9 };
+function vgKickNotice(msg) {
+  if (typeof document > "u") return;
+  document.querySelector(".vg-kick")?.remove();
+  if (!document.getElementById("vg-rep-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-rep-style", st.textContent = vgRepCss, document.head.appendChild(st);
+  }
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  const d = document.createElement("div");
+  d.className = "vg-rep vg-kick", d.innerHTML = `<div class="card" role="alertdialog" aria-modal="true" aria-labelledby="vg-kick-h"><h3 id="vg-kick-h">Disconnected</h3><p class="sub">${vgEsc(msg || "A moderator disconnected you from the server.")} You are back in the lobby.</p><div class="acts"><button type="button" class="pri" data-ok>OK</button></div></div>`, document.body.appendChild(d);
+  const close = () => {
+    d.remove(), window.removeEventListener("keydown", key, !0);
+  }, key = (ev) => {
+    ev.stopImmediatePropagation(), (ev.key === "Escape" || ev.key === "Enter") && (ev.preventDefault(), close());
+  };
+  window.addEventListener("keydown", key, !0), d.querySelector("[data-ok]").addEventListener("click", close), setTimeout(() => d.querySelector("[data-ok]")?.focus(), 30);
+}
 /* Report a player: from the end-of-match screen, about someone from the online match that just finished. */
 var vgLastMatch = null;
 function vgTrackMatch(m) {
-  if (!m || typeof m != "object" || !m.matchId || !/^(match_found|match_update|match_ended|player_joined)$/.test(m.type)) return;
-  (!vgLastMatch || vgLastMatch.id !== m.matchId) && (vgLastMatch = { id: m.matchId, names: /* @__PURE__ */ new Set(), reported: /* @__PURE__ */ new Set(), ended: !1, endedAt: 0 });
+  if (!m || typeof m != "object" || !m.matchId) return;
+  // Beta 1.3: remember who eliminated you last, for the report dialog
+  if (m.type === "player_killed") {
+    const me = String(vgAuth.user || "").toLowerCase();
+    vgLastMatch && vgLastMatch.id === m.matchId && me && String(m.targetName || "").toLowerCase() === me && m.attackerName && String(m.attackerName).toLowerCase() !== me && (vgLastMatch.lastKiller = String(m.attackerName).slice(0, 20), vgLastMatch.names.add(vgLastMatch.lastKiller));
+    return;
+  }
+  if (!/^(match_found|match_update|match_ended|player_joined)$/.test(m.type)) return;
+  (!vgLastMatch || vgLastMatch.id !== m.matchId) && (vgLastMatch = { id: m.matchId, names: /* @__PURE__ */ new Set(), reported: /* @__PURE__ */ new Set(), ended: !1, endedAt: 0, lastKiller: null });
   for (const r of [...m.roster || [], ...m.players || [], ...m.player ? [m.player] : []]) r?.name && vgLastMatch.names.add(String(r.name).slice(0, 20));
   m.type === "match_ended" && vgMatchOver();
 }
@@ -52730,6 +54302,8 @@ var vgRepCss = `
 .vg-rep .who button:hover, .vg-rep .why button:hover { border-color: #f2c14e; }
 .vg-rep .who button.on, .vg-rep .why button.on { border-color: #f2c14e; background: rgba(242,193,78,.15); color: #f2c14e; }
 .vg-rep .who button:disabled { opacity: .45; cursor: default; }
+.vg-rep .who button em.lk { display: inline-block; margin-left: 8px; padding: 2px 6px; background: #c8402f; color: #fff; font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; vertical-align: 1px; }
+.vg-rep .who button { display: inline-flex; align-items: center; }
 .vg-rep textarea { width: 100%; min-height: 70px; box-sizing: border-box; padding: 10px 11px; background: rgba(255,255,255,.04); border: 1px solid rgba(236,240,234,.2); color: #fff; font: 14px/1.4 inherit; font-family: inherit; resize: vertical; outline: none; }
 .vg-rep textarea:focus { border-color: #f2c14e; }
 .vg-rep .msg { min-height: 18px; margin: 10px 0 0; font-size: 13px; color: #c3c9c2; }
@@ -52753,9 +54327,9 @@ function vgReportOpen() {
   }
   const me = String(vgAuth.user || "").toLowerCase(), M = vgLastMatch, names = [...M.names].filter((n) => n.toLowerCase() !== me).sort((a, b) => a.localeCompare(b));
   const d = document.createElement("div");
-  d.className = "vg-rep", d.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-rep-h"><h3 id="vg-rep-h">Report a player</h3><p class="sub">${M.ended ? "From the match you just played." : "From your current match."} Reports go to the Vangaurd moderators, who can ban cheaters and abusive players.</p><span class="lbl">Player</span><div class="who">${names.map((n) => `<button type="button" data-n="${vgEsc(n)}"${M.reported.has(n) ? " disabled" : ""}>${vgEsc(n)}${M.reported.has(n) ? " \xB7 reported" : ""}</button>`).join("")}</div><span class="lbl">Reason</span><div class="why">${VG_REPORT_REASONS.map(([k, t]) => `<button type="button" data-r="${k}">${t}</button>`).join("")}</div><span class="lbl">What happened? (optional)</span><textarea maxlength="300" placeholder="For example: always knew where everyone was through walls"></textarea><div class="msg" aria-live="polite"></div><div class="acts"><button type="button" data-c>Cancel</button><button type="button" class="pri" data-s disabled>Send report</button></div></div>`, document.body.appendChild(d);
+  d.className = "vg-rep", d.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-rep-h"><h3 id="vg-rep-h">Report a player</h3><p class="sub">${M.ended ? "From the match you just played." : "From your current match."} Reports go to the Vangaurd moderators, who can ban cheaters and abusive players.</p><span class="lbl">Player</span><div class="who">${names.map((n) => `<button type="button" data-n="${vgEsc(n)}"${M.reported.has(n) ? " disabled" : ""}>${vgEsc(n)}${M.reported.has(n) ? " \xB7 reported" : ""}${M.lastKiller === n ? '<em class="lk">Last eliminated you</em>' : ""}</button>`).join("")}</div><span class="lbl">Reason</span><div class="why">${VG_REPORT_REASONS.map(([k, t]) => `<button type="button" data-r="${k}">${t}</button>`).join("")}</div><span class="lbl">What happened? (optional)</span><textarea maxlength="300" placeholder="For example: always knew where everyone was through walls"></textarea><div class="msg" aria-live="polite"></div><div class="acts"><button type="button" data-c>Cancel</button><button type="button" class="pri" data-s disabled>Send report</button></div></div>`, document.body.appendChild(d);
   const $ = (q) => d.querySelector(q), send = $("[data-s]"), msg = $(".msg"), note = $("textarea");
-  let who = names.length === 1 && !M.reported.has(names[0]) ? names[0] : null, why = null, busy = !1;
+  let who = names.length === 1 && !M.reported.has(names[0]) ? names[0] : M.lastKiller && names.includes(M.lastKiller) && !M.reported.has(M.lastKiller) ? M.lastKiller : null, why = null, busy = !1;
   const sync = () => {
     d.querySelectorAll("[data-n]").forEach((b) => b.classList.toggle("on", b.dataset.n === who)), d.querySelectorAll("[data-r]").forEach((b) => b.classList.toggle("on", b.dataset.r === why)), send.disabled = busy || !who || !why;
   }, say = (t, kind = "") => {
@@ -52789,7 +54363,7 @@ function vgReportOpen() {
     if (busy = !1, r.type === "report_ok") {
       M.reported.add(who), say(`Thanks. The moderators will review your report on ${who}.`, "ok"), send.textContent = "Sent", send.disabled = !0;
       const b = d.querySelector(`[data-n="${CSS.escape(who)}"]`);
-      b && (b.disabled = !0, b.textContent = `${who} \xB7 reported`), who = null, setTimeout(() => d.isConnected && close(), 1800);
+      b && (b.disabled = !0, b.textContent = `${who} \xB7 reported`, M.lastKiller === who && b.insertAdjacentHTML("beforeend", '<em class="lk">Last eliminated you</em>')), who = null, setTimeout(() => d.isConnected && close(), 1800);
     } else say(r.message || "The report could not be sent.", "err"), sync();
   }), sync(), setTimeout(() => (d.querySelector("[data-n]:not(:disabled)") || $("[data-c]")).focus(), 30);
 }
@@ -52992,6 +54566,7 @@ typeof window < "u" && vgNet.listeners.push((m) => vgReadyMsg(m));
 /* ------------------------------------------------------------------ Beta 1.2: news & patch notes */
 // Only the current version's notes are shown (Beta 1.21: older versions are no longer listed).
 var VG_PATCH_NOTES = [
+  { v: "Beta 1.3", items: ["Fixed Matchmaking", "Many QoL Fixes", "You can now see on the report page who the last player who killed you was.", "Switched from NA West Servers to NA East Servers", "Fixed a Bug where if you would Slide or go Prone it would not show it on another players screen", "Weapon Leveling", "Weapon Mounting", "Kill Streaks", "Daily and Weekly Challenges and more!"] },
   { v: "Beta 1.21", items: ["Dive to prone from mid-air: press prone while jumping or falling.", "Fixed being able to mantle through some windows into buildings."] }
 ];
 var vgNewsUI = { open: !1, shown: !1, el: null };
@@ -53118,7 +54693,7 @@ function vgCheckBuild(m) {
   const refused = m.type === "error" && m.code === "outdated";
   const need = Math.floor(Number(refused ? m.latestBuild : m.minClientBuild) || 0);
   if (!refused && !(need > 0 && VGD.build < need)) return !1;
-  return vgUpdateRequired({ build: need || null, label: m.latestLabel, url: m.downloadUrl }), !0;
+  return vgUpdateRequired({ build: need || null, label: m.latestLabel, url: m.downloadUrl, steam: !!(m.steam || m.steamUpdates) }), !0;
 }
 function vgUpdateRequired(info = {}) {
   if (typeof document > "u" || vgUpd.open) return;
@@ -53136,6 +54711,17 @@ function vgUpdateRequired(info = {}) {
   } catch {
   }
   const clean = (t) => String(t || "").replace(/[^\w .()-]/g, "").trim().slice(0, 40);
+  // Beta 1.3: the game is updated by Steam.
+  if (info.steam) {
+    const nw = clean(info.label), d2 = document.createElement("div");
+    d2.className = "vg-upd", d2.innerHTML = `<div class="card" role="alertdialog" aria-modal="true" aria-labelledby="vg-upd-h"><div class="tag">Update required</div><h3 id="vg-upd-h">New version available</h3><p>${nw && nw !== clean(VGD.label) ? `<b>Vangaurd ${vgEsc(nw)}</b> is out. You have ${vgEsc(clean(VGD.label))}, which can no longer be played online.` : "<b>A new version of Vangaurd</b> is out."} Steam downloads it for you: close the game, let Steam finish the update, then start Vangaurd again from your Steam Library.</p><button type="button" class="go" data-q>Close game</button></div>`, document.body.appendChild(d2), d2.querySelector("[data-q]").addEventListener("click", () => {
+      try {
+        window.vangaurdDesktop?.quit ? window.vangaurdDesktop.quit() : window.close();
+      } catch {
+      }
+    });
+    return;
+  }
   const url = /^https:\/\/github\.com\//.test(String(info.url || "")) ? String(info.url) : VG_RELEASE_PAGE;
   const desk = typeof window < "u" ? window.vangaurdDesktop : null, auto = !!desk?.checkForUpdate;
   const newer = clean(info.label), mine = clean(VGD.label);
@@ -53240,7 +54826,7 @@ function vgBuildProbe() {
       return;
     }
     if (m.type === "connected") {
-      if (got = !0, vgCheckBuild(m)) return done();
+      if (got = !0, vgAnnFrom(m), vgRegionsFrom(m), vgCheckBuild(m)) return done();
       try {
         ws.send(JSON.stringify({ type: "hello", clientBuild: VGD.build, device: vgDevice() }));
       } catch {
@@ -53255,7 +54841,8 @@ function vgBuildProbe() {
 var vgAuth = { user: null, token: null, offline: !1, open: !1, listeners: [] }, VG_AUTH_KEY = "vangaurd.auth.v1";
 // News & patch notes once per launch, right after sign-in (Beta 1.2).
 typeof window < "u" && vgAuth.listeners.push(() => {
-  vgAuth.user && !vgNewsUI.shown && (vgNewsUI.shown = !0, setTimeout(() => vgNewsShow(!0), 900));
+  const go = () => vgBoot.on ? setTimeout(go, 400) : vgNewsShow(!0);
+  vgAuth.user && !vgNewsUI.shown && (vgNewsUI.shown = !0, setTimeout(go, 900));
 });
 function vgAuthSet(user, token, remember) {
   vgAuth.user = user || null, vgAuth.token = token || null, vgAuth.offline = !user;
@@ -53311,7 +54898,7 @@ function vgAuthCall(msg, ms = 9e3) {
       } catch {
         return;
       }
-      m.type === "connected" ? vgCheckBuild(m) ? fin({ error: "outdated", message: "This version of Vangaurd is out of date." }) : ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build, device: vgDevice() })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created }) : m.type === "auth_code" ? fin({ code: !0, pending: m.pending, purpose: m.purpose, to: m.to, ttl: m.ttl, resendIn: m.resendIn }) : m.type === "auth_need_email" ? fin({ needEmail: !0, pending: m.pending, user: m.username }) : m.type === "banned" ? (vgBanned(m.ban, m.message), fin({ error: "banned", message: m.message || "This account is banned." })) : m.type === "auth_error" ? (m.code === "banned" && vgBanned(m.ban, m.message), fin({ error: m.code || "error", message: m.message || "Sign-in failed." })) : m.type === "logged_out" && fin({ ok: !0 });
+      m.type === "connected" ? vgCheckBuild(m) ? fin({ error: "outdated", message: "This version of Vangaurd is out of date." }) : ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build, device: vgDevice(), steam: msg.steam || vgBoot.steam || void 0 })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created, developer: !!m.developer }) : m.type === "auth_code" ? fin({ code: !0, pending: m.pending, purpose: m.purpose, to: m.to, ttl: m.ttl, resendIn: m.resendIn }) : m.type === "auth_need_email" ? fin({ needEmail: !0, pending: m.pending, user: m.username }) : m.type === "banned" ? (vgBanned(m.ban, m.message), fin({ error: "banned", message: m.message || "This account is banned." })) : m.type === "auth_error" ? (m.code === "banned" && vgBanned(m.ban, m.message), fin({ error: m.code || "error", message: m.message || "Sign-in failed." })) : m.type === "logged_out" && fin({ ok: !0 });
     }), ws.addEventListener("error", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." })), ws.addEventListener("close", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." }));
   });
 }
@@ -53369,7 +54956,7 @@ function vgAuthUI() {
   const say = (t, err = !1) => {
     msg.textContent = t || "", msg.classList.toggle("err", !!err);
   }, offlineOpts = (on) => {
-    retry.hidden = !on, off.hidden = !on;
+    retry.hidden = !on, off.hidden = !on || vgSteamLocked();
   }, show = (v, focus) => {
     view = v;
     for (const [k, x] of Object.entries(forms)) x.hidden = k !== v;
@@ -53392,8 +54979,9 @@ function vgAuthUI() {
   const WHAT = { register: "to finish creating your account", login: "to sign in", add_email: "to add it to your account", reset: "to reset your password" };
   // One answer from the server moves the screen on: signed in, enter a code, add an email, or an error.
   function handle(r) {
-    if (lock(!1), r.ok) {
-      pw.value = pw2.value = np.value = np2.value = code.value = "", pending = null, vgAuthSet(r.user, r.token, rem.checked), ui.hide();
+    if (lock(!1), r.error === "maintenance" || r.error === "steam_required") return vgBootFail(r.error, r.message);
+    if (r.ok) {
+      r.developer != null && (vgAuth.dev = !!r.developer), pw.value = pw2.value = np.value = np2.value = code.value = "", pending = null, vgAuthSet(r.user, r.token, rem.checked), ui.hide();
       try {
         pgCtx?.services.hud?.notify?.(r.created ? `Welcome to Vangaurd, ${r.user}` : purpose === "reset" ? `Password changed. Signed in as ${r.user}` : `Signed in as ${r.user}`, { kind: "info", duration: 2.6 });
       } catch {
@@ -53416,6 +55004,7 @@ function vgAuthUI() {
     const ident = u.value.trim(), pass = pw.value;
     if (mode === "register") {
       if (!NAME.test(ident)) return say("Usernames are 3 to 16 letters, numbers, - or _.", !0), u.focus();
+      if (vgNameBlocked(ident)) return say("That username isn't allowed. Pick another one.", !0), u.focus();
       if (!EMAIL.test(em.value.trim())) return say("Enter a valid email address.", !0), em.focus();
       if (pass.length < 6) return say("Passwords need at least 6 characters.", !0), pw.focus();
       if (pass !== pw2.value) return say("The passwords do not match.", !0), pw2.focus();
@@ -53481,6 +55070,261 @@ function vgAuthUI() {
   };
   return ui;
 }
+/* ------------------------------------------------------------------ Beta 1.3: start-up loading screen */
+// After the launch (anti-cheat) window the game opens on this screen: Patching… (update check), then
+// Logging In… (signing in to Vangaurd services, contacting services) and then the lobby, or the sign-in page
+// when there is no saved sign-in. When the server is down for maintenance, when Steam is required but not
+// running, or when the server can't be reached, it turns into a "Login failed" screen with Retry.
+var vgBoot = { el: null, on: !1, run: 0, failed: null, steam: null, steamAt: 0 };
+var vgBootCss = `
+.vg-boot { position: fixed; inset: 0; z-index: 420; display: none; overflow: hidden; color: #e9ece6; font-family: inherit; background: #07090a; }
+.vg-boot.on { display: block; }
+.vg-boot .bg { position: absolute; inset: 0; background:
+  radial-gradient(ellipse 70% 60% at 50% 42%, rgba(52,60,58,.55), rgba(7,9,10,0) 70%),
+  radial-gradient(ellipse 120% 80% at 50% 120%, rgba(242,193,78,.10), rgba(7,9,10,0) 60%),
+  linear-gradient(180deg, #0c1011, #07090a 70%); }
+.vg-boot .bg::before { content: ""; position: absolute; inset: -50%; background: repeating-linear-gradient(115deg, rgba(236,240,234,.025) 0 2px, transparent 2px 46px); animation: vgBootDrift 40s linear infinite; }
+.vg-boot .bg::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.6)); }
+@keyframes vgBootDrift { to { transform: translateX(92px); } }
+.vg-boot .mid { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; width: min(92vw, 900px); }
+.vg-boot .logo { display: flex; align-items: center; gap: clamp(14px, 2.4vw, 30px); }
+.vg-boot .logo svg { width: clamp(64px, 9vw, 118px); height: auto; filter: drop-shadow(0 6px 24px rgba(242,193,78,.25)); }
+.vg-boot .word { font-weight: 900; font-size: clamp(48px, 9.5vw, 132px); line-height: .9; letter-spacing: .14em; color: #f3f5f0; text-shadow: 0 4px 0 rgba(0,0,0,.35), 0 18px 60px rgba(0,0,0,.6); }
+.vg-boot .rule { width: min(560px, 70vw); height: 3px; margin: clamp(14px, 2vw, 22px) 0 0; background: linear-gradient(90deg, transparent, #f2c14e 20%, #f2c14e 80%, transparent); opacity: .85; }
+.vg-boot .st { display: flex; align-items: center; gap: 14px; margin-top: clamp(26px, 4vh, 44px); min-height: 40px; }
+.vg-boot .spin { width: 26px; height: 26px; border-radius: 50%; border: 3px solid rgba(236,240,234,.14); border-top-color: #f2c14e; border-right-color: #f2c14e; animation: vgBootSpin .8s linear infinite; }
+@keyframes vgBootSpin { to { transform: rotate(360deg); } }
+.vg-boot .st b { font-size: clamp(20px, 2.2vw, 28px); font-weight: 800; letter-spacing: .06em; }
+.vg-boot .det { margin-top: 8px; min-height: 18px; color: #9aa29b; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
+.vg-boot .ver { position: absolute; right: 22px; bottom: 18px; color: rgba(233,236,230,.45); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; }
+.vg-boot .fail { display: none; margin-top: clamp(26px, 4vh, 44px); width: min(520px, 90vw); padding: 22px 26px 20px; box-sizing: border-box; background: rgba(12,15,17,.94); border: 1px solid rgba(236,240,234,.14); border-top: 3px solid #c8402f; box-shadow: 0 24px 70px rgba(0,0,0,.6); text-align: left; }
+.vg-boot.failed .st, .vg-boot.failed .det { display: none; }
+.vg-boot.failed .fail { display: block; }
+.vg-boot .fail h3 { margin: 0 0 8px; font-size: 22px; letter-spacing: .12em; text-transform: uppercase; }
+.vg-boot .fail p { margin: 0 0 18px; color: #c3c9c2; font-size: 14px; line-height: 1.5; }
+.vg-boot .fail .acts { display: flex; gap: 10px; }
+.vg-boot .fail button { flex: 1; padding: 12px; border: 1px solid rgba(236,240,234,.24); background: rgba(255,255,255,.06); color: #e9ece6; font: 800 12px/1 inherit; font-family: inherit; letter-spacing: .18em; text-transform: uppercase; cursor: pointer; }
+.vg-boot .fail button.pri { background: #f2c14e; border-color: #f2c14e; color: #111; }
+.vg-boot .fail button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.vg-boot .fail button[hidden] { display: none; }
+`;
+var VG_SHIELD = '<svg viewBox="0 0 120 120" aria-hidden="true"><path fill="none" stroke="#f2c14e" stroke-width="7" d="M60 8 L104 23 V57 C104 84 85 101 60 111 C35 101 16 84 16 57 V23 Z"/><path fill="#f2c14e" d="M60 32 L88 49 V60 L60 43 L32 60 V49 Z"/><path fill="#f2c14e" opacity=".6" d="M60 57 L88 74 V85 L60 68 L32 85 V74 Z"/></svg>';
+function vgBootUI() {
+  if (vgBoot.el || typeof document > "u") return vgBoot.el;
+  if (!document.getElementById("vg-boot-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-boot-style", st.textContent = vgBootCss, document.head.appendChild(st);
+  }
+  const d = vgBoot.el = document.createElement("div");
+  d.className = "vg-boot", d.setAttribute("role", "status"), d.innerHTML = `<div class="bg"></div><div class="mid"><div class="logo">${VG_SHIELD}<div class="word">VANGAURD</div></div><div class="rule"></div><div class="st"><span class="spin"></span><b data-s>Patching…</b></div><div class="det" data-d></div><div class="fail" role="alertdialog" aria-modal="true" aria-labelledby="vg-boot-fh"><h3 id="vg-boot-fh">Login failed</h3><p data-m></p><div class="acts"><button type="button" class="pri" data-retry>Retry</button><button type="button" data-off hidden>Play offline</button><button type="button" data-quit hidden>Quit</button></div></div></div><div class="ver">${VGD.label}</div>`, document.body.appendChild(d);
+  d.querySelector("[data-retry]").addEventListener("click", () => vgBootRun()), d.querySelector("[data-off]").addEventListener("click", () => {
+    vgBootHide(), vgAuthSet(null, null, !1);
+  }), d.querySelector("[data-quit]").addEventListener("click", () => {
+    try {
+      window.vangaurdDesktop?.quit ? window.vangaurdDesktop.quit() : window.close();
+    } catch {
+    }
+  });
+  for (const t of ["keydown", "keyup", "mousedown", "pointerdown"]) d.addEventListener(t, (ev) => ev.stopPropagation());
+  return d;
+}
+function vgBootShow(status, detail = "") {
+  const d = vgBootUI();
+  if (!d) return;
+  vgBoot.on = !0, vgBoot.failed = null, d.classList.add("on"), d.classList.remove("failed"), d.querySelector("[data-s]").textContent = status, d.querySelector("[data-d]").textContent = detail;
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+}
+function vgBootHide() {
+  vgBoot.on = !1, vgBoot.failed = null, vgBoot.el?.classList.remove("on", "failed");
+}
+typeof window < "u" && (window.__VGBOOT__ = { show: (s, d) => vgBootShow(s, d), hide: () => vgBootHide(), fail: (k, m) => vgBootFail(k, m) });
+// kind: maintenance | steam_required | offline | (anything else). Offline also offers singleplayer.
+function vgBootFail(kind, message) {
+  const d = vgBootUI();
+  if (!d) return;
+  vgBoot.run++, vgBoot.on = !0, vgBoot.failed = kind, vgAuth.ui?.hide?.(), d.classList.add("on", "failed");
+  const title = kind === "steam_required" ? "Steam required" : "Login failed";
+  kind === "maintenance" && message && !/maintenance/i.test(message) && (message = `Vangaurd is undergoing maintenance. ${message}`);
+  d.querySelector("#vg-boot-fh").textContent = title, d.querySelector("[data-m]").textContent = message || (kind === "maintenance" ? "Vangaurd is undergoing maintenance. Please try again later." : kind === "offline" ? "Unable to contact the Vangaurd services. Check your connection and try again." : "Sign-in failed. Try again."), d.querySelector("[data-off]").hidden = kind !== "offline" || vgSteamLocked(), d.querySelector("[data-quit]").hidden = kind !== "steam_required" && !(kind === "offline" && vgSteamLocked());
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  setTimeout(() => d.querySelector("[data-retry]")?.focus(), 40);
+}
+// What the desktop app knows about Steam (present, Steam ID, session ticket). Asked once per launch.
+async function vgSteamInfo() {
+  if (vgBoot.steam && performance.now() - vgBoot.steamAt < 30 * 60e3) return vgBoot.steam;
+  let s = { present: !1 };
+  try {
+    const desk = typeof window < "u" ? window.vangaurdDesktop : null;
+    desk?.steam && (s = await Promise.race([desk.steam(), new Promise((r) => setTimeout(() => r({ present: !1, timeout: !0 }), 4e3))]) || { present: !1 });
+  } catch {
+  }
+  return vgBoot.steam = { present: s.present === !0, id: s.id || null, ticket: s.ticket || null, kind: s.kind || null, app: s.app || null, required: s.required === !0 }, vgBoot.steamAt = performance.now(), vgBoot.steam;
+}
+// The Steam version of the game, started without Steam: no offline play (it still signs in, for the players the
+// owner lets play without Steam).
+function vgSteamLocked() {
+  return !!(vgBoot.steam?.required && !vgBoot.steam.present);
+}
+// The desktop app keeps the game window hidden behind the launch (anti-cheat) window until the game has loaded;
+// the start-up screen waits until the window is on screen so players see it.
+function vgDeskRevealed() {
+  const desk = typeof window < "u" ? window.vangaurdDesktop : null;
+  if (!desk?.revealed || vgBoot.revealed) return Promise.resolve();
+  return new Promise((res) => {
+    let done = !1;
+    const fin = () => done || (done = !0, vgBoot.revealed = !0, res());
+    try {
+      desk.onReveal?.(fin), desk.revealed().then((v) => v && fin()).catch(() => fin());
+    } catch {
+      fin();
+    }
+    setTimeout(fin, 150e3);
+  });
+}
+async function vgBootRun() {
+  const run = ++vgBoot.run, wait = (ms) => new Promise((r) => setTimeout(r, ms)), alive = () => run === vgBoot.run;
+  vgAuth.ui?.hide?.(), vgBootShow("Patching…", "Checking for updates");
+  const steamP = vgSteamInfo();
+  if (await vgDeskRevealed(), !alive()) return;
+  const t0 = performance.now();
+  try {
+    vgBuildProbe();
+  } catch {
+  }
+  await wait(1100);
+  if (!alive()) return;
+  if (vgUpd.open) return vgBootHide();
+  const sv = vgAuthSaved();
+  if (!sv) {
+    await steamP;
+    if (!alive()) return;
+    return vgBootHide(), vgAuthUI().show();
+  }
+  vgBootShow("Logging In…", "Signing in to Vangaurd services");
+  const steam = await steamP, r = await vgAuthCall({ type: "resume", token: sv.token, steam });
+  if (!alive()) return;
+  if (r.ok) {
+    vgBootShow("Logging In…", "Contacting services");
+    let remember = !1;
+    try {
+      remember = !!localStorage.getItem(VG_AUTH_KEY);
+    } catch {
+    }
+    vgAuthSet(r.user, sv.token, remember), r.developer != null && (vgAuth.dev = !!r.developer), await wait(Math.max(500, 2200 - (performance.now() - t0)));
+    if (!alive()) return;
+    return vgBootHide();
+  }
+  if (r.error === "maintenance" || r.error === "steam_required" || r.error === "offline") return vgBootFail(r.error, r.message);
+  if (r.error === "banned" || r.error === "outdated") return vgBootHide();
+  vgBootHide(), vgAuthUI().show(r.message || "Please sign in again.");
+}
+// The server went into maintenance while you were connected.
+function vgMaintenance(message) {
+  vgNet.stopped = !0;
+  try {
+    vgNet.ws?.close();
+  } catch {
+  }
+  try {
+    vgKick.fn?.(message, "maintenance-silent");
+  } catch {
+  }
+  vgBootFail("maintenance", message);
+}
+
+/* ------------------------------------------------------------------ Beta 1.3: lobby announcement */
+// Set from the anti-cheat console (Server tab): a banner at the bottom of the lobby, e.g. a downtime warning.
+var vgAnn = { cur: null, el: null, closed: "", timer: 0 };
+var vgAnnCss = `
+.vg-ann { position: fixed; left: 50%; bottom: calc(var(--u, 1px) * 78 + 12px); transform: translate(-50%, 16px); z-index: 60; display: flex; align-items: flex-start; gap: 14px; width: min(560px, calc(100vw - 32px)); box-sizing: border-box; padding: 14px 16px 14px 14px; background: rgba(10,13,15,.94); border: 1px solid rgba(236,240,234,.14); border-left: 4px solid #f2c14e; box-shadow: 0 18px 50px rgba(0,0,0,.55); color: #e9ece6; font-family: inherit; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
+.vg-ann.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.vg-ann.dt { border-left-color: #ff8a3d; }
+.vg-ann .ic { flex: none; width: 34px; height: 34px; display: grid; place-items: center; background: rgba(242,193,78,.14); color: #f2c14e; }
+.vg-ann.dt .ic { background: rgba(255,138,61,.14); color: #ff8a3d; }
+.vg-ann .ic svg { width: 20px; height: 20px; }
+.vg-ann .tx { flex: 1; min-width: 0; }
+.vg-ann b { display: block; font-size: 14px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.vg-ann p { margin: 4px 0 0; color: #c3c9c2; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.vg-ann .when { margin-top: 5px; color: #f2c14e; font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+.vg-ann.dt .when { color: #ff8a3d; }
+.vg-ann .x { flex: none; width: 26px; height: 26px; border: 0; background: none; color: #8e968f; font-size: 20px; line-height: 1; cursor: pointer; }
+.vg-ann .x:hover { color: #fff; }
+`;
+function vgAnnSet(a) {
+  vgAnn.cur = a && typeof a == "object" && (a.text || a.title) ? a : null, vgAnnRender(!0);
+}
+function vgAnnRender(force = !1) {
+  if (typeof document > "u") return;
+  const a = vgAnn.cur, expired = a?.until && a.until < Date.now();
+  let screen = "", stage = "";
+  try {
+    screen = window.__GAME__?.ctx?.services?.hud?.menu || "", stage = window.__GAME__?.ctx?.services?.gamemode?.state?.stage || "";
+  } catch {
+  }
+  const lobby = ["entry", "main", "armory", "loadouts"].includes(screen) && (!stage || stage === "menu") && !vgBoot.on && !vgAuth.open, show = !!a && !expired && lobby && (a.kind === "downtime" || vgAnn.closed !== a.id);
+  if (!vgAnn.el) {
+    if (!a) return;
+    const st = document.createElement("style");
+    st.textContent = vgAnnCss, document.head.appendChild(st), vgAnn.el = document.createElement("div"), vgAnn.el.className = "vg-ann", vgAnn.el.setAttribute("role", "status"), document.body.appendChild(vgAnn.el), vgAnn.el.addEventListener("click", (ev) => {
+      ev.stopPropagation(), ev.target.closest?.("[data-x]") && vgAnn.cur && vgAnn.cur.kind !== "downtime" && (vgAnn.closed = vgAnn.cur.id, vgAnnRender(!0));
+    }), vgAnn.timer = setInterval(() => vgAnnRender(), 1e3);
+  }
+  const el = vgAnn.el;
+  if (el.classList.toggle("on", show), !a || !force && !show) return;
+  const dt = a.kind === "downtime", mins = a.startsAt ? Math.round((a.startsAt - Date.now()) / 6e4) : null, at = a.startsAt ? new Date(a.startsAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "", when = a.startsAt ? mins > 0 ? `Starts at ${at} (in ${mins} min)` : "Starting now" : "", sig = `${a.id}|${when}`;
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig, el.classList.toggle("dt", dt), el.innerHTML = `<span class="ic">${dt ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3.5 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M4 10v4h3l6 4V6L7 10z" fill="currentColor"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'}</span><span class="tx"><b>${vgEsc(a.title || (dt ? "Downtime begins soon" : "Announcement"))}</b>${a.text ? `<p>${vgEsc(a.text)}</p>` : ""}${when ? `<div class="when">${when}</div>` : ""}</span>${dt ? "" : '<button type="button" class="x" data-x aria-label="Hide">\xD7</button>'}`;
+}
+/* ------------------------------------------------------------------ Beta 1.3: regions */
+// The main server (NA East) lists any regional match servers (e.g. Europe). Matches use the closest one by ping;
+// "vangaurd.region" (a region id) overrides it. With one region nothing changes. (A server switch in Settings
+// comes later.)
+var vgRegions = { list: null, pick: null, at: 0, cur: null };
+function vgRegionsFrom(m) {
+  m?.type === "connected" && "regions" in m && (vgRegions.list = Array.isArray(m.regions) && m.regions.length > 1 ? m.regions.filter((r) => r && typeof r.id == "string" && (r.url === null || /^https?:\/\//.test(r.url))) : null);
+}
+function vgWsOf(u) {
+  const url = new URL(u);
+  return url.protocol = url.protocol === "https:" || url.protocol === "wss:" ? "wss:" : "ws:", url.pathname = "/ws", url.search = "", url.hash = "", url.toString();
+}
+async function vgRegionUrl() {
+  const L = vgRegions.list;
+  if (!L) return null;
+  let pref = "auto";
+  try {
+    pref = localStorage.getItem("vangaurd.region") || "auto";
+  } catch {
+  }
+  let r = L.find((x) => x.id === pref) || null;
+  if (!r) {
+    if (!vgRegions.pick || performance.now() - vgRegions.at > 10 * 60e3) {
+      const main = vgServerWs().replace(/^ws/, "http").replace(/\/ws$/, ""), res = await Promise.all(L.map(async (x) => {
+        let best = 1 / 0;
+        for (let i = 0; i < 2; i++) {
+          const t0 = performance.now(), ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 2500);
+          try {
+            await fetch(`${x.url || main}/health`, { cache: "no-store", signal: ctl.signal }), best = Math.min(best, performance.now() - t0);
+          } catch {
+          }
+          clearTimeout(to);
+        }
+        return { x, ms: best };
+      }));
+      res.sort((a, b) => a.ms - b.ms), vgRegions.pick = res[0] && res[0].ms < 1 / 0 ? res[0].x : L[0], vgRegions.at = performance.now(), console.info(`[network] region ${vgRegions.pick.id} (${res.map((q) => `${q.x.id} ${Math.round(q.ms)} ms`).join(", ")})`);
+    }
+    r = vgRegions.pick;
+  }
+  return r?.url || null;
+}
+function vgAnnFrom(m) {
+  m && (m.type === "announcement" ? vgAnnSet(m.announcement) : m.type === "connected" && "announcement" in m && vgAnnSet(m.announcement));
+}
 function vgAuthShow(note, tab) {
   vgAuthUI().show(note, tab);
 }
@@ -53489,10 +55333,10 @@ function vgAuthStart() {
   if (vgAuth.started) return;
   vgAuth.started = !0;
   try {
-    if (localStorage.getItem("vangaurd.auth.offline") === "1") return vgAuthSet(null, null, !1);
+    if (!window.vangaurdDesktop && localStorage.getItem("vangaurd.auth.offline") === "1") return vgAuthSet(null, null, !1);
   } catch {
   }
-  vgBuildProbe(), vgAuthUI().boot();
+  vgBootRun();
 }
 function Uc() {
   try {
@@ -54153,18 +55997,18 @@ function cJ(A) {
   const pgK = NA("div", "k", BA);
   pgK.textContent = "Profile", NA("h2", "", BA).textContent = "Progression & armory";
   const Z = NA("div", "od-tabs", pA), nA = {};
-  for (const [yA, VA] of [["level", "Level"], ["armory", "Armory"]]) {
+  for (const [yA, VA] of [["level", "Level"], ["challenges", "Challenges"], ["armory", "Armory"]]) {
     const le = NA("button", "od-tab", Z);
     le.textContent = VA, le.addEventListener("click", () => {
       F.armoryPage = yA, z();
     }), nA[yA] = le;
   }
   const j = NA("div", "od-armory-content", pA), aA = NA("div", "od-foot", pA);
-  aA.innerHTML = '<span class="hint"><span class="od-key">ESC</span>Back</span><span class="sp"></span><span class="ver">Experimental · Local save only</span>';
+  aA.innerHTML = '<span class="hint"><span class="od-key">ESC</span>Back</span><span class="sp"></span><span class="ver">Saved to your account when signed in</span>';
   function z() {
     const yA = Z3(), lv = pgLevel(), D = lwData();
-    (F.armoryPage !== "level" && F.armoryPage !== "armory") && (F.armoryPage = "level");
-    for (const VA of ["level", "armory"]) Ka(nA[VA], "sel", F.armoryPage === VA);
+    ["level", "challenges", "armory"].includes(F.armoryPage) || (F.armoryPage = "level");
+    for (const VA of ["level", "challenges", "armory"]) Ka(nA[VA], "sel", F.armoryPage === VA);
     pgK.textContent = `Level ${lv.level} · ${lv.total.toLocaleString()} XP earned`;
     const bars = ["Damage", "Fire rate", "Range", "Control", "Mobility"], barH = (w) => `<div class="od-lw-bars">${bars.map((n, i) => `<span>${n}</span><i><b style="transform:scaleX(${(w.bars[i] / 10).toFixed(2)})"></b></i>`).join("")}</div>`;
     if (F.armoryPage === "level") {
@@ -54180,10 +56024,23 @@ function cJ(A) {
         for (let i = 1; i < L; i++) t += pgCost(i);
         return Math.max(0, t - lv.total);
       };
-      j.innerHTML = `<div class="od-armory-grid"><section><h3>Operator level</h3><p class="od-armory-rank od-pg-level">Level ${lv.level}</p><div class="od-armory-bar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div><p>${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.level + 1}</p><p>${nxt ? `Next unlock at level ${nxt}: <strong>${pgUnlocksAt(nxt).map(Nn).join(", ")}</strong> · ${toL(nxt).toLocaleString()} XP to go` : "Every loadout and attachment is unlocked."}</p><h3>Service record</h3><p>${yA.kills} eliminations · ${yA.headshots} headshots · ${yA.longshots | 0} longshots · ${yA.deaths} deaths · ${lv.total.toLocaleString()} XP total</p></section><section><h3>How to earn XP</h3><div class="od-armory-unlock on"><b>+100</b><span>Elimination (+50 more for a headshot)</span></div><div class="od-armory-unlock on"><b>+50</b><span>Confirming a dog tag in Kill Confirmed</span></div><div class="od-armory-unlock on"><b>+200</b><span>Surviving a wave in Protection</span></div><div class="od-armory-unlock on"><b>+500</b><span>Winning a match (+150 for finishing one)</span></div><p>Level 1 to 2 takes 5,000 XP, level 2 to 3 takes 5,500, and each level after takes 500 more. Your XP bar starts from zero after every level up.</p></section></div><div class="od-armory-grid od-armory-weapons"><section><h3>Unlock track</h3>${track.join("")}</section><section><h3>Loadout slots</h3>${pgSlotLv.map((L, i) => `<div class="od-armory-unlock ${pgUnlocked(i) ? "on" : ""}"><b>${pgUnlocked(i) ? "UNLOCKED" : "LEVEL " + L}</b><span>Loadout ${i + 1}${i === pgActive() ? " · equipped" : ""}</span></div>`).join("")}<p>Build and equip loadouts from <strong>Loadouts</strong> in the main menu or the pause menu.</p></section></div>`;
+      j.innerHTML = `<div class="od-armory-grid"><section><h3>Operator level</h3><p class="od-armory-rank od-pg-level">Level ${lv.level}</p><div class="od-armory-bar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div><p>${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.level + 1}</p><p>${nxt ? `Next unlock at level ${nxt}: <strong>${pgUnlocksAt(nxt).map(Nn).join(", ")}</strong> · ${toL(nxt).toLocaleString()} XP to go` : "Every loadout and attachment is unlocked."}</p><h3>Service record</h3><p>${yA.kills} eliminations · ${yA.headshots} headshots · ${yA.longshots | 0} longshots · ${yA.deaths} deaths · ${lv.total.toLocaleString()} XP total</p></section><section><h3>How to earn XP</h3><div class="od-armory-unlock on"><b>+100</b><span>Elimination (+50 more for a headshot)</span></div><div class="od-armory-unlock on"><b>+50</b><span>Confirming a dog tag in Kill Confirmed</span></div><div class="od-armory-unlock on"><b>+200</b><span>Surviving a wave in Protection</span></div><div class="od-armory-unlock on"><b>+500</b><span>Winning a match (+150 for finishing one)</span></div><div class="od-armory-unlock on"><b>+1,500 and up</b><span>Daily and weekly challenges (see the Challenges tab)</span></div><div class="od-armory-unlock on"><b>+50</b><span>A kill by one of your killstreaks</span></div><p>Level 1 to 2 takes 5,000 XP, level 2 to 3 takes 5,500, and each level after takes 500 more. Your XP bar starts from zero after every level up.</p></section></div><div class="od-armory-grid od-armory-weapons"><section><h3>Unlock track</h3>${track.join("")}</section><section><h3>Loadout slots</h3>${pgSlotLv.map((L, i) => `<div class="od-armory-unlock ${pgUnlocked(i) ? "on" : ""}"><b>${pgUnlocked(i) ? "UNLOCKED" : "LEVEL " + L}</b><span>Loadout ${i + 1}${i === pgActive() ? " · equipped" : ""}</span></div>`).join("")}<p>Build and equip loadouts from <strong>Loadouts</strong> in the main menu or the pause menu.</p></section></div>`;
+    } else if (F.armoryPage === "challenges") {
+      const st = chState(), row = (c) => `<div class="od-ch${c.done ? " done" : ""}"><div class="t"><b>${Nn(c.text)}</b><span>${c.done ? "Complete" : `${(c.prog | 0).toLocaleString()} / ${c.n.toLocaleString()}`}</span></div><div class="od-armory-bar"><i style="transform:scaleX(${Math.min(1, (c.prog | 0) / c.n).toFixed(3)})"></i></div><em>+${c.xp.toLocaleString()} XP</em></div>`, done = [...st.d.list, ...st.w.list].filter((c) => c.done).length;
+      j.innerHTML = `<p class="od-armory-note">Challenges pay out XP the moment you finish them. Kills from any match count; wins and finished matches count in Team Deathmatch and Domination, online or offline. ${done} of 6 done.</p><div class="od-armory-grid"><section><h3>Daily challenges</h3><p class="od-ch-left">New challenges in ${chTimeLeft(!1)}</p>${st.d.list.map(row).join("")}</section><section><h3>Weekly challenges</h3><p class="od-ch-left">New challenges in ${chTimeLeft(!0)}</p>${st.w.list.map(row).join("")}</section></div>`;
     } else {
-      const gun = (w, kind) => `<section><h3>${Nn(w.name)}</h3><p class="od-lw-sum">${Nn(w.cls)} · ${kind}</p><p>${Nn(w.desc)}</p>${barH(w)}</section>`, att = Object.entries(_c).map(([sl, d]) => `<section><h3>${d.label}${d.frames ? " · rifles only" : ""}</h3>${d.options.map((o) => `<div class="od-armory-unlock ${lv.level >= (o.lv || 1) ? "on" : ""}"><b>${o.id === "none" ? "STANDARD" : lv.level >= o.lv ? "UNLOCKED" : "LEVEL " + o.lv}</b><span>${Nn(o.name)}${o.frames ? " (rifles only)" : ""} — ${Nn(o.effect || "")}</span></div>`).join("")}</section>`).join("");
-      j.innerHTML = `<p class="od-armory-note">Every weapon is available from level 1. Attachments unlock as you level up and are fitted per loadout in <strong>Loadouts</strong>.</p><h3 class="od-pg-h">Attachments</h3><div class="od-armory-grid od-armory-weapons">${att}</div><h3 class="od-pg-h">Primary weapons</h3><div class="od-armory-grid od-armory-weapons">${D.primary.map((w) => gun(w, "Primary")).join("")}</div><h3 class="od-pg-h">Secondary weapons</h3><div class="od-armory-grid od-armory-weapons">${D.secondary.map((w) => gun(w, "Secondary")).join("")}</div>`;
+      const wsec = (w) => {
+        const ws = wpnStat(w.id), un = Object.entries(WPN_ATT_LV).sort((a, b) => a[1] - b[1]).map(([k2, L]) => {
+          const [sl, id] = k2.split(":");
+          return pgAttFits(D.secondary.some((x) => x.id === w.id) ? "secondary" : "primary", sl, id) ? `<div class="od-armory-unlock ${ws.level >= L ? "on" : ""}"><b>${ws.level >= L ? "UNLOCKED" : "WEAPON LV " + L}</b><span>${Nn(pgAttOpt(sl, id)?.name || id)}</span></div>` : "";
+        }).join("");
+        return `<div class="od-lo-wlv"><div class="hd"><b>Weapon level ${ws.level}${ws.max ? " · Mastered" : ""}</b><span>${ws.kills.toLocaleString()} kills</span></div><div class="od-armory-bar"><i style="transform:scaleX(${ws.progress.toFixed(3)})"></i></div><small>${ws.max ? "Maximum level" : `${ws.xp.toLocaleString()} / ${ws.need.toLocaleString()} XP to weapon level ${ws.level + 1}`}</small></div><details class="od-wl-track"><summary>Weapon level unlocks</summary>${un}</details>`;
+      };
+      const gun = (w, kind) => `<section><h3>${Nn(w.name)}</h3><p class="od-lw-sum">${Nn(w.cls)} · ${kind}</p><p>${Nn(w.desc)}</p>${barH(w)}${wsec(w)}</section>`, att = Object.entries(_c).map(([sl, d]) => `<section><h3>${d.label}${d.frames ? " · rifles only" : ""}</h3>${d.options.map((o) => {
+        const wl = wpnAttLv(sl, o.id);
+        return `<div class="od-armory-unlock ${lv.level >= (o.lv || 1) ? "on" : ""}"><b>${o.id === "none" ? "STANDARD" : lv.level >= o.lv ? "UNLOCKED" : "LEVEL " + o.lv}</b><span>${Nn(o.name)}${o.frames ? " (rifles only)" : ""} — ${Nn(o.effect || "")}${wl && lv.level < o.lv ? ` · or weapon level ${wl} on a gun` : ""}</span></div>`;
+      }).join("")}</section>`).join(""), ksl = KS_DEFS.map((d) => `<div class="od-armory-unlock ${lv.level >= d.lv ? "on" : ""}"><b>${lv.level >= d.lv ? `${d.kills} KILLS` : "LEVEL " + d.lv}</b><span>${ksSvg(d.id, "od-ks-ic")}${Nn(d.name)} — ${Nn(d.desc)}</span></div>`).join("");
+      j.innerHTML = `<p class="od-armory-note">Every weapon is available from level 1. Attachments unlock as you level up, or early on a gun you level up with kills, and are fitted per loadout in <strong>Loadouts</strong>.</p><h3 class="od-pg-h">Killstreaks</h3><div class="od-armory-grid od-armory-weapons"><section><h3>Killstreak rewards</h3>${ksl}</section><section><h3>How they work</h3><p>Pick three per loadout in <strong>Loadouts</strong>. Get that many kills in a row without dying to earn one, then press <strong>${Nn(S2(e.input?.bindings?.killstreak?.[0]) || "4")}</strong> (d-pad up on a controller) to call it in. Earned killstreaks stay until you use them, even if you die. Kills made by a killstreak don't count toward the next one.</p><p>Care packages and airstrikes need a spot with open sky: aim at it and press Fire.</p></section></div><h3 class="od-pg-h">Attachments</h3><div class="od-armory-grid od-armory-weapons">${att}</div><h3 class="od-pg-h">Primary weapons</h3><div class="od-armory-grid od-armory-weapons">${D.primary.map((w) => gun(w, "Primary")).join("")}</div><h3 class="od-pg-h">Secondary weapons</h3><div class="od-armory-grid od-armory-weapons">${D.secondary.map((w) => gun(w, "Secondary")).join("")}</div>`;
     }
   }
   const loS = s("loadouts", "od-main od-lo-screen");
@@ -54262,9 +56119,9 @@ function cJ(A) {
       return `<button type="button" class="od-lo-slot${i === k ? " sel" : ""}${i === act ? " eq" : ""}${u ? "" : " locked"}" data-lo-slot="${i}"><span class="num">${i + 1}</span><span class="txt"><b>${Nn(x.name)}</b><small>${u ? `${Nn(p.name)} · ${Nn(q.name)}` : `Unlocks at level ${pgSlotLv[i]}`}</small></span>${i === act ? "<em>Equipped</em>" : u ? "" : `<em class="lock">LV ${pgSlotLv[i]}</em>`}</button>`;
     }).join("");
     const atts = (role) => Object.entries(_c).filter(([, d]) => !d.frames || d.frames.includes(role === "secondary" ? "pistol" : "rifle")).map(([sl, d]) => {
-      const cur = L.att[role][sl], opts = d.options.filter((o) => pgAttFits(role, sl, o.id)).map((o) => {
-        const ok = lv.level >= (o.lv || 1);
-        return `<button type="button" class="od-btn od-lo-opt${cur === o.id ? " pri" : ""}" data-lo-att="${role}:${sl}:${o.id}" ${ok ? "" : "disabled"} title="${Nn(o.effect || "")}">${Nn(o.name)}${ok ? "" : ` <i>LV ${o.lv}</i>`}</button>`;
+      const cur = L.att[role][sl], gid = L[role], opts = d.options.filter((o) => pgAttFits(role, sl, o.id)).map((o) => {
+        const ok = pgAttOk(role, sl, o.id, gid), wl = wpnAttLv(sl, o.id);
+        return `<button type="button" class="od-btn od-lo-opt${cur === o.id ? " pri" : ""}" data-lo-att="${role}:${sl}:${o.id}" ${ok ? "" : "disabled"} title="${Nn(o.effect || "")}${ok ? "" : ` · Unlocks at level ${o.lv}${wl ? ` or at weapon level ${wl} for this gun` : ""}`}">${Nn(o.name)}${ok ? "" : ` <i>LV ${o.lv}${wl ? ` · GUN ${wl}` : ""}</i>`}</button>`;
       }).join("");
       return `<div class="od-lo-att"><h4>${d.label}</h4><div class="od-lo-opts">${opts}</div><p>${Nn(pgAttOpt(sl, cur)?.effect || "")}</p></div>`;
     }).join("");
@@ -54279,9 +56136,23 @@ function cJ(A) {
         return `<button type="button" class="od-btn od-lo-opt${cur[ci] === pk.id ? " pri" : ""}" data-lo-perk="${ci}:${pk.id}" ${ok ? "" : "disabled"} title="${Nn(pk.desc)}">${Nn(pk.name)}${ok ? "" : ` <i>LV ${pk.lv}</i>`}</button>`;
       }).join("")}</div><p>${Nn(perkDef(cur[ci])?.desc || "")}</p></div>`).join("")}</div></section>`;
     };
-    const col = (role, list, cur, title) => `<section class="od-lo-col"><h3>${title}</h3><div class="od-lo-guns">${list.map((w) => `<button type="button" class="od-btn od-lo-gun${w.id === cur.id ? " pri" : ""}" data-lo-gun="${role}:${w.id}" title="${Nn(w.cls)}">${Nn(w.name)}</button>`).join("")}</div><p class="od-lw-name"><strong>${Nn(cur.name)}</strong> · ${Nn(cur.cls)}</p><p>${Nn(cur.desc)}</p>${barH(cur)}${camoRow(role)}<div class="od-lo-atts">${atts(role)}</div></section>`;
+    const wlv = (w) => {
+      const ws = wpnStat(w.id);
+      let nx = null;
+      for (let l2 = ws.level + 1; l2 <= WPN_MAX && !nx; l2++) wpnUnlocksAt(l2).length && (nx = l2);
+      return `<div class="od-lo-wlv"><div class="hd"><b>Weapon level ${ws.level}${ws.max ? " · Mastered" : ""}</b><span>${ws.kills.toLocaleString()} kills</span></div><div class="od-armory-bar"><i style="transform:scaleX(${ws.progress.toFixed(3)})"></i></div><small>${ws.max ? "Maximum level" : `${ws.xp.toLocaleString()} / ${ws.need.toLocaleString()} XP to weapon level ${ws.level + 1}`}${nx ? ` · weapon level ${nx}: ${wpnUnlocksAt(nx).map(Nn).join(", ")}` : ""}</small></div>`;
+    };
+    const col = (role, list, cur, title) => `<section class="od-lo-col"><h3>${title}</h3><div class="od-lo-guns">${list.map((w) => `<button type="button" class="od-btn od-lo-gun${w.id === cur.id ? " pri" : ""}" data-lo-gun="${role}:${w.id}" title="${Nn(w.cls)}">${Nn(w.name)}<i class="wl">${wpnStat(w.id).level}</i></button>`).join("")}</div><p class="od-lw-name"><strong>${Nn(cur.name)}</strong> · ${Nn(cur.cls)}</p><p>${Nn(cur.desc)}</p>${barH(cur)}${wlv(cur)}${camoRow(role)}<div class="od-lo-atts">${atts(role)}</div></section>`;
+    const ksSec = () => {
+      const cur = pgStreaks(k), msg = F.ksMsg || "";
+      F.ksMsg = "";
+      return `<section class="od-lo-col od-lo-ks"><h3>Killstreaks <small>${cur.length} / 3</small></h3><div class="od-lo-kslist">${KS_DEFS.map((d) => {
+        const on = cur.includes(d.id), ok = ksUnlocked(d.id, lv.level);
+        return `<button type="button" class="od-btn od-lo-ksbtn${on ? " pri" : ""}${ok ? "" : " lock"}" data-lo-ks="${d.id}" title="${Nn(d.desc)}">${ksSvg(d.id)}<span><b>${Nn(d.name)}</b><small>${ok ? `${d.kills} kills` : `Level ${d.lv}`}</small></span></button>`;
+      }).join("")}</div><p class="od-lo-ksmsg">${msg ? Nn(msg) : cur.length ? `Equipped: ${cur.map((id) => `${Nn(ksDef(id).name)} (${ksDef(id).kills})`).join(" · ")}. Earn them with kills in a row and press <strong>${Nn(S2(e.input.bindings?.killstreak?.[0]) || "4")}</strong> to call one in.` : "Pick up to three. Earn them with kills in a row."}</p></section>`;
+    };
     const prim = D.primary.find((w) => w.id === L.primary) || D.primary[0], sec = D.secondary.find((w) => w.id === L.secondary) || D.secondary[0];
-    const ed = open ? `<div class="od-lo-top"><label class="od-lo-namebox"><span>Loadout name</span><input class="od-lo-name" maxlength="20" value="${Nn(L.name)}" spellcheck="false"></label>${k === act ? '<span class="od-lo-eqd">Equipped</span>' : '<button type="button" class="od-btn pri" data-lo-equip>Equip loadout</button>'}<div class="od-lo-presets"><span>Start from a class</span>${D.classes.map((c) => `<button type="button" class="od-btn od-lo-opt" data-lo-class="${c.id}">${Nn(c.name)}</button>`).join("")}</div></div><div class="od-lo-cols">${col("primary", D.primary, prim, "Primary")}${col("secondary", D.secondary, sec, "Secondary")}${perkSec()}<section class="od-lo-col od-lo-gren"><h3>Grenade</h3><div class="od-lo-opts">${X3().map((g) => `<button type="button" class="od-btn od-lo-opt${L.grenade === g ? " pri" : ""}" data-lo-gren="${g}">${g}</button>`).join("")}</div><p>Frag: damage · Smoke: cover · Flash: blinds · Proximity: area trap</p></section></div>${k === act && ["match-live", "match-dead", "live", "warmup", "intermission"].includes(st) ? '<p class="od-lo-note">You are in a match: changes to this loadout equip on your next respawn.</p>' : ""}` : `<div class="od-lo-lockcard"><b>Locked</b><p>${Nn(L.name)} unlocks at level ${pgSlotLv[k]}. You are level ${lv.level} · ${loXpTo(pgSlotLv[k]).toLocaleString()} XP to go.</p></div>`;
+    const ed = open ? `<div class="od-lo-top"><label class="od-lo-namebox"><span>Loadout name</span><input class="od-lo-name" maxlength="20" value="${Nn(L.name)}" spellcheck="false"></label>${k === act ? '<span class="od-lo-eqd">Equipped</span>' : '<button type="button" class="od-btn pri" data-lo-equip>Equip loadout</button>'}<div class="od-lo-presets"><span>Start from a class</span>${D.classes.map((c) => `<button type="button" class="od-btn od-lo-opt" data-lo-class="${c.id}">${Nn(c.name)}</button>`).join("")}</div></div><div class="od-lo-cols">${col("primary", D.primary, prim, "Primary")}${col("secondary", D.secondary, sec, "Secondary")}${perkSec()}${ksSec()}<section class="od-lo-col od-lo-gren"><h3>Grenade</h3><div class="od-lo-opts">${X3().map((g) => `<button type="button" class="od-btn od-lo-opt${L.grenade === g ? " pri" : ""}" data-lo-gren="${g}">${g}</button>`).join("")}</div><p>Frag: damage · Smoke: cover · Flash: blinds · Proximity: area trap</p></section></div>${k === act && ["match-live", "match-dead", "live", "warmup", "intermission"].includes(st) ? '<p class="od-lo-note">You are in a match: changes to this loadout equip on your next respawn.</p>' : ""}` : `<div class="od-lo-lockcard"><b>Locked</b><p>${Nn(L.name)} unlocks at level ${pgSlotLv[k]}. You are level ${lv.level} · ${loXpTo(pgSlotLv[k]).toLocaleString()} XP to go.</p></div>`;
     loC.innerHTML = `<div class="od-lo"><aside class="od-lo-slots">${slots}<div class="od-lo-lv"><b>Level ${lv.level}</b><div class="od-armory-bar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div><small>${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.level + 1}</small></div></aside><div class="od-lo-edit">${ed}</div></div>`;
     const on = (sel, fn) => loC.querySelectorAll(sel).forEach((el) => el.addEventListener("click", () => fn(el)));
     on("[data-lo-slot]", (el) => {
@@ -54297,6 +56168,9 @@ function cJ(A) {
     }), on("[data-lo-perk]", (el) => {
       const [ci, id] = el.dataset.loPerk.split(":");
       pgSetPerk(+ci, id, k) && loEmit(k), loRender();
+    }), on("[data-lo-ks]", (el) => {
+      const r = pgToggleStreak(el.dataset.loKs, k);
+      r.ok ? loEmit(k) : (F.ksMsg = r.msg || "", e.services.audio?.ui?.("error")), loRender();
     }), on("[data-lo-camo]", (el) => {
       camoOpen(el.dataset.loCamo);
     }), on("[data-lo-gren]", (el) => {
@@ -54505,6 +56379,7 @@ function cJ(A) {
     e.services.network?.state?.active && vgMatchOver();
     const VA = e.services.gamemode?.state;
     VA && ["tdm", "domination"].includes(VA.matchType) && pgAddXp(yA.winner === VA.playerTeam ? 500 : 150, yA.winner === VA.playerTeam ? "Match victory" : "Match complete");
+    VA && ["tdm", "domination"].includes(VA.matchType) && (chEvent("play"), yA.winner === VA.playerTeam && chEvent("win"));
   }, pgWave = (yA = {}) => {
     yA.phase === "clear" && pgAddXp(200, `Wave ${yA.wave} survived`);
   }, pgRef = () => {
@@ -54749,16 +56624,26 @@ function cJ(A) {
     DA(), v.focus();
   });
   function $A() {
+    // Beta 1.3 regions: matches are played on the chosen region's server (the main server when there is one region)
+    const wantR = vgRegions.cur ? vgWsOf(vgRegions.cur) : null, ms = F.multiplayerSocket;
+    if (ms && ms.readyState <= 1 && (ms.__region || null) !== wantR) {
+      ms.__replaced = !0;
+      try {
+        ms.close();
+      } catch {
+      }
+      F.multiplayerSocket = null;
+    }
     if (F.multiplayerSocket?.readyState === WebSocket.OPEN) return Promise.resolve(F.multiplayerSocket);
     if (F.multiplayerSocket?.readyState === WebSocket.CONNECTING) return new Promise((le, ge) => {
       F.multiplayerSocket.addEventListener("open", () => le(F.multiplayerSocket), { once: !0 }), F.multiplayerSocket.addEventListener("error", () => ge(/* @__PURE__ */ new Error("Could not connect to the Railway matchmaking service.")), { once: !0 });
     });
-    const yA = fA();
+    const yA = wantR || fA();
     if (!yA) return Promise.reject(new Error(G.textContent));
     const VA = new URL(yA).host;
     return new Promise((le, ge) => {
       const Se = new WebSocket(yA);
-      F.multiplayerSocket = Se;
+      Se.__region = wantR, F.multiplayerSocket = Se;
       let Ue = !1;
       const lt = setTimeout(() => {
         Ue || (Ue = !0, Se.close(), ge(/* @__PURE__ */ new Error("Matchmaking connection timed out.")));
@@ -54773,11 +56658,12 @@ function cJ(A) {
           return;
         }
         if (e.events.emit("network:message", it), vgTrackMatch(it), it.type === "banned" || it.type === "auth_error" && it.code === "banned") F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgBanned(it.ban, it.message);
-        else if (it.type === "kicked") he(it.message || "A moderator disconnected you.", 8);
+        else if (it.type === "kicked") vgKick.fn(it.message, "match");
+        else if (it.type === "maintenance") vgMaintenance(it.message);
         else if (it.type === "connected") F.multiplayerPlayerId = it.playerId ?? it.id ?? it.clientId ?? null, vgCheckBuild(it);
         else if (it.type === "queue_status") {
           F.waitingForPlayers = !0;
-          const ot = Number.isFinite(it.queued) ? it.queued : 1, ht = Number.isFinite(it.maximum) ? it.maximum : 12, Ot = Number.isFinite(it.startsIn) ? it.startsIn : null, mn2 = Number.isFinite(it.minimum) ? it.minimum : null, Gs = Ot === null ? mn2 && ot < mn2 ? `${gmName()} · ${ot} in queue · waiting for ${mn2 - ot} more player${mn2 - ot === 1 ? "" : "s"} to start.` : `Searching ${gmName()} · ${ot}/${ht} players (12 max).` : Ot > 0 ? `${gmName()} · ${ot} players · match starts in ${Ot}s.` : `${gmName()} starting…`;
+          const ot = Number.isFinite(it.queued) ? it.queued : 1, ht = Number.isFinite(it.maximum) ? it.maximum : 12, Ot = Number.isFinite(it.startsIn) ? it.startsIn : null, mn2 = Number.isFinite(it.minimum) ? it.minimum : null, Gs = it.full ? `${gmName()} · the match is full (${it.inMatch || ht}/${ht}) · you're #${it.position || 1} in line. You join when a spot opens or when this match ends.` : Ot === null ? mn2 && ot < mn2 ? `${gmName()} · ${ot} in queue · waiting for ${mn2 - ot} more player${mn2 - ot === 1 ? "" : "s"} to start.` : `Searching ${gmName()} · ${ot}/${ht} players (12 max).` : Ot > 0 ? `${gmName()} · ${ot} players · match starts in ${Ot}s.` : `${gmName()} starting…`;
           G.textContent = Gs, e.events.emit("gamemode:queue-status", {
             ...it,
             queued: ot,
@@ -54795,13 +56681,14 @@ function cJ(A) {
           });
           const ot = it.roster.map((ht) => ht?.name || "Player").join(", ");
           G.textContent = `Match ready · ${it.roster.length} players: ${ot}. Deploying into the match…`, he(`Match found · deploying into ${it.mode === "kc" ? "Kill Confirmed" : "Team Deathmatch"}`, 5), JA();
-        } else it.type === "match_left" ? (F.multiplayerMatch = null, e.events.emit("network:clear"), G.textContent = "Left matchmaking room.", JA()) : it.type === "player_left" ? G.textContent = "A player left the reserved room." : it.type === "error" && (it.code === "login_required" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgAuthShow("Sign in to play online.")), it.code === "outdated" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgCheckBuild(it)), G.textContent = it.message || "Matchmaking service error.", it.code !== "outdated" && he(G.textContent, 8));
+        } else it.type === "match_left" ? (F.multiplayerMatch = null, e.events.emit("network:clear"), G.textContent = "Left matchmaking room.", JA()) : it.type === "player_left" ? G.textContent = "A player left the reserved room." : it.type === "error" && (it.code === "login_required" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgAuthShow("Sign in to play online.")), it.code === "outdated" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgCheckBuild(it)), (it.code === "maintenance" || it.code === "steam_required") && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgBootFail(it.code, it.message)), G.textContent = it.message || "Matchmaking service error.", it.code !== "outdated" && he(G.textContent, 8));
       }), Se.addEventListener("error", () => {
         clearTimeout(lt);
         const $e = `Could not connect to ${VA}. Check the matchmaking service deployment and Railway domain target port.`;
         Ue || (Ue = !0, ge(new Error($e))), G.textContent = $e;
       }), Se.addEventListener("close", () => {
-        clearTimeout(lt), F.waitingForPlayers = !1, F.multiplayerMatch = null, F.multiplayerPlayerId = null, e.events.emit("network:clear"), F.sessionType === "multiplayer" && (G.textContent = "Disconnected from matchmaking. Quick Join to reconnect.", he(G.textContent, 8), JA());
+        if (Se.__replaced) return;
+        clearTimeout(lt), F.waitingForPlayers = !1, F.multiplayerMatch = null, F.multiplayerPlayerId = null, e.events.emit("network:clear"), F.sessionType === "multiplayer" && performance.now() - vgKick.at > 5e3 && (G.textContent = "Disconnected from matchmaking. Quick Join to reconnect.", he(G.textContent, 8), JA());
       });
     });
   }
@@ -54813,6 +56700,21 @@ function cJ(A) {
   const KA = (yA) => {
     const VA = F.multiplayerSocket;
     VA?.readyState === WebSocket.OPEN && F.multiplayerMatch && VA.send(JSON.stringify(yA));
+  };
+  vgKick.fn = (msg, src) => {
+    const now = performance.now(), online = !!(F.multiplayerMatch || F.waitingForPlayers || e.services.network?.state?.active || F.sessionType === "multiplayer"), quiet = src === "maintenance-silent";
+    if (!quiet && now - vgKick.at < 3e3) return;
+    if (vgKick.at = now, !online) return quiet ? void 0 : vgToast(msg || "A moderator disconnected you from the server.");
+    try {
+      F.waitingForPlayers = !1, F.multiplayerMatch = null, e.events.emit("gamemode:online-queue", { active: !1 }), e.events.emit("network:clear"), G.textContent = "A moderator disconnected you from the server.";
+      const st = e.services.gamemode?.state?.stage;
+      st && st !== "menu" && e.services.gamemode.end("menu"), F.sessionType = "singleplayer", document.querySelector(".vg-rep:not(.vg-kick)")?.remove();
+      // back to the lobby even if a menu (pause, settings) was open over the match
+      ["entry", "main", "armory", "loadouts"].includes(F.screen) || tt("entry");
+    } catch (err) {
+      e.reportError?.("hud", "kicked", err);
+    }
+    quiet || vgKickNotice(msg);
   };
   e.events.on("hud:quit", netLeave), typeof window < "u" && window.addEventListener("pagehide", () => {
     try {
@@ -54846,6 +56748,7 @@ function cJ(A) {
     if (!(F.sessionType !== "multiplayer" || F.multiplayerMatch || F.queueJoinPending)) {
       F.queueJoinPending = !0;
       try {
+        vgRegions.cur = await vgRegionUrl();
         const yA = await $A();
         if (yA.readyState !== WebSocket.OPEN) throw new Error("Matchmaking connection closed before joining.");
         yA.send(JSON.stringify({
@@ -54855,7 +56758,8 @@ function cJ(A) {
           token: vgAuth.token,
           clientBuild: VGD.build,
           clientLabel: VGD.label,
-          device: vgDevice()
+          device: vgDevice(),
+          steam: vgBoot.steam || void 0
         })), F.waitingForPlayers = !0, G.textContent = `Searching for ${gmName()} players…`, e.events.emit("gamemode:queue-status", {
           queued: 1,
           minimum: null,
@@ -55395,7 +57299,7 @@ function cJ(A) {
         } catch {
         }
       }
-      ghV.copy(ghP).sub(g.prev).multiplyScalar(1 / dt), g.prev.copy(ghP), g.sol.update({ dt, pos: ghP, vel: ghV, yaw, pitch: f0.pitch + (f1.pitch - f0.pitch) * w, crouch: f1.stance === "stand" ? 0 : 1, sprint: ghV.length() > 5 });
+      ghV.copy(ghP).sub(g.prev).multiplyScalar(1 / dt), g.prev.copy(ghP), g.sol.update({ dt, pos: ghP, vel: ghV, yaw, pitch: f0.pitch + (f1.pitch - f0.pitch) * w, crouch: f1.stance === "stand" ? 0 : 1, prone: f1.stance === "prone", slide: f1.stance === "slide", sprint: ghV.length() > 5 });
     }
   }
   function ghostsClear() {
@@ -55504,6 +57408,7 @@ var bI, T2, DI, t5, wC, i5, $g, gJ = YA((() => {
     ["leanLeft", "Lean left"],
     ["leanRight", "Lean right"],
     ["inspect", "Inspect weapon"],
+    ["killstreak", "Use killstreak"],
     ["scoreboard", "Scoreboard"],
     ["ping", "Ping (double-click: enemy)"],
     ["pause", "Pause"]
@@ -60976,6 +62881,7 @@ function jJ(A) {
       alive: M.alive !== !1 && M.dead !== !0,
       stance: typeof M.stance == "string" ? M.stance : null,
       sprinting: !!M.sprinting,
+      sliding: !!M.sliding,
       quiet: !!M.quiet
     };
   }
@@ -61068,11 +62974,13 @@ function jJ(A) {
       isPlayer: !1,
       isRemote: !0,
       onDamage($, tA) {
+        const vgSk = String(tA?.source || "");
         c({
           type: "player_hit",
           targetId: V.rawId,
           amount: $,
-          zone: tA?.zone || "torso"
+          zone: tA?.zone || "torso",
+          ...vgSk.startsWith("player~") ? { streak: vgSk.slice(7, 16) } : {}
         });
       },
       onDeath() {
@@ -61132,11 +63040,13 @@ function jJ(A) {
       isPlayer: !1,
       isRemote: !0,
       onDamage($, tA) {
+        const vgSk = String(tA?.source || "");
         c({
           type: "player_hit",
           targetId: V.rawId,
           amount: $,
-          zone: tA?.zone || "torso"
+          zone: tA?.zone || "torso",
+          ...vgSk.startsWith("player~") ? { streak: vgSk.slice(7, 16) } : {}
         });
         try {
           tA?.direction?.isVector3 && sol.anim.hit(tA.direction, tA.zone || "torso", Math.min(1.6, Math.max(0.4, $ / 25)));
@@ -61237,21 +63147,21 @@ function jJ(A) {
       team: M.team ?? M.state?.team
     }));
     const G = U.alive;
-    U.target.set(S.x, S.y, S.z), S.yaw !== null && (U.targetYaw = S.yaw), S.pitch !== null && (U.targetPitch = S.pitch), S.stance && (U.crouch = S.stance === "crouch" || S.stance === "prone" ? 1 : 0), U.sprint = S.sprinting, U.soldier && (U.soldier.quiet = !!S.quiet), U.alive = S.alive, setAlive(U, U.alive), U.lastSeen = performance.now(), o++, r = performance.now(), U.alive && (revive(U), (!G || posOf(U).distanceToSquared(U.target) > 100) && (U.yaw = U.targetYaw, U.pitch = U.targetPitch, snap(U))), U.hasState = !0, U.stance = S.stance || U.stance || "stand", histPush(U.hist ||= [], S.x, S.y, S.z, U.targetYaw, U.targetPitch, U.stance, U.alive);
+    U.target.set(S.x, S.y, S.z), S.yaw !== null && (U.targetYaw = S.yaw), S.pitch !== null && (U.targetPitch = S.pitch), S.stance && (U.crouch = S.stance === "crouch" || S.stance === "prone" || S.stance === "slide" ? 1 : 0, U.prone = S.stance === "prone", U.slide = S.stance === "slide" || !!S.sliding), U.sprint = S.sprinting, U.soldier && (U.soldier.quiet = !!S.quiet), U.alive = S.alive, setAlive(U, U.alive), U.lastSeen = performance.now(), o++, r = performance.now(), U.alive && (revive(U), (!G || posOf(U).distanceToSquared(U.target) > 100) && (U.yaw = U.targetYaw, U.pitch = U.targetPitch, snap(U))), U.hasState = !0, U.stance = S.stance || U.stance || "stand", histPush(U.hist ||= [], S.x, S.y, S.z, U.targetYaw, U.targetPitch, U.stance, U.alive);
   }
   // Beta 1.2 killcams: a few seconds of where each player was and where they looked (camera frames use the AI
   // convention yaw = player yaw + PI, y = eye height); the local player is recorded the same way every 0.08 s.
   const rec = [];
   let recT = -1;
   function histPush(H, x, y, z, yaw, pitch, stance, alive) {
-    const eye = stance === "prone" ? 0.4 : stance === "crouch" ? 1.1 : 1.64;
+    const eye = stance === "prone" ? 0.4 : stance === "crouch" || stance === "slide" ? 1.1 : 1.64;
     H.push({ t: A.time.t, x, y: y + eye, z, fy: y, yaw: (yaw || 0) + Math.PI, pyaw: yaw || 0, pitch: pitch || 0, stance: stance || "stand", alive: alive !== !1 }), H.length > 110 && H.splice(0, H.length - 110);
   }
   function recTick() {
     const P = A.services.player?.state;
     if (!P?.position || A.time.t - recT < 0.08) return;
     recT = A.time.t;
-    const st = P.stance || "stand";
+    const st = P.sliding && P.stance !== "prone" ? "slide" : P.stance || "stand";
     histPush(rec, P.position.x, P.position.y, P.position.z, P.yaw, P.pitch, st, P.alive);
   }
   function framesOf(id, secs = 3.5, until = null) {
@@ -61389,7 +63299,8 @@ function jJ(A) {
         z: x.z,
         yaw: M.yaw,
         pitch: M.pitch,
-        stance: M.stance,
+        stance: M.sliding && M.stance !== "prone" ? "slide" : M.stance,
+        sliding: !!M.sliding,
         moving: !!M.moving,
         sprinting: !!M.sprinting,
         weaponId: A.services.weapons.state?.id,
@@ -61420,7 +63331,7 @@ function jJ(A) {
         if (U.soldier) {
           U.prev.copy(U.pos), U.pos.lerp(U.target, S);
           const G = Math.atan2(Math.sin(U.targetYaw - U.yaw), Math.cos(U.targetYaw - U.yaw)), k2 = Math.min(1, M * 10), dx = M > 1e-4 ? (U.pos.x - U.prev.x) / M : 0, dz = M > 1e-4 ? (U.pos.z - U.prev.z) / M : 0;
-          U.vel.x += (dx - U.vel.x) * k2, U.vel.z += (dz - U.vel.z) * k2, U.yaw += G * S, U.pitch += (U.targetPitch - U.pitch) * S, cam && U.soldier.lod(cam.distanceTo(U.pos)), U.soldier.update({ dt: M, pos: U.pos, vel: U.vel, yaw: U.yaw, pitch: U.pitch, crouch: U.crouch, sprint: U.sprint && Math.hypot(U.vel.x, U.vel.z) > 4 }), U.soldier.dead && A.time.t - U.soldier.deadT > 6 && (U.group.visible = !1), U.fireFlash = Math.max(0, U.fireFlash - M), U.muzzle.material.opacity = U.fireFlash > 0 && !U.soldier.dead ? Math.min(0.95, U.fireFlash * 9) : 0, U.tag && (U.tag.visible = !U.soldier.dead);
+          U.vel.x += (dx - U.vel.x) * k2, U.vel.z += (dz - U.vel.z) * k2, U.yaw += G * S, U.pitch += (U.targetPitch - U.pitch) * S, cam && U.soldier.lod(cam.distanceTo(U.pos)), U.soldier.update({ dt: M, pos: U.pos, vel: U.vel, yaw: U.yaw, pitch: U.pitch, crouch: U.crouch, prone: !!U.prone, slide: !!U.slide, sprint: U.sprint && Math.hypot(U.vel.x, U.vel.z) > 4 }), U.soldier.dead && A.time.t - U.soldier.deadT > 6 && (U.group.visible = !1), U.fireFlash = Math.max(0, U.fireFlash - M), U.muzzle.material.opacity = U.fireFlash > 0 && !U.soldier.dead ? Math.min(0.95, U.fireFlash * 9) : 0, U.tag && (U.tag.visible = !U.soldier.dead);
           continue;
         }
         U.group.position.lerp(U.target, S);
@@ -75793,9 +77704,9 @@ function b6(A) {
       pitch: (HA.soundPitch || 1) + (n.next() - 0.5) * 0.04
     });
     const Qi = HA.pattern[(m - 1) % HA.pattern.length], hi = 1 - E.ads * (1 - HA.camAdsMul), Oi = oe ? 0.82 : 1, Or = HA.camPitch * Qi[0] * hi * Oi * Nt * (1 + (n.next() - 0.5) * 0.15), wo = HA.camYaw * Qi[1] * hi * Oi * Nt + (n.next() - 0.5) * HA.camYaw * Oi * 0.4 * Nt;
-    A.services.player.applyRecoil(Or, wo);
-    const us = HA.kick, As = 1 - E.ads * (1 - us.adsMul);
-    z.impulse(0, us.back * As * (0.9 + n.next() * 0.2)), z.impulse(1, us.up * As), z.impulse(2, us.pitch * As * (0.85 + n.next() * 0.3)), z.impulse(3, us.yaw * As * (n.next() - 0.5) * 2), z.impulse(4, us.roll * As * ((n.next() - 0.5) * 2 * 0.7 + Qi[1] * 0.3)), z.impulse(5, (n.next() - 0.5) * 0.06 * As), cA.impulse(0, 0.12 * As), cA.impulse(1, Qi[1] * 0.04 * As), cA.impulse(2, 0.03 * As), M = Math.min(HA.bloomMax, M + HA.bloomPerShot), V = 1, tA = 0, gA.weaponId = E.id, gA.time = a.t, gA.suppressed = !!E.suppressed, i.emit("weapon:fired", gA), E.ammo === 0 && ($ = !0, vBurstQ = 0), E.fireMode === "burst" && vBurstQ > 0 && (vBurstQ--, vBurstQ <= 0 && (y += HA.burstDelay || 0.2));
+    A.services.player.applyRecoil(Or * vgMountMul(0.4), wo * vgMountMul(0.4));
+    const us = HA.kick, As = (1 - E.ads * (1 - us.adsMul)) * vgMountMul(0.5);
+    z.impulse(0, us.back * As * (0.9 + n.next() * 0.2)), z.impulse(1, us.up * As), z.impulse(2, us.pitch * As * (0.85 + n.next() * 0.3)), z.impulse(3, us.yaw * As * (n.next() - 0.5) * 2), z.impulse(4, us.roll * As * ((n.next() - 0.5) * 2 * 0.7 + Qi[1] * 0.3)), z.impulse(5, (n.next() - 0.5) * 0.06 * As), cA.impulse(0, 0.12 * As), cA.impulse(1, Qi[1] * 0.04 * As), cA.impulse(2, 0.03 * As), M = Math.min(HA.bloomMax, M + HA.bloomPerShot * vgMountMul(0.5)), V = 1, tA = 0, gA.weaponId = E.id, gA.time = a.t, gA.suppressed = !!E.suppressed, i.emit("weapon:fired", gA), E.ammo === 0 && ($ = !0, vBurstQ = 0), E.fireMode === "burst" && vBurstQ > 0 && (vBurstQ--, vBurstQ <= 0 && (y += HA.burstDelay || 0.2));
   }
   function fA(HA) {
     if (!u) return;
@@ -75805,15 +77716,15 @@ function b6(A) {
       return;
     }
     t.pressed("sprint") && (a.t - P < 0.3 && (_ = !0), P = a.t);
-    const xe = !!OA.sprinting && !E.reloading;
+    const vgBF = vgKS.blockFire, xe = !!OA.sprinting && !E.reloading;
     if (OA.sprinting || (_ = !1), E.sprinting = !!OA.sprinting, E.tacSprint = xe && _, OA.sprinting && E.reloading && !v?.data.pastSeat && AA(), xe ? G = 0.14 : G = Math.max(0, G - HA), Y >= 0 ? (Y += HA, Y >= oe.holsterTime && (Y = -1, bt(Q), Q = null, N = u.cfg.equipTime, H.weaponId = E.id, i.emit("weapon:equip", H), A.services.audio.play(`${u.cfg.kind}_equip`, { bus: "sfx" }))) : N > 0 && (N -= HA, N <= 0 && (N = 0, E.action = "idle")), Xe() || E.reloading || v?.name === "inspect") {
       const ar = E.id === "rifle" ? "pistol" : "rifle";
       ggOn ? E.id !== ggOn && Q !== ggOn && Ae(ggOn) : t.pressed("swapWeapon") || t.pressed("weaponNext") || t.pressed("weaponPrev") ? Ae(ar) : t.pressed("weapon1") && E.id !== "rifle" ? Ae("rifle") : t.pressed("weapon2") && E.id !== "pistol" && Ae("pistol");
     }
     let Mt = A.settings.data.controls.toggleAds ? t.pressed("ads") ? !(w > 0.5) : w > 0.5 && E.ads > 0 : t.isDown("ads");
-    if ((xe || G > 0.07 || v && !v.data.allowAds || Y >= 0 || N > u.cfg.equipTime * 0.5) && (Mt = !1), w = Math.min(1, Math.max(0, w + (Mt ? 1 : -1) * HA / oe.adsTime)), E.ads = Ed(w), t.isDown("inspect") ? (K += HA, K > 0.32 && Xe() && !xe && (E.action = "inspect", E.inspecting = !0, Je("inspect", () => {
+    if ((xe || vgBF || G > 0.07 || v && !v.data.allowAds || Y >= 0 || N > u.cfg.equipTime * 0.5) && (Mt = !1), w = Math.min(1, Math.max(0, w + (Mt ? 1 : -1) * HA / oe.adsTime)), E.ads = Ed(w), t.isDown("inspect") ? (K += HA, K > 0.32 && Xe() && !xe && (E.action = "inspect", E.inspecting = !0, Je("inspect", () => {
       E.inspecting = !1, E.action = "idle";
-    }), K = -99)) : (K > 0 && K <= 0.32 && Xe() && u.cfg.modes.length > 1 && Je("fireMode"), K = 0), t.pressed("reload") && (Xe() || v?.name === "inspect") && !xe && (Dt(), E.inspecting = !1, qe()), t.pressed("melee") && (Xe() || v?.name === "inspect" || E.reloading) && (E.reloading && AA(), Dt(), E.inspecting = !1, E.action = "melee", Je("melee", () => {
+    }), K = -99)) : (K > 0 && K <= 0.32 && Xe() && u.cfg.modes.length > 1 && Je("fireMode"), K = 0), t.pressed("reload") && !vgBF && (Xe() || v?.name === "inspect") && !xe && (Dt(), E.inspecting = !1, qe()), t.pressed("melee") && !vgBF && !vgMountPress(A, E.ads) && (Xe() || v?.name === "inspect" || E.reloading) && (E.reloading && AA(), Dt(), E.inspecting = !1, E.action = "melee", Je("melee", () => {
       E.action = "idle";
     })), t.pressed("tactical")) {
       const ar = X3(), Kr = ar[(ar.indexOf(E.grenadeType) + 1) % ar.length];
@@ -75825,15 +77736,16 @@ function b6(A) {
         duration: 1.2
       });
     }
-    t.pressed("grenade") && E.lethal > 0 && (Xe() || v?.name === "inspect" || E.reloading && !v?.data?.pastSeat) && (E.reloading && AA(), Dt(), E.lethal--, E.action = "grenade", Je("grenade", () => {
+    t.pressed("grenade") && !vgBF && E.lethal > 0 && (Xe() || v?.name === "inspect" || E.reloading && !v?.data?.pastSeat) && (E.reloading && AA(), Dt(), E.lethal--, E.action = "grenade", Je("grenade", () => {
       E.action = "idle";
     })), y = Math.max(y - HA, -HA);
     const ai = t.isDown("fire"), Qi = t.pressed("fire"), hi = A.services.gamemode.state || {};
-    !(hi.matchType === "tdm" && !["match-live", "match-dead"].includes(hi.stage)) && !xe && G <= 0 && !E.reloading && (!v || v.name === "inspect" || v.name === "fireMode") && Y < 0 && N <= u.cfg.equipTime * 0.25 && (ai || Qi || vBurstQ > 0) && (v && (v.name === "inspect" || v.name === "fireMode") && Qi && (Dt(), E.inspecting = !1), (E.fireMode === "auto" ? ai : E.fireMode === "burst" ? (Qi && vBurstQ <= 0 && E.ammo > 0 && (vBurstQ = u.cfg.burst || 3), vBurstQ > 0 || Qi) : Qi) && y <= 0 && !v && (E.ammo > 0 ? (y < -HA && (y = 0), O()) : Qi && (sA.weaponId = E.id, i.emit("weapon:empty", sA), A.services.audio.play("dry_fire", { bus: "sfx" }), E.reserve > 0 && qe()))), ai || (m = 0), E.action === "fire" && a.t - D > 0.12 && (E.action = "idle"), !v && !E.reloading && Y < 0 && N <= 0 && E.action !== "fire" && (E.action = xe ? "sprint" : "idle"), E.ammo === 0 && E.reserve > 0 && !E.reloading && Xe() && a.t - D > 0.25 && !xe && j && !ai && qe(), j = ai;
+    !(hi.matchType === "tdm" && !["match-live", "match-dead"].includes(hi.stage)) && !vgBF && !xe && G <= 0 && !E.reloading && (!v || v.name === "inspect" || v.name === "fireMode") && Y < 0 && N <= u.cfg.equipTime * 0.25 && (ai || Qi || vBurstQ > 0) && (v && (v.name === "inspect" || v.name === "fireMode") && Qi && (Dt(), E.inspecting = !1), (E.fireMode === "auto" ? ai : E.fireMode === "burst" ? (Qi && vBurstQ <= 0 && E.ammo > 0 && (vBurstQ = u.cfg.burst || 3), vBurstQ > 0 || Qi) : Qi) && y <= 0 && !v && (E.ammo > 0 ? (y < -HA && (y = 0), O()) : Qi && (sA.weaponId = E.id, i.emit("weapon:empty", sA), A.services.audio.play("dry_fire", { bus: "sfx" }), E.reserve > 0 && qe()))), ai || (m = 0), E.action === "fire" && a.t - D > 0.12 && (E.action = "idle"), !v && !E.reloading && Y < 0 && N <= 0 && E.action !== "fire" && (E.action = xe ? "sprint" : "idle"), E.ammo === 0 && E.reserve > 0 && !E.reloading && Xe() && a.t - D > 0.25 && !xe && j && !ai && qe(), j = ai;
+    vgMountTick(A, HA, E);
     const Oi = Math.min(1, OA.speed / 4.4);
     M = Math.max(0, M - oe.bloomRecover * HA * (a.t - D > 0.1 ? 1 : 0.2));
     const Or = oe.spreadHip + (oe.spreadAds - oe.spreadHip) * E.ads, wo = kc(E.id), us = wo.optic && wo.optic !== "none" ? 0.85 : 1;
-    E.spread = (Or + oe.spreadMove * Oi * (1 - E.ads * 0.8) + M * (1 - E.ads * 0.75) + (OA.grounded ? 0 : 2.5)) * (1 - E.ads * (1 - us)), A.services.hud.setCrosshairSpread?.(E.spread), Pe(HA), F(HA), TA(HA);
+    E.spread = (Or + oe.spreadMove * Oi * (1 - E.ads * 0.8) + M * (1 - E.ads * 0.75) + (OA.grounded ? 0 : 2.5)) * (1 - E.ads * (1 - us)) * vgMountMul(0.7), A.services.hud.setCrosshairSpread?.(E.spread), Pe(HA), F(HA), TA(HA);
     const As = 1 + (oe.adsZoom - 1) * E.ads;
     A.services.player.setZoom(As), A.services.postfx.setADS(E.ads);
   }
@@ -86185,7 +88097,8 @@ var _R = IM, VK = /* @__PURE__ */ Object.assign({
   "./postfx/index.js": () => Promise.resolve().then(() => (PV(), LV)),
   "./vfx/index.js": () => Promise.resolve().then(() => (i6(), e6)),
   "./weapons/index.js": () => Promise.resolve().then(() => (D6(), y6)),
-  "./world/index.js": () => Promise.resolve().then(() => (JK(), YK))
+  "./world/index.js": () => Promise.resolve().then(() => (JK(), YK)),
+  "./extras/index.js": () => Promise.resolve({ default: vgExtrasSystem })
 });
 async function OK(A, { only: e = null, reportError: t, faults: i = /* @__PURE__ */ new Set() }) {
   const a = _R.filter((r) => !e || e.includes(r)), s = await Promise.all(a.map(async (r) => {
