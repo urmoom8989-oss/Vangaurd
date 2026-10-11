@@ -13,7 +13,7 @@ What it does:
 - **Steam (Beta 1.3).** **Require Steam** in the Server tab refuses players whose game wasn't started from Steam, except the owner and the players on the "play without Steam" list there.
 - **Developers (Beta 1.3).** Developers (the owner, and anyone added in the Server tab) get the in-game replay recorder and can sign in during maintenance.
 - **Usernames** can never contain "Parallel" or "Developer" (any spelling with digits, - or _ in between). Existing accounts keep working.
-- **Only the newest game build can play online.** The game sends its build number when it queues. The newest build is the highest of `latest.json` in this folder (updated with every release, so deploying the server raises it), the build set in the console's Server tab, `MIN_CLIENT_BUILD`, and a `version.json` at `LATEST_VERSION_URL` if that is set. Older builds are turned away and told to update through Steam. Builds from before Beta 0.9 send no build number and are always turned away.
+- **Only the newest game build can play online.** The game sends its build number when it queues. The newest build is the highest of the `version.json` on the latest GitHub release (read every 5 minutes), `latest.json` in this folder, the build set in the console's Server tab, and `MIN_CLIENT_BUILD`. Older builds are turned away with an "update to play online" message. Builds from before Beta 0.9 send no build number and are always turned away.
 - **Ping marks** (middle mouse in the game) are relayed to the player's teammates.
 - **Accounts.** The game asks players to sign in (or create an account) before the main menu. Usernames are unique (case-insensitive): a taken name can only be used by signing in to that account, and online play needs a signed-in account (the in-match name is always the account name). Passwords are stored only as salted scrypt hashes; the game keeps a sign-in token, never the password. Ten failed attempts from one address pause sign-in for ten minutes.
 - **Email codes.** Creating an account needs an email address and the 6-digit code sent to it; until an email sender is set up (see [Email codes](#email-codes)) new accounts are paused and the game says so. Every sign-in (with the username or the email, plus the password) asks for a fresh code sent to the account's email. Accounts made before email existed are asked to add one the next time they sign in. **Forgot password?** in the game sends a code to the account's email and sets a new password (and signs the account out everywhere else). Codes last 10 minutes and allow 5 tries; at most 6 codes an hour go to one address.
@@ -80,8 +80,8 @@ Set these as Railway service variables if you want to change the defaults.
 | `TDM_SCORE_LIMIT` | `50` | Kills needed to win Team Deathmatch |
 | `VERSION_GATE` | `on` | `off` lets every game build play online |
 | `MIN_CLIENT_BUILD` | `1` | Lowest game build allowed (a floor under `latest.json`) |
-| `LATEST_VERSION_URL` | unset | Optional address of a `version.json` to read the newest build from every 5 minutes |
-| `RELEASE_PAGE_URL` | unset | Download page shown to outdated games. Unset: they are told to update through Steam |
+| `LATEST_VERSION_URL` | latest release `version.json` | Where the newest build number is read from every 5 minutes (`off` to not read it) |
+| `RELEASE_PAGE_URL` | latest GitHub release | Download page shown to outdated games (`steam` tells them to update through Steam instead) |
 | `RELEASE_KEY` | unset | Lets a release pipeline `POST /release` `{ "build": 27, "label": "Beta 1.4" }` with the header `x-release-key` |
 | `REGION` | `na-east` | The region this server is in (shown on `/health` and in the game) |
 | `REGIONS` | unset | Main server only: regional match servers, e.g. `[{"id":"eu","name":"Europe","url":"https://vangaurd-eu.up.railway.app"}]`. The game plays on the closest one (by ping); accounts, friends and moderation stay on the main server |

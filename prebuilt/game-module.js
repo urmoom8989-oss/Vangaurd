@@ -54659,7 +54659,7 @@ async function vgNewsShow(auto) {
 /* ------------------------------------------------------------------ update required */
 // Shown when the Vangaurd server says this build is too old: when the game connects (launch, sign-in) or
 // when searching for a match. There is no "later": update now, or close it and the game quits.
-var vgUpd = { open: !1 }, VG_RELEASE_PAGE = "https://github.com/urmoom8989-oss/opus-of-duty/releases/latest";
+var vgUpd = { open: !1 }, VG_RELEASE_PAGE = "https://github.com/urmoom8989-oss/Vangaurd/releases/latest";
 var vgUpdCss = `
 .vg-upd { position: fixed; inset: 0; z-index: 420; display: grid; place-items: center; background: rgba(4,6,8,.84); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #e9ece6; }
 .vg-upd .card { position: relative; width: min(460px, 92vw); box-sizing: border-box; padding: 28px 30px 24px; background: rgba(12,15,17,.98); border: 1px solid rgba(236,240,234,.14); border-top: 3px solid #f2c14e; box-shadow: 0 30px 90px rgba(0,0,0,.65); }

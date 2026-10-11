@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
-const RELEASE_PAGE = process.env.VANGAURD_RELEASE_PAGE || 'https://github.com/urmoom8989-oss/opus-of-duty/releases/latest';
+const RELEASE_PAGE = process.env.VANGAURD_RELEASE_PAGE || 'https://github.com/urmoom8989-oss/Vangaurd/releases/latest';
 const DOWNLOAD_BASE = process.env.VANGAURD_DOWNLOAD_BASE || `${RELEASE_PAGE}/download`;
 const VERSION_URL = process.env.VANGAURD_VERSION_URL || `${DOWNLOAD_BASE}/version.json`;
 

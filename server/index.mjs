@@ -40,13 +40,13 @@ try {
     .map((r) => ({ id: r.id, name: String(r.name || REGION_NAMES[r.id] || r.id).slice(0, 24), url: String(r.url).replace(/\/+$/, '') }));
 } catch { REGIONS = []; }
 // ---------- client version gate ----------
-// Only the newest game build may play online. From Beta 1.3 the game is no longer published on GitHub, so the
-// newest build comes from (the highest wins): server/latest.json (updated with every release, so deploying the
-// server raises it), the build the owner sets in the /admin console, MIN_CLIENT_BUILD, and, only when
-// LATEST_VERSION_URL is set, a version.json fetched from that address every 5 minutes. VERSION_GATE=off disables it.
+// Only the newest game build may play online. The newest build is the highest of: the version.json attached to
+// the latest GitHub release (read every 5 minutes; LATEST_VERSION_URL=off turns that off), server/latest.json,
+// the build the owner sets in the /admin console, and MIN_CLIENT_BUILD. VERSION_GATE=off disables the check.
 const GATE = String(process.env.VERSION_GATE || 'on').toLowerCase() !== 'off';
-const LATEST_URL = process.env.LATEST_VERSION_URL || '';
-const RELEASE_PAGE = process.env.RELEASE_PAGE_URL || null;
+const LATEST_URL = process.env.LATEST_VERSION_URL || 'https://github.com/urmoom8989-oss/Vangaurd/releases/latest/download/version.json';
+// Where outdated games are sent to update. RELEASE_PAGE_URL=steam tells them to update through Steam instead.
+const RELEASE_PAGE = String(process.env.RELEASE_PAGE_URL || '').toLowerCase() === 'steam' ? null : process.env.RELEASE_PAGE_URL || 'https://github.com/urmoom8989-oss/Vangaurd/releases/latest';
 const latest = { build: Math.max(0, Math.floor(Number(process.env.MIN_CLIENT_BUILD ?? 1)) || 0), label: 'Beta 1.04', checkedAt: 0, source: 'env' };
 function raiseLatest(build, label, source) {
   const b = Math.floor(Number(build));

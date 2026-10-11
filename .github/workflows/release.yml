@@ -1,9 +1,8 @@
 name: Build Vangaurd (Mac, Windows)
 
-# From Beta 1.3 the game is sold on Steam, so nothing is published on GitHub any more: no release, no
-# standalone HTML. Each run builds the Mac and Windows apps and keeps them as private workflow artifacts
-# (Actions → this run → Artifacts) to upload to Steam. The game, the server and the desktop app all use
-# BUILD_NUMBER; server/latest.json holds the same number so the server knows the newest build.
+# Builds the Mac and Windows apps and publishes them as the GitHub release for this version, with a
+# version.json that the desktop apps (auto-update) and the server (only the newest build plays online) read.
+# The game, the server and the desktop app all use BUILD_NUMBER. (No standalone HTML is published.)
 
 on:
   workflow_dispatch:
@@ -18,7 +17,7 @@ on:
       - '.github/workflows/release.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: release
@@ -27,7 +26,8 @@ concurrency:
 env:
   BUILD_LABEL: "Beta 1.3"
   FILE_LABEL: "Beta-1.3"
-  # Fixed per version (Beta 1.21 was build 25). Keep in step with server/latest.json.
+  RELEASE_TAG: "beta-1.3"
+  # Fixed per version (Beta 1.21 was build 25).
   BUILD_NUMBER: "26"
   # steamworks.js (Steam detection) is added at build time and shipped next to the app.
   STEAMWORKS_VERSION: "0.4.0"
@@ -87,8 +87,66 @@ jobs:
             release/*.zip
           if-no-files-found: error
 
-  summary:
+  release:
     needs: [mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac
+          path: out
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: out
+      - run: ls -la out
+      - name: Write version.json (read by the desktop updater and the multiplayer server)
+        run: |
+          cat > out/version.json <<JSON
+          {
+            "label": "${BUILD_LABEL}",
+            "version": "1.30.${BUILD_NUMBER}",
+            "build": ${BUILD_NUMBER},
+            "tag": "${RELEASE_TAG}",
+            "commit": "${GITHUB_SHA::7}",
+            "files": {
+              "win": "Vangaurd-${FILE_LABEL}-Setup.exe",
+              "winZip": "Vangaurd-${FILE_LABEL}-win.zip",
+              "macArm": "Vangaurd-${FILE_LABEL}-arm64.dmg",
+              "macX64": "Vangaurd-${FILE_LABEL}-x64.dmg"
+            }
+          }
+          JSON
+          cat out/version.json
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete "$RELEASE_TAG" --yes --cleanup-tag || true
+          cat > notes.md <<NOTES
+          Vangaurd ${BUILD_LABEL}.
+
+          - **Windows**: \`Vangaurd-${FILE_LABEL}-Setup.exe\` installs the game; \`Vangaurd-${FILE_LABEL}-win.zip\` runs without installing. If SmartScreen appears, choose **More info → Run anyway**.
+          - **Mac**: \`Vangaurd-${FILE_LABEL}-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-${FILE_LABEL}-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
+
+          What's new:
+          - Fixed Matchmaking
+          - Many QoL Fixes
+          - You can now see on the report page who the last player who killed you was.
+          - Switched from NA West Servers to NA East Servers
+          - Fixed a Bug where if you would Slide or go Prone it would not show it on another players screen
+          - Weapon Leveling
+          - Weapon Mounting
+          - Kill Streaks
+          - Daily and Weekly Challenges and more!
+
+          Online play requires this version. Installed games ask to update when they start.
+          NOTES
+          gh release create "$RELEASE_TAG" out/* --target "$GITHUB_SHA" --latest --title "Vangaurd ${BUILD_LABEL}" --notes-file notes.md
+
+  summary:
+    needs: [release]
     runs-on: ubuntu-latest
     steps:
       - name: Write version.json (kept with the build; the server reads server/latest.json)
@@ -113,6 +171,6 @@ jobs:
           {
             echo "## Vangaurd ${BUILD_LABEL} (build ${BUILD_NUMBER})"
             echo ""
-            echo "The Mac and Windows apps are in this run's **Artifacts** (private). Upload them to Steam."
-            echo "Nothing was published on GitHub."
+            echo "Published as the GitHub release ${RELEASE_TAG} (Mac and Windows apps + version.json)."
+            echo "The apps are also in this run's Artifacts for 30 days (e.g. to upload to Steam)."
           } >> "$GITHUB_STEP_SUMMARY"
