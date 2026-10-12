@@ -1,6 +1,6 @@
-# Vangaurd matchmaking server 3.1
+# Vangaurd matchmaking server 3.2
 
-This is the online server for Vangaurd Beta 1.3. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
+This is the online server for Vangaurd Beta 1.31. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
 
 What it does:
 
@@ -12,6 +12,7 @@ What it does:
 - **Lobby announcements and maintenance (Beta 1.3).** The console's **Server** tab shows a banner at the bottom of every player's lobby (an announcement, or a "Downtime begins soon" warning with the start time) and switches maintenance on and off: everyone but the owner, moderators and developers is signed out and sees "Login failed · Vangaurd is undergoing maintenance" with a Retry button.
 - **Steam (Beta 1.3).** **Require Steam** in the Server tab refuses players whose game wasn't started from Steam, except the owner and the players on the "play without Steam" list there.
 - **Developers (Beta 1.3).** Developers (the owner, and anyone added in the Server tab) get the in-game replay recorder and can sign in during maintenance.
+- **Drone mode (developers, Beta 1.31).** The Multiplayer screen has **Drone mode** for developers: pick a mode and a map. If a match of that mode is being played on that map the developer watches it from the drone, invisible like a moderator spectating; otherwise the server opens an empty match on that map just for them (nobody is ever put into it). The map stays open while the drone flies and closes when it leaves. Developers can also use the F10 drone in their own online matches. Players who are not developers are refused (`drone_info`, `spectate_join` with `drone: true`).
 - **Usernames** can never contain "Parallel" or "Developer" (any spelling with digits, - or _ in between). Existing accounts keep working.
 - **Only the newest game build can play online.** The game sends its build number when it queues. The newest build is the highest of the `version.json` on the latest GitHub release (read every 5 minutes), `latest.json` in this folder, the build set in the console's Server tab, and `MIN_CLIENT_BUILD`. Older builds are turned away with an "update to play online" message. Builds from before Beta 0.9 send no build number and are always turned away.
 - **Ping marks** (middle mouse in the game) are relayed to the player's teammates.
@@ -37,7 +38,7 @@ From Beta 1.3 the main server runs in Railway's US East region (service **Settin
 
 ## Check that it worked
 
-Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"3.1.0"`, `"region":"na-east"`, `"email"` (`"gmail"`, `"smtp"` or `"brevo"` once email is set up, `false` before) with `"emailReady":true` and `"emailStatus"` saying why not if it is `false`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
+Open `https://opus-of-duty-production-f963.up.railway.app/health` in a browser. You should see `"version":"3.2.0"`, `"region":"na-east"`, `"email"` (`"gmail"`, `"smtp"` or `"brevo"` once email is set up, `false` before) with `"emailReady":true` and `"emailStatus"` saying why not if it is `false`, `"accountsPersistent":true`, `"saves"` (accounts with a cloud save), `"minClientBuild"` (the newest game build), `"mapVoteSeconds":10` and the six map names. If you see an older version, the old code is still running.
 
 ## Anti-cheat console (`/admin`)
 

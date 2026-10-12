@@ -48903,7 +48903,7 @@ function vgBotName() {
   }
   return b.order[b.i++ % b.order.length];
 }
-var VGD = { label: "Beta 1.3", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 1.31", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -50322,21 +50322,42 @@ function vgExtrasSystem(A) {
     K.ui.innerHTML = `${next ? `<div class="hint"><kbd>${Nn(keyLabel())}</kbd>${Nn(ksDef(next).name)}</div>` : ""}<div class="row">${slots}</div><div class="cnt">Streak ${K.kills}</div>`;
   }
   // ---------------- drone (F10)
-  const D = { pos: V(), vel: V(), yaw: 0, pitch: 0, el: null, inv: !1, t: 0 };
+  // Offline: F10 anywhere in a match. Beta 1.31: developers also fly it over multiplayer maps (Drone mode on the
+  // Multiplayer screen: an invisible spectator session, see specStart); there F10 switches between the drone and
+  // following the players, and Esc leaves.
+  const D = { pos: V(), vel: V(), yaw: 0, pitch: 0, el: null, inv: !1, t: 0, ses: !1, clean: !1 };
+  const droneSes = () => typeof vgSpec < "u" && vgSpec.active && !!vgSpec.drone, netIds = () => S.network?.ids?.() || [];
   function droneAllowed() {
+    if (droneSes()) return hud()?.menu === "none" && !(typeof vgReplay < "u" && vgReplay.playing);
     const g = gm();
-    return !net() && hud()?.menu === "none" && ["match-live", "match-dead", "live", "intermission", "warmup", "range", "sandbox"].includes(g.stage) && !(typeof vgReplay < "u" && vgReplay.playing);
+    // online matches: developers only (Beta 1.31)
+    return (!net() || !!vgAuth.dev) && hud()?.menu === "none" && ["match-live", "match-dead", "live", "intermission", "warmup", "range", "sandbox"].includes(g.stage) && !(typeof vgReplay < "u" && vgReplay.playing);
   }
   function droneToggle() {
+    if (droneSes()) {
+      if (!vgDrone.on) return droneEnter();
+      if (!netIds().length) return hud()?.notify?.("Nobody to follow yet · the drone stays up", { kind: "info", duration: 1.8 });
+      return droneExit();
+    }
     if (vgDrone.on) return droneExit();
-    if (net()) return hud()?.notify?.("Drone mode works offline only", { kind: "info", duration: 1.6 });
-    if (!droneAllowed()) return;
-    const cam = A.camera;
-    cam.getWorldPosition(D.pos);
-    const e = new ga().setFromQuaternion(cam.getWorldQuaternion(T.q), "YXZ");
-    D.yaw = e.y, D.pitch = e.x, D.vel.set(0, 0, 0), vgDrone.on = !0, vgMount.on && vgMountSet(A, null), K.target && cancelTarget();
+    if (net() && !vgAuth.dev) return hud()?.notify?.("Drone mode works offline only", { kind: "info", duration: 1.6 });
+    droneEnter() && net() && hud()?.notify?.("Drone up · your soldier stays where it is and can still be shot", { kind: "info", duration: 2.4 });
+  }
+  function droneEnter(opt = {}) {
+    if (vgDrone.on || !droneAllowed()) return !1;
+    const cam = A.camera, Bn = S.world?.bounds;
+    if (opt.overview && Bn) {
+      // above the map, looking across it
+      const cx = (Bn.min.x + Bn.max.x) / 2, cz = (Bn.min.z + Bn.max.z) / 2, size = Math.max(40, Math.min(Bn.max.x - Bn.min.x, Bn.max.z - Bn.min.z));
+      D.pos.set(cx, 0, cz + size * 0.42), D.pos.y = ground(D.pos.x, D.pos.z, 120) + Math.min(55, 14 + size * 0.22), D.yaw = 0, D.pitch = -0.42;
+    } else {
+      cam.getWorldPosition(D.pos);
+      const e = new ga().setFromQuaternion(cam.getWorldQuaternion(T.q), "YXZ");
+      D.yaw = e.y, D.pitch = e.x;
+    }
+    D.vel.set(0, 0, 0), vgDrone.on = !0, D.ses = droneSes(), vgMount.on && vgMountSet(A, null), K.target && cancelTarget();
     try {
-      S.player.setMovementEnabled(!1), D.inv = gm().stage !== "range", D.inv && S.player.setInvulnerable?.(!0);
+      S.player.setMovementEnabled(!1), D.inv = !D.ses && !net() && gm().stage !== "range", D.inv && S.player.setInvulnerable?.(!0);
     } catch {
     }
     const sens = () => (A.settings.get("controls.sensitivity", 3) || 3) * 7e-4;
@@ -50358,21 +50379,31 @@ function vgExtrasSystem(A) {
 .vg-drone .tag { position: absolute; left: 40px; top: 36px; } .vg-drone .tag b { color: #f2c14e; letter-spacing: .3em; } .vg-drone .tag i { display: inline-block; width: 8px; height: 8px; margin-left: 10px; border-radius: 50%; background: #ff4a3a; animation: vgDrn 1s steps(2) infinite; }
 .vg-drone .tel { position: absolute; right: 40px; top: 36px; text-align: right; line-height: 1.7; }
 .vg-drone .help { position: absolute; left: 0; right: 0; bottom: 36px; text-align: center; color: rgba(233,236,230,.7); font-size: 11px; }
-@keyframes vgDrn { 50% { opacity: .15; } }`, document.head.appendChild(st), D.el = document.createElement("div"), D.el.className = "vg-drone", D.el.innerHTML = '<div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div><div class="x"></div><div class="tag"><b>DRONE</b><i></i></div><div class="tel"></div><div class="help">WASD fly · SPACE up · C down · SHIFT fast · AIM slow · F10 exit</div>', document.body.appendChild(D.el);
+@keyframes vgDrn { 50% { opacity: .15; } }
+.vg-drone .sub { position: absolute; left: 40px; top: 58px; color: rgba(233,236,230,.78); text-transform: uppercase; }
+.vg-drone.clean > * { display: none !important; }
+body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .od-fps-counter, body.vg-drone-clean .vg-toast { display: none !important; }`, document.head.appendChild(st), D.el = document.createElement("div"), D.el.className = "vg-drone", D.el.innerHTML = '<div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div><div class="x"></div><div class="tag"><b>DRONE</b><i></i></div><div class="sub"></div><div class="tel"></div><div class="help"></div>', document.body.appendChild(D.el);
     }
-    D.el.style.display = "", ev.emit("drone:toggle", { on: !0 });
+    opt.overview && (D.clean = !1), droneClean(D.clean), D.el.querySelector(".help").textContent = D.ses ? `WASD fly · SPACE up · C down · SHIFT fast · AIM slow · H hide UI · F10 follow players${vgAuth.dev ? " · F8 record · F9 replays" : ""} · ESC leave` : `WASD fly · SPACE up · C down · SHIFT fast · AIM slow · H hide UI${net() && vgAuth.dev ? " · F8 record" : ""} · F10 exit`, D.el.querySelector(".sub").textContent = "", D.t = 0;
+    return D.el.style.display = "", ev.emit("drone:toggle", { on: !0 }), !0;
   }
   function droneExit() {
     if (!vgDrone.on) return;
-    vgDrone.on = !1, A.input.setLookHandler(null), vgKS.blockFire = !1;
-    try {
+    vgDrone.on = !1, A.input.setLookHandler(null), vgKS.blockFire = droneSes();
+    // in a multiplayer drone session the spectator view keeps the player still and the interface hidden
+    if (!droneSes()) try {
       S.player.setMovementEnabled(!0), D.inv && S.player.setInvulnerable?.(!1), A.camera.layers.enable(A.layers.VIEWMODEL), S.hud?.setVisible?.(!0);
     } catch {
     }
-    D.el && (D.el.style.display = "none"), ev.emit("drone:toggle", { on: !1 });
+    D.inv = !1, D.ses = !1, D.el && (D.el.style.display = "none"), typeof document < "u" && document.body.classList.remove("vg-drone-clean"), ev.emit("drone:toggle", { on: !1 });
+  }
+  // H: hide the drone's interface (frame, telemetry, key help and the REC badge) for clean footage; H again shows it
+  function droneClean(on) {
+    D.clean = !!on, D.el?.classList.toggle("clean", D.clean), typeof document < "u" && document.body.classList.toggle("vg-drone-clean", D.clean && vgDrone.on);
   }
   function droneLate(dt) {
     if (!vgDrone.on) return;
+    if (D.ses && !droneSes()) return droneExit();
     if (!droneAllowed() && hud()?.menu !== "none") return droneExit();
     const mv = A.input.getMove?.() || { x: 0, y: 0 }, fast = A.input.isDown("sprint"), slow = A.input.isDown("ads"), sp = fast ? 22 : slow ? 2.5 : 8, f = T.a.set(-Math.sin(D.yaw) * Math.cos(D.pitch), Math.sin(D.pitch), -Math.cos(D.yaw) * Math.cos(D.pitch)), r = T.b.set(Math.cos(D.yaw), 0, -Math.sin(D.yaw)), want = T.c.set(0, 0, 0);
     want.addScaledVector(f, mv.y || 0).addScaledVector(r, mv.x || 0), A.input.isDown("jump") && (want.y += 1), A.input.isDown("crouch") && (want.y -= 1), want.lengthSq() > 1 && want.normalize(), want.multiplyScalar(sp), D.vel.lerp(want, 1 - Math.exp(-5 * dt)), D.pos.addScaledVector(D.vel, dt);
@@ -50386,6 +50417,16 @@ function vgExtrasSystem(A) {
       D.t = 0.1;
       const hdg = ((-D.yaw * 180 / Math.PI) % 360 + 360) % 360;
       D.el.querySelector(".tel").innerHTML = `ALT ${(D.pos.y - gy).toFixed(1)} M<br>SPD ${D.vel.length().toFixed(1)} M/S<br>HDG ${hdg.toFixed(0).padStart(3, "0")}°`;
+      if (D.ses) {
+        const dr = vgSpec.drone || {}, n = netIds().length, mapNm = (() => {
+          try {
+            return S.world?.maps?.().find((m) => m.id === S.world.mapId)?.name || S.world?.mapId || "";
+          } catch {
+            return "";
+          }
+        })();
+        D.el.querySelector(".sub").textContent = `Multiplayer · ${mapNm} · ${dr.mode === "kc" ? "Kill Confirmed" : "Team Deathmatch"} · ${n ? `${n} player${n === 1 ? "" : "s"}` : "no players"}`;
+      }
     }
   }
   // ---------------- lifecycle
@@ -50456,6 +50497,10 @@ function vgExtrasSystem(A) {
       }), ev.on("ai:death", (o) => o?.agent?.key && K.botK.delete(o.agent.key)), ev.on("network:message", (m) => m?.type === "streak" && onRemote(m)), ev.on("loadout:changed", () => ui(!0));
       typeof window < "u" && window.addEventListener("keydown", (e) => {
         e.code === "F10" && !e.repeat && (e.preventDefault(), e.stopPropagation(), droneToggle());
+        if (e.code === "KeyH" && !e.repeat && vgDrone.on && !(typeof vgReplay < "u" && vgReplay.playing)) {
+          const t = e.target, typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+          typing || (e.preventDefault(), e.stopImmediatePropagation(), droneClean(!D.clean));
+        }
       }, !0);
       try {
         const rs = vgReplaySystem(A);
@@ -50463,7 +50508,7 @@ function vgExtrasSystem(A) {
       } catch (err) {
         A.reportError?.("extras", "replay-init", err);
       }
-      vgKS.api = { use, earn, state: K, allowed, reset: resetAll, entities: () => K.ents.map((e) => e.kind), drone: { toggle: droneToggle, exit: droneExit, state: D }, mount: { probe: () => vgMountProbe(A), press: (ads) => vgMountPress(A, ads), state: vgMount, mul: vgMountMul } }, typeof window < "u" && (window.__VGKS__ = vgKS);
+      vgKS.api = { use, earn, state: K, allowed, reset: resetAll, entities: () => K.ents.map((e) => e.kind), drone: { toggle: droneToggle, exit: droneExit, start: (o) => droneEnter(o), clean: (on) => droneClean(on), state: D }, mount: { probe: () => vgMountProbe(A), press: (ads) => vgMountPress(A, ads), state: vgMount, mul: vgMountMul } }, typeof window < "u" && (window.__VGKS__ = vgKS);
     },
     update(dt) {
       try {
@@ -50494,6 +50539,13 @@ function vgExtrasSystem(A) {
     }
   };
 }
+function vgMapName(id) {
+  try {
+    return wmList().find((m) => m.id === id)?.name || id || "";
+  } catch {
+    return id || "";
+  }
+}
 /* ------------------------------------------------------------------ Beta 1.3: replay recorder (developers) */
 // For game trailers. Developers only (set in the anti-cheat console; the owner always is one).
 //   F8  start / stop recording (up to 10 minutes): every soldier (you, bots, other players), their shots,
@@ -50518,7 +50570,7 @@ function vgReplaySystem(A) {
   // ---------------- recording
   function actorsNow() {
     const out = [], ps = S.player?.state;
-    if (ps?.position) out.push(["me", r2(ps.position.x), r2(ps.position.y), r2(ps.position.z), r3(ps.yaw || 0), r3(ps.pitch || 0), ps.sliding && ps.stance !== "prone" ? 3 : ST[ps.stance] ?? 0, ps.alive === !1 ? 0 : 1]);
+    if (ps?.position && !(typeof vgSpec < "u" && vgSpec.active)) out.push(["me", r2(ps.position.x), r2(ps.position.y), r2(ps.position.z), r3(ps.yaw || 0), r3(ps.pitch || 0), ps.sliding && ps.stance !== "prone" ? 3 : ST[ps.stance] ?? 0, ps.alive === !1 ? 0 : 1]);
     for (const ag of S.ai?.agents || []) {
       if (!ag?.position || !ag.key) continue;
       const cr = ag.anim?.in?.crouch ?? ag.body?.anim?.in?.crouch ?? 0;
@@ -50689,10 +50741,11 @@ function vgReplaySystem(A) {
     if (!isDev()) return;
     if (P.data) return studioClose();
     if (R.rec) recStop();
-    if (net()) return toast("Leave the online match to watch replays (recording works online).", 2.6);
+    const droneSes = typeof vgSpec < "u" && vgSpec.active && !!vgSpec.drone;
+    if (net() && !(droneSes && !(S.network?.ids?.() || []).length)) return toast(droneSes ? "Replays play on an empty map: pick a map nobody is playing in Drone mode." : "Leave the online match to watch replays (recording works online).", 2.8);
     const d = R.list[idx];
     if (!d) return studioUi(), void 0;
-    if (d.map && S.world?.mapId !== d.map) return toast(`This replay was recorded on ${mapName(d.map)}. Start a match there to watch it.`, 3), studioUi(idx);
+    if (d.map && S.world?.mapId !== d.map) return toast(`This replay was recorded on ${mapName(d.map)}. Open Drone mode on ${mapName(d.map)} (Multiplayer screen) or start a match there to watch it.`, 3.2), studioUi(idx);
     vgDrone.on && vgKS.api?.drone?.exit?.(), vgMount.on && vgMountSet(A, null), P.data = d, P.idx = idx, P.t = 0, P.evI = 0, P.speed = 1, P.play = !0, P.cam = P.cam || "follow", P.target = d.actors.me ? "me" : Object.keys(d.actors)[0], R.playing = !0, vgKS.blockFire = !0;
     P.scaleWas = A.time.scale, A.time.scale = 0, P.hidden = [];
     for (const ag of S.ai?.agents || []) ag?.object && ag.object.visible && (ag.object.visible = !1, P.hidden.push(ag.object));
@@ -50711,11 +50764,14 @@ function vgReplaySystem(A) {
     ghostsClear(), P.data = null, R.playing = !1, vgKS.blockFire = vgDrone.on, A.time.scale = P.scaleWas || 1;
     for (const o of P.hidden) o.visible = !0;
     P.hidden = [];
+    const droneSes = typeof vgSpec < "u" && vgSpec.active && !!vgSpec.drone;
     try {
-      A.input.setLookHandler(null), S.player?.setMovementEnabled?.(!0), A.camera.layers.enable(A.layers.VIEWMODEL), S.hud?.setVisible?.(!0);
+      A.input.setLookHandler(null), droneSes || (S.player?.setMovementEnabled?.(!0), A.camera.layers.enable(A.layers.VIEWMODEL), S.hud?.setVisible?.(!0));
     } catch {
     }
     studioUi(-1), ev.emit("replay:studio", { open: !1 });
+    // back to the drone in a multiplayer drone session
+    droneSes && setTimeout(() => vgKS.api?.drone?.start?.(), 0);
   }
   function mapName(id) {
     try {
@@ -50877,14 +50933,14 @@ function vgReplaySystem(A) {
       }
     } else if (k === "Escape") studioClose();
     else used = !1;
-    used && (e.preventDefault(), e.stopPropagation());
+    used && (e.preventDefault(), e.stopImmediatePropagation());
   }
   function onWheel(e) {
     P.data && (P.cam === "follow" || P.cam === "orbit") && (P.dist = Math.max(1.2, Math.min(14, P.dist * (e.deltaY > 0 ? 1.1 : 0.9))));
   }
   return {
     init() {
-      ev.on("combat:shot", onShot), ev.on("combat:explosion", onBoom), ev.on("network:message", onNet), wrapVfx(), typeof window < "u" && (window.addEventListener("keydown", onKey, !0), window.addEventListener("wheel", onWheel, { passive: !0 })), R.api = { start: recStart, stop: recStop, open: studioOpen, close: studioClose, seek, state: P, setCam, togglePlay, dev: (on) => (vgAuth.dev = !!on) }, typeof window < "u" && (window.__VGRP__ = R);
+      ev.on("combat:shot", onShot), ev.on("combat:explosion", onBoom), ev.on("network:message", onNet), wrapVfx(), typeof window < "u" && (window.addEventListener("keydown", onKey, !0), window.addEventListener("wheel", onWheel, { passive: !0 })), R.api = { start: recStart, stop: recStop, open: studioOpen, close: studioClose, seek, state: P, setCam, togglePlay, dev: (on) => (vgAuth.dev = !!on), listOpen: () => !!(P.ui && !P.data), closeList: () => P.ui && !P.data && (P.ui.remove(), P.ui = null) }, typeof window < "u" && (window.__VGRP__ = R);
     },
     tick() {
       R.rec && (recTick(), recUi());
@@ -54380,7 +54436,7 @@ var vgRangeCss = `
 `;
 /* ------------------------------------------------------------------ Beta 1.2: final killcam + spectating state */
 var vgFinal = { on: !1, label: "", start: null };
-var vgSpec = { active: !1, offerOpen: !1, start: null, stop: null };
+var vgSpec = { active: !1, offerOpen: !1, start: null, stop: null, drone: null };
 var vgSpecCss = `
 .vg-spec { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #eef1ec; font-family: inherit; }
 .vg-spec .top { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); text-align: center; padding: 10px 26px 12px; background: rgba(8,11,13,.72); border: 1px solid rgba(236,240,234,.14); border-top: 3px solid #ff5a4a; min-width: 300px; }
@@ -54395,6 +54451,104 @@ var vgSpecCss = `
 .vg-spec .keys i { display: inline-block; min-width: 18px; margin-right: 4px; padding: 2px 6px; border: 1px solid rgba(236,240,234,.4); font-style: normal; font-weight: 700; text-align: center; }
 .vg-spec .keys button { pointer-events: auto; padding: 8px 12px; background: #f2c14e; border: 0; color: #111; font: 800 11px/1 inherit; font-family: inherit; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; }
 `;
+/* ------------------------------------------------------------------ Beta 1.31: Drone mode in multiplayer (developers) */
+// Multiplayer screen -> Drone mode: pick a mode and a map. If a match of that mode is being played on the map you
+// watch it from the drone (nobody sees you); otherwise you get the map to yourself. F10 switches between the drone
+// and following the players, F8 records a replay, Esc leaves. The server checks that you are a developer.
+var vgDroneCss = `
+.vg-rep .card.vg-dp { width: min(780px, 94vw); }
+.vg-dp .modes { display: flex; gap: 6px; margin: 0 0 16px; }
+.vg-dp .modes button { flex: 1; padding: 10px 8px; background: rgba(255,255,255,.05); border: 1px solid rgba(236,240,234,.2); color: #e9ece6; font: 800 11.5px/1 inherit; font-family: inherit; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; }
+.vg-dp .modes button.on { border-color: #f2c14e; background: rgba(242,193,78,.15); color: #f2c14e; }
+.vg-dp .maps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 620px) { .vg-dp .maps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.vg-dp .maps button { position: relative; display: block; padding: 0; overflow: hidden; background: #0b0e10; border: 2px solid rgba(236,240,234,.14); color: #e9ece6; font-family: inherit; text-align: left; cursor: pointer; }
+.vg-dp .maps button:hover, .vg-dp .maps button:focus-visible { border-color: rgba(242,193,78,.6); outline: none; }
+.vg-dp .maps button.on { border-color: #f2c14e; box-shadow: 0 0 0 1px #f2c14e inset; }
+.vg-dp .maps .im { display: block; width: 100%; aspect-ratio: 2 / 1; background: #151a1d center / cover no-repeat; }
+@media (max-height: 760px) { .vg-dp .maps .im { aspect-ratio: 5 / 2; } .vg-rep .card.vg-dp p.sub { margin-bottom: 10px; } }
+.vg-dp .maps b { display: block; padding: 9px 11px 2px; font-size: 13.5px; letter-spacing: .12em; text-transform: uppercase; }
+.vg-dp .maps small { display: block; padding: 0 11px 10px; color: #a9b0a8; font-size: 11.5px; }
+.vg-dp .maps em { position: absolute; left: 8px; top: 8px; padding: 4px 7px; background: #c8402f; color: #fff; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.vg-dp .maps em::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #fff; vertical-align: 1px; animation: vgDpB 1s steps(2) infinite; }
+@keyframes vgDpB { 50% { opacity: .2; } }
+`;
+function vgDronePick() {
+  if (typeof document > "u" || !vgAuth.dev || !vgAuth.user || vgSpec.active || document.querySelector(".vg-rep")) return;
+  if (!document.getElementById("vg-dp-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-dp-style", st.textContent = vgDroneCss, document.head.appendChild(st);
+  }
+  const d = vgRepDialog(`<h3>Drone mode</h3><p class="sub">Developers only. Fly the drone over a multiplayer map. Nobody can see you. If a match is being played on the map you watch it live; if not, you have the map to yourself. F10 switches between the drone and following players, F8 records a replay, Esc leaves.</p><span class="lbl">Mode</span><div class="modes"><button type="button" data-m="tdm">Team Deathmatch</button><button type="button" data-m="kc">Kill Confirmed</button></div><span class="lbl">Map</span><div class="maps"></div><div class="msg" aria-live="polite">Checking for live matches…</div><div class="acts"><button type="button" data-c>Cancel</button><button type="button" class="pri" data-go>Fly in</button></div>`);
+  d.querySelector(".card").classList.add("vg-dp");
+  const $ = (q) => d.querySelector(q), maps = $(".maps"), msg = $(".msg"), go = $("[data-go]");
+  let mode = "tdm", map = null, info = null, ws = null;
+  try {
+    map = localStorage.getItem("vangaurd.drone.map") || null, mode = localStorage.getItem("vangaurd.drone.mode") === "kc" ? "kc" : "tdm";
+  } catch {
+  }
+  const all = () => {
+    const known = wmList(), ids = info?.maps?.length ? info.maps : known.map((m) => m.id);
+    return ids.map((id) => ({ id, name: known.find((m) => m.id === id)?.name || id }));
+  }, liveOn = (id) => (info?.live || []).find((x) => x.mode === mode && x.mapId === id);
+  const render = () => {
+    const list = all();
+    list.some((m) => m.id === map) || (map = (list.find((m) => liveOn(m.id)) || list[0])?.id || null);
+    d.querySelectorAll("[data-m]").forEach((b) => b.classList.toggle("on", b.dataset.m === mode));
+    maps.innerHTML = list.map((m) => {
+      const lv = liveOn(m.id), shot = typeof wmShots < "u" && wmShots[m.id];
+      return `<button type="button" data-map="${vgEsc(m.id)}" class="${m.id === map ? "on" : ""}" aria-pressed="${m.id === map}">${lv ? `<em>Live · ${lv.players | 0}</em>` : ""}<span class="im"${shot ? ` style="background-image:url('${shot}')"` : ""}></span><b>${vgEsc(m.name)}</b><small>${lv ? `Watch the live match · ${lv.players | 0} player${lv.players === 1 ? "" : "s"}` : "Empty map · just you"}</small></button>`;
+    }).join(""), maps.querySelectorAll("[data-map]").forEach((b) => b.addEventListener("click", () => {
+      map = b.dataset.map, render();
+    }));
+    go.disabled = !map;
+  };
+  d.querySelectorAll("[data-m]").forEach((b) => b.addEventListener("click", () => {
+    mode = b.dataset.m, render();
+  })), render();
+  // live matches (and the server's map list); the server also refuses players who are not developers
+  try {
+    ws = new WebSocket(vgServerWs());
+    const to = setTimeout(() => {
+      msg.textContent = "Can't reach the Vangaurd server.", msg.classList.add("err");
+      try {
+        ws.close();
+      } catch {
+      }
+    }, 8e3);
+    ws.onmessage = (ev) => {
+      let m;
+      try {
+        m = JSON.parse(ev.data);
+      } catch {
+        return;
+      }
+      if (m.type === "connected") return ws.send(JSON.stringify({ type: "drone_info", token: vgAuth.token, clientBuild: VGD.build }));
+      if (m.type === "drone_error") return clearTimeout(to), msg.textContent = m.message || "Drone mode is for developers.", msg.classList.add("err"), go.disabled = !0, ws.close();
+      if (m.type === "drone_info") {
+        clearTimeout(to), info = m, ws.close();
+        const n = (m.live || []).length;
+        msg.textContent = n ? `${n} match${n === 1 ? " is" : "es are"} being played right now (marked Live).` : "Nobody is playing right now: every map is empty.", render();
+      }
+    };
+  } catch {
+    msg.textContent = "Can't reach the Vangaurd server.", msg.classList.add("err");
+  }
+  d.onclose = () => {
+    try {
+      ws?.close();
+    } catch {
+    }
+  }, $("[data-c]").addEventListener("click", d.close), go.addEventListener("click", () => {
+    if (!map) return;
+    try {
+      localStorage.setItem("vangaurd.drone.map", map), localStorage.setItem("vangaurd.drone.mode", mode);
+    } catch {
+    }
+    d.close(), vgSpec.start?.(null, { mode, mapId: map });
+  }), setTimeout(() => go.focus(), 30);
+}
+typeof window < "u" && (window.__VGDRONE__ = { pick: () => vgDronePick(), dev: () => !!vgAuth.dev });
 /* ------------------------------------------------------------------ Beta 1.2: report menu, bug reports */
 var vgCurMap = null;
 var VG_BUG_CATS = [["gameplay", "Gameplay"], ["graphics", "Graphics"], ["controls", "Controls"], ["online", "Online"], ["menus", "Menus"], ["performance", "Performance"], ["other", "Other"]];
@@ -54566,6 +54720,7 @@ typeof window < "u" && vgNet.listeners.push((m) => vgReadyMsg(m));
 /* ------------------------------------------------------------------ Beta 1.2: news & patch notes */
 // Only the current version's notes are shown (Beta 1.21: older versions are no longer listed).
 var VG_PATCH_NOTES = [
+  { v: "Beta 1.31", items: ["The game now shows when the servers are offline or under maintenance, even if you are not signed in.", "The sign-in page now tells you on its own when the servers go down."] },
   { v: "Beta 1.3", items: ["Fixed Matchmaking", "Many QoL Fixes", "You can now see on the report page who the last player who killed you was.", "Switched from NA West Servers to NA East Servers", "Fixed a Bug where if you would Slide or go Prone it would not show it on another players screen", "Weapon Leveling", "Weapon Mounting", "Kill Streaks", "Daily and Weekly Challenges and more!"] },
   { v: "Beta 1.21", items: ["Dive to prone from mid-air: press prone while jumping or falling.", "Fixed being able to mantle through some windows into buildings."] }
 ];
@@ -54801,39 +54956,76 @@ function vgShutdownPage(url, text = "The game has closed because this version is
   box.className = "vg-closed", box.innerHTML = `<div><b>VANGAURD</b><p>${vgEsc(text)}</p>${url ? `<a href="${url}" target="_blank" rel="noopener">Download the new version</a>` : ""}<small>You can close this tab.</small></div>`, document.body.appendChild(box);
 }
 // At launch: ask the server which build it needs, so an old build is stopped before the menus.
+// Beta 1.31: also tells the start-up screen whether the server is up (and not in maintenance), so players who
+// are not signed in see "Login failed" too instead of the sign-in page. Resolves with
+// { ok, maintenance, outdated } | { offline } | { banned }.
 function vgBuildProbe() {
-  if (typeof WebSocket > "u") return;
-  let ws, got = !1, fin = !1, to = 0;
-  const done = () => {
-    fin = !0, clearTimeout(to);
-    try {
-      ws?.close();
-    } catch {
-    }
-  }, offline = () => {
-    fin || (done(), got || vgBanOffline());
-  };
-  try {
-    ws = new WebSocket(vgServerWs());
-  } catch {
-    return vgBanOffline();
-  }
-  to = setTimeout(offline, 8e3), ws.addEventListener("message", (ev) => {
-    let m;
-    try {
-      m = JSON.parse(ev.data);
-    } catch {
-      return;
-    }
-    if (m.type === "connected") {
-      if (got = !0, vgAnnFrom(m), vgRegionsFrom(m), vgCheckBuild(m)) return done();
+  if (typeof WebSocket > "u") return Promise.resolve({ ok: !0 });
+  return new Promise((res) => {
+    let ws, got = !1, fin = !1, to = 0, said = !1;
+    const tell = (r) => said || (said = !0, res(r));
+    const done = () => {
+      fin = !0, clearTimeout(to);
       try {
-        ws.send(JSON.stringify({ type: "hello", clientBuild: VGD.build, device: vgDevice() }));
+        ws?.close();
       } catch {
       }
-      clearTimeout(to), to = setTimeout(done, 5e3);
-    } else m.type === "banned" ? (done(), vgBanned(m.ban, m.message)) : m.type === "device_ok" && done();
-  }), ws.addEventListener("error", offline), ws.addEventListener("close", offline);
+    }, offline = () => {
+      fin || (done(), got || (vgBanOffline(), tell({ offline: !0 })));
+    };
+    try {
+      ws = new WebSocket(vgServerWs());
+    } catch {
+      return vgBanOffline(), tell({ offline: !0 });
+    }
+    to = setTimeout(offline, 8e3), ws.addEventListener("message", (ev) => {
+      let m;
+      try {
+        m = JSON.parse(ev.data);
+      } catch {
+        return;
+      }
+      if (m.type === "connected") {
+        got = !0, vgAnnFrom(m), vgRegionsFrom(m);
+        const old = vgCheckBuild(m);
+        if (tell({ ok: !0, maintenance: m.maintenance || null, outdated: old }), old) return done();
+        try {
+          ws.send(JSON.stringify({ type: "hello", clientBuild: VGD.build, device: vgDevice() }));
+        } catch {
+        }
+        clearTimeout(to), to = setTimeout(done, 5e3);
+      } else m.type === "banned" ? (done(), vgBanned(m.ban, m.message), tell({ banned: !0 })) : m.type === "device_ok" && done();
+    }), ws.addEventListener("error", offline), ws.addEventListener("close", offline);
+  });
+}
+// Beta 1.31: is the server up? (used while the sign-in page is open). { ok, maintenance } | { offline }
+function vgServerStatus(ms = 8e3) {
+  return new Promise((res) => {
+    let ws, said = !1;
+    const tell = (r) => {
+      if (said) return;
+      said = !0, clearTimeout(to);
+      try {
+        ws?.close();
+      } catch {
+      }
+      res(r);
+    }, to = setTimeout(() => tell({ offline: !0 }), ms);
+    try {
+      ws = new WebSocket(vgServerWs());
+    } catch {
+      return tell({ offline: !0 });
+    }
+    ws.addEventListener("message", (ev) => {
+      let m;
+      try {
+        m = JSON.parse(ev.data);
+      } catch {
+        return;
+      }
+      m.type === "connected" && (vgAnnFrom(m), tell({ ok: !0, maintenance: m.maintenance || null }));
+    }), ws.addEventListener("error", () => tell({ offline: !0 })), ws.addEventListener("close", () => tell({ offline: !0 }));
+  });
 }
 /* ------------------------------------------------------------------ accounts (sign in before the main menu) */
 // Usernames and passwords live on the Vangaurd server; the game only keeps a sign-in token on this device
@@ -55041,7 +55233,7 @@ function vgAuthUI() {
     ru.value = u.value.trim(), show("reset", ru);
   }), root.querySelectorAll("[data-back]").forEach((b) => b.addEventListener("click", () => {
     busy || (pending = null, clearInterval(coolT), setMode(mode));
-  })), retry.addEventListener("click", () => ui.boot()), off.addEventListener("click", () => {
+  })), retry.addEventListener("click", () => vgBootRun()), off.addEventListener("click", () => {
     vgAuthSet(null, null, !1), ui.hide();
   });
   const ui = vgAuth.ui = {
@@ -55068,6 +55260,20 @@ function vgAuthUI() {
       r.error === "offline" ? (say("Can't reach the Vangaurd server. Check your connection and try again, or play offline.", !0), offlineOpts(!0)) : (say(r.message || "Please sign in again.", !0), pw.focus());
     }
   };
+  // Beta 1.31: while the sign-in page is open, keep checking that the server is up; when it goes down or into
+  // maintenance the page turns into the "Login failed" screen (staff can still sign in from there).
+  let checking = !1;
+  setInterval(async () => {
+    if (checking || !vgAuth.open || busy || view !== "main" || vgBoot.on || vgUpd.open || typeof document < "u" && document.hidden) return;
+    checking = !0;
+    try {
+      const st = await vgServerStatus();
+      if (!vgAuth.open || busy || view !== "main" || vgBoot.on || vgAuth.user) return;
+      st.offline ? vgBootFail("offline") : st.maintenance && !vgAuth.staffNote && vgBootFail("maintenance", st.maintenance.message || "");
+    } finally {
+      checking = !1;
+    }
+  }, 45e3);
   return ui;
 }
 /* ------------------------------------------------------------------ Beta 1.3: start-up loading screen */
@@ -55116,9 +55322,12 @@ function vgBootUI() {
     st.id = "vg-boot-style", st.textContent = vgBootCss, document.head.appendChild(st);
   }
   const d = vgBoot.el = document.createElement("div");
-  d.className = "vg-boot", d.setAttribute("role", "status"), d.innerHTML = `<div class="bg"></div><div class="mid"><div class="logo">${VG_SHIELD}<div class="word">VANGAURD</div></div><div class="rule"></div><div class="st"><span class="spin"></span><b data-s>Patching…</b></div><div class="det" data-d></div><div class="fail" role="alertdialog" aria-modal="true" aria-labelledby="vg-boot-fh"><h3 id="vg-boot-fh">Login failed</h3><p data-m></p><div class="acts"><button type="button" class="pri" data-retry>Retry</button><button type="button" data-off hidden>Play offline</button><button type="button" data-quit hidden>Quit</button></div></div></div><div class="ver">${VGD.label}</div>`, document.body.appendChild(d);
+  d.className = "vg-boot", d.setAttribute("role", "status"), d.innerHTML = `<div class="bg"></div><div class="mid"><div class="logo">${VG_SHIELD}<div class="word">VANGAURD</div></div><div class="rule"></div><div class="st"><span class="spin"></span><b data-s>Patching…</b></div><div class="det" data-d></div><div class="fail" role="alertdialog" aria-modal="true" aria-labelledby="vg-boot-fh"><h3 id="vg-boot-fh">Login failed</h3><p data-m></p><div class="acts"><button type="button" class="pri" data-retry>Retry</button><button type="button" data-off hidden>Play offline</button><button type="button" data-signin hidden>Staff sign-in</button><button type="button" data-quit hidden>Quit</button></div></div></div><div class="ver">${VGD.label}</div>`, document.body.appendChild(d);
   d.querySelector("[data-retry]").addEventListener("click", () => vgBootRun()), d.querySelector("[data-off]").addEventListener("click", () => {
     vgBootHide(), vgAuthSet(null, null, !1);
+  }), d.querySelector("[data-signin]").addEventListener("click", () => {
+    // During maintenance the owner, moderators and developers can still sign in.
+    vgBoot.run++, vgBootHide(), vgAuth.staffNote = !0, vgAuthUI().show("Only Vangaurd staff can sign in during maintenance.");
   }), d.querySelector("[data-quit]").addEventListener("click", () => {
     try {
       window.vangaurdDesktop?.quit ? window.vangaurdDesktop.quit() : window.close();
@@ -55148,7 +55357,7 @@ function vgBootFail(kind, message) {
   vgBoot.run++, vgBoot.on = !0, vgBoot.failed = kind, vgAuth.ui?.hide?.(), d.classList.add("on", "failed");
   const title = kind === "steam_required" ? "Steam required" : "Login failed";
   kind === "maintenance" && message && !/maintenance/i.test(message) && (message = `Vangaurd is undergoing maintenance. ${message}`);
-  d.querySelector("#vg-boot-fh").textContent = title, d.querySelector("[data-m]").textContent = message || (kind === "maintenance" ? "Vangaurd is undergoing maintenance. Please try again later." : kind === "offline" ? "Unable to contact the Vangaurd services. Check your connection and try again." : "Sign-in failed. Try again."), d.querySelector("[data-off]").hidden = kind !== "offline" || vgSteamLocked(), d.querySelector("[data-quit]").hidden = kind !== "steam_required" && !(kind === "offline" && vgSteamLocked());
+  d.querySelector("#vg-boot-fh").textContent = title, d.querySelector("[data-m]").textContent = message || (kind === "maintenance" ? "Vangaurd is undergoing maintenance. Please try again later." : kind === "offline" ? "Unable to contact the Vangaurd services. Check your connection and try again." : "Sign-in failed. Try again."), d.querySelector("[data-off]").hidden = kind !== "offline" || vgSteamLocked(), d.querySelector("[data-signin]").hidden = kind !== "maintenance" || !!vgAuth.user, d.querySelector("[data-quit]").hidden = kind !== "steam_required" && !(kind === "offline" && vgSteamLocked());
   try {
     document.pointerLockElement && document.exitPointerLock();
   } catch {
@@ -55189,21 +55398,29 @@ function vgDeskRevealed() {
 }
 async function vgBootRun() {
   const run = ++vgBoot.run, wait = (ms) => new Promise((r) => setTimeout(r, ms)), alive = () => run === vgBoot.run;
-  vgAuth.ui?.hide?.(), vgBootShow("Patching…", "Checking for updates");
+  vgAuth.staffNote = !1, vgAuth.ui?.hide?.(), vgBootShow("Patching…", "Checking for updates");
   const steamP = vgSteamInfo();
   if (await vgDeskRevealed(), !alive()) return;
   const t0 = performance.now();
+  let probeP;
   try {
-    vgBuildProbe();
+    probeP = vgBuildProbe();
   } catch {
   }
+  probeP = probeP || Promise.resolve({ ok: !0 });
   await wait(1100);
   if (!alive()) return;
   if (vgUpd.open) return vgBootHide();
   const sv = vgAuthSaved();
   if (!sv) {
-    await steamP;
+    // Beta 1.31: not signed in. Still check the server first, so a server that is down or in maintenance
+    // shows "Login failed" here instead of a sign-in page that can't work.
+    vgBootShow("Logging In…", "Contacting services");
+    const [st] = await Promise.all([probeP, steamP]);
     if (!alive()) return;
+    if (vgUpd.open || st.outdated) return vgBootHide();
+    if (st.offline) return vgBootFail("offline");
+    if (st.maintenance) return vgBootFail("maintenance", st.maintenance.message || "");
     return vgBootHide(), vgAuthUI().show();
   }
   vgBootShow("Logging In…", "Signing in to Vangaurd services");
@@ -55899,7 +56116,7 @@ function cJ(A) {
   vgFr?.addButtons(n);
   typeof window < "u" && setInterval(() => {
     const on = F.sessionType === "multiplayer" && !!vgAuth.user, st = vgNetStats();
-    vgLobNet.style.display = on ? "" : "none", on && (vgLobNet.innerHTML = st.open ? `<span class="${st.ping == null ? "" : st.ping < 70 ? "g" : st.ping < 130 ? "y" : "r"}">●</span> PING ${st.ping == null ? "--" : Math.round(st.ping)} ms · LOSS ${st.loss.toFixed(0)}%` : '<span class="r">●</span> Connecting…');
+    vgDroneItem && (vgDroneItem.style.display = on && vgAuth.dev && !F.waitingForPlayers && !F.multiplayerMatch ? "" : "none"), vgLobNet.style.display = on ? "" : "none", on && (vgLobNet.innerHTML = st.open ? `<span class="${st.ping == null ? "" : st.ping < 70 ? "g" : st.ping < 130 ? "y" : "r"}">●</span> PING ${st.ping == null ? "--" : Math.round(st.ping)} ms · LOSS ${st.loss.toFixed(0)}%` : '<span class="r">●</span> Connecting…');
   }, 1e3);
   NA("div", "emb", Q, R2), NA("div", "op", Q).textContent = "Vangaurd", NA("h1", "", Q, "<span>VANGAURD</span>"), NA("div", "sub", Q).textContent = "";
   const d = NA("div", "od-menu", u), f = [
@@ -55949,7 +56166,10 @@ function cJ(A) {
     }),
     de(d, "Settings", "Graphics, mouse, audio and interface", () => Ct("graphics")),
     de(d, "Back", "Return to deployment selection", () => tt("entry"))
-  ], C = NA("div", "od-card", u), y = NA("div", "od-card-head", C), w = NA("div", "k", y), m = NA("div", "t", C), D = NA("div", "p", C), M = NA("div", "map", C), x = NA("canvas", "", M), S = NA("div", "stats", C), U = NA("div", "od-mp-status", u);
+  ], vgDroneItem = (() => {
+    const b2 = de(d, "Drone mode", "Developers · fly over a multiplayer map", () => vgDronePick());
+    return b2.classList.add("vg-dev-item"), b2.style.display = "none", d.insertBefore(b2, E[E.length - 1]), b2;
+  })(), C = NA("div", "od-card", u), y = NA("div", "od-card-head", C), w = NA("div", "k", y), m = NA("div", "t", C), D = NA("div", "p", C), M = NA("div", "map", C), x = NA("canvas", "", M), S = NA("div", "stats", C), U = NA("div", "od-mp-status", u);
   U.setAttribute("role", "status"), U.setAttribute("aria-live", "polite");
   const G = NA("div", "", U), P = NA("button", "od-btn", U);
   P.type = "button", P.textContent = "Set up online connection", P.hidden = !0;
@@ -56237,7 +56457,8 @@ function cJ(A) {
       d.close(), specStart(m.target);
     }), setTimeout(() => d.querySelector("[data-go]")?.focus(), 30);
   }
-  function specStart(target) {
+  // drone: { mode, mapId } for a developer's multiplayer drone session (Beta 1.31)
+  function specStart(target, drone = null) {
     if (spec.active || spec.ws) return;
     let ws;
     try {
@@ -56245,7 +56466,7 @@ function cJ(A) {
     } catch {
       return vgToast("Can't reach the Vangaurd server.");
     }
-    spec.ws = ws, spec.targetName = target, spec.queue = [], spec.stats.clear(), spec.names.clear(), spec.ended = !1, vgToast(`Joining ${target}'s match…`), ws.onmessage = (ev) => {
+    spec.ws = ws, spec.drone = drone, spec.targetName = target || "", spec.queue = [], spec.stats.clear(), spec.names.clear(), spec.ended = !1, vgToast(drone ? `Flying the drone to ${vgMapName(drone.mapId)}…` : `Joining ${target}'s match…`), ws.onmessage = (ev) => {
       let m;
       try {
         m = JSON.parse(ev.data);
@@ -56254,14 +56475,14 @@ function cJ(A) {
       }
       specMsg(m);
     }, ws.onclose = () => {
-      spec.ws === ws && (spec.ws = null, spec.active ? specStop("The spectator connection closed.") : vgToast("Couldn't start spectating."));
+      spec.ws === ws && (spec.ws = null, spec.active ? specStop(spec.drone ? "Drone mode ended: the connection closed." : "The spectator connection closed.") : (vgToast(spec.drone ? "Couldn't start drone mode." : "Couldn't start spectating."), spec.drone = null));
     };
   }
   function specMsg(m) {
-    if (m.type === "connected") return spec.ws?.send(JSON.stringify({ type: "spectate_join", token: vgAuth.token, target: spec.targetName, clientBuild: VGD.build, device: vgDevice() }));
-    if (m.type === "spectate_error") return vgToast(m.message || "Can't spectate that player."), specStop();
+    if (m.type === "connected") return spec.ws?.send(JSON.stringify(spec.drone ? { type: "spectate_join", drone: !0, mode: spec.drone.mode, mapId: spec.drone.mapId, token: vgAuth.token, clientBuild: VGD.build, device: vgDevice() } : { type: "spectate_join", token: vgAuth.token, target: spec.targetName, clientBuild: VGD.build, device: vgDevice() }));
+    if (m.type === "spectate_error") return vgToast(m.message || (spec.drone ? "Can't start drone mode." : "Can't spectate that player.")), specStop();
     if (m.type === "spectate_start") return specBegin(m);
-    if (m.type === "spectate_end") return specStop(m.reason === "left" ? "" : `Spectating ended: ${m.reason || "the match closed."}`);
+    if (m.type === "spectate_end") return specStop(m.reason === "left" ? "" : `${spec.drone ? "Drone mode" : "Spectating"} ended: ${m.reason || "the match closed."}`);
     if (!m.matchId && m.type !== "player_state") return;
     specTrack(m), spec.active ? e.events.emit("network:message", m) : spec.queue.push(m);
   }
@@ -56280,8 +56501,23 @@ function cJ(A) {
     }
     if (!spec.ws) return;
     e.events.emit("network:session", { ...m, type: "match_found", playerId: null }), spec.active = !0, vgSpec.active = !0;
+    m.drone && (spec.drone = { ...spec.drone || {}, mode: m.mode, mapId: m.mapId, watching: !!m.watching }, vgSpec.drone = spec.drone);
     for (const q of spec.queue.splice(0)) e.events.emit("network:message", q);
+    // drone: the map is loaded, now the server sends the match (roster, positions)
+    if (spec.drone) try {
+      spec.ws?.readyState === 1 && spec.ws.send(JSON.stringify({ type: "spectate_ready" }));
+    } catch {
+    }
     specUI(), window.addEventListener("keydown", specKey, !0);
+    if (spec.drone) {
+      vgCurMap = m.mapId || vgCurMap;
+      try {
+        vgKS.api?.drone?.start?.({ overview: !0 });
+      } catch (err) {
+        e.reportError?.("hud", "drone-start", err);
+      }
+      vgToast(m.watching ? `Drone up over ${vgMapName(m.mapId)} · watching the live match (${(m.roster || []).length} players)` : `Drone up over ${vgMapName(m.mapId)} · nobody else is here`);
+    }
   }
   function specTrack(m) {
     const st = (id) => {
@@ -56313,6 +56549,13 @@ function cJ(A) {
   function specKey(ev) {
     const k = ev.code;
     if (!spec.active) return;
+    if (spec.drone) {
+      // the replay studio (developers) has the keys while it is open
+      if (vgReplay.playing) return;
+      if (k === "Escape" && vgReplay.api?.listOpen?.()) return ev.preventDefault(), ev.stopImmediatePropagation(), vgReplay.api.closeList();
+      // flying: everything but Esc goes to the drone
+      if (vgDrone.on && k !== "Escape") return;
+    }
     const mine = k === "Escape" || k === "ArrowLeft" || k === "ArrowRight" || k === "KeyQ" || k === "KeyE" || k === "KeyV";
     if (!mine) return;
     ev.preventDefault(), ev.stopImmediatePropagation(), k === "Escape" ? specStop("") : k === "KeyV" ? (spec.third = !spec.third, spec.hidden && (spec.hidden.visible = !0, spec.hidden = null)) : specSwitch(k === "ArrowLeft" || k === "KeyQ" ? -1 : 1);
@@ -56320,7 +56563,7 @@ function cJ(A) {
   function specUI() {
     spec.el?.remove();
     const d = spec.el = document.createElement("div");
-    d.className = "vg-spec", d.innerHTML = '<div class="top"><span class="k">Spectating · moderator</span><b></b><small></small></div><div class="stats"></div><div class="keys"><span><i>←</i><i>→</i> Switch player</span><span><i>V</i> First person / chase</span><span><i>Esc</i> Stop spectating</span><button type="button" data-x>Stop spectating</button></div>', document.body.appendChild(d), d.querySelector("[data-x]").addEventListener("click", () => specStop(""));
+    d.className = "vg-spec", d.innerHTML = spec.drone ? '<div class="top"><span class="k">Drone · following</span><b></b><small></small></div><div class="stats"></div><div class="keys"><span><i>←</i><i>→</i> Switch player</span><span><i>V</i> First person / chase</span><span><i>F10</i> Fly the drone</span><span><i>Esc</i> Leave</span><button type="button" data-x>Leave drone mode</button></div>' : '<div class="top"><span class="k">Spectating · moderator</span><b></b><small></small></div><div class="stats"></div><div class="keys"><span><i>←</i><i>→</i> Switch player</span><span><i>V</i> First person / chase</span><span><i>Esc</i> Stop spectating</span><button type="button" data-x>Stop spectating</button></div>', document.body.appendChild(d), d.querySelector("[data-x]").addEventListener("click", () => specStop(""));
     if (!document.getElementById("vg-spec-style")) {
       const st = document.createElement("style");
       st.id = "vg-spec-style", st.textContent = vgSpecCss, document.head.appendChild(st);
@@ -56328,11 +56571,19 @@ function cJ(A) {
   }
   function specFrame(dt) {
     const N = e.services.network;
+    // drone session: the drone (or the replay studio) has the camera
+    if (spec.drone && (vgDrone.on || vgReplay.playing)) {
+      spec.el && spec.el.style.display !== "none" && (spec.el.style.display = "none"), spec.hidden && (spec.hidden.visible = !0, spec.hidden = null);
+      return;
+    }
+    spec.el && spec.el.style.display === "none" && (spec.el.style.display = "", spec.uiT = 0);
     let P = spec.target != null ? N?.pose?.(spec.target) : null;
     if (!P) {
       const ids = specIds();
       ids.length && (spec.target = ids[0], spec.targetName = spec.names.get(ids[0]) || ids[0], P = N.pose(spec.target));
     }
+    // following, and the last player left: back up in the drone
+    if (!P && spec.drone) return vgKS.api?.drone?.start?.(), void 0;
     const cam = e.camera;
     if (P) {
       const fx = -Math.sin(P.yaw) * Math.cos(P.pitch), fy = Math.sin(P.pitch), fz = -Math.cos(P.yaw) * Math.cos(P.pitch), eye = P.stance === "prone" ? 0.4 : P.stance === "crouch" ? 1.1 : 1.64;
@@ -56347,8 +56598,13 @@ function cJ(A) {
     spec.el.querySelector(".top b").textContent = nm, spec.el.querySelector(".top small").textContent = P ? `${P.alive ? spec.third ? "Chase camera" : "First person" : "Dead · respawning"} · ${specIds().length} player${specIds().length === 1 ? "" : "s"}${spec.ended ? " · match over" : ""}` : "Waiting for players…", spec.el.querySelector(".stats").innerHTML = `<div><span>Kills</span><b>${x.kills | 0}</b></div><div><span>Deaths</span><b>${x.deaths | 0}</b></div><div><span>Score</span><b>${x.score | 0}</b></div><div title="Since you started watching"><span>Seen kills</span><b>${x.seenKills | 0}</b></div><div title="Headshot kills since you started watching"><span>Headshots</span><b>${x.hs | 0}${x.seenKills ? ` · ${Math.round(x.hs / x.seenKills * 100)}%` : ""}</b></div><div title="Shots heard since you started watching"><span>Shots</span><b>${x.shots | 0}</b></div>`;
   }
   function specStop(reason) {
-    const was = spec.active;
-    spec.active = !1, vgSpec.active = !1;
+    const was = spec.active, drone = !!spec.drone;
+    spec.active = !1, vgSpec.active = !1, vgSpec.drone = null, spec.drone = null;
+    if (drone) try {
+      vgReplay.playing && vgReplay.api?.close?.(), vgReplay.api?.listOpen?.() && vgReplay.api.closeList(), vgDrone.on && vgKS.api?.drone?.exit?.();
+    } catch (err) {
+      e.reportError?.("hud", "drone-stop", err);
+    }
     const ws = spec.ws;
     spec.ws = null;
     try {
@@ -56362,7 +56618,7 @@ function cJ(A) {
         e.services.hud.setVisible?.(!0), e.services.player.setMovementEnabled(!0), e.services.player.setInvulnerable?.(!1);
       } catch {
       }
-      F.vmDisabled && (e.camera.layers.enable(e.layers.VIEWMODEL), F.vmDisabled = !1), tt("entry");
+      F.vmDisabled && (e.camera.layers.enable(e.layers.VIEWMODEL), F.vmDisabled = !1), drone ? Qe() : tt("entry");
     }
     reason && vgToast(reason);
   }

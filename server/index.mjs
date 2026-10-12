@@ -23,7 +23,7 @@ const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
 };
-const VERSION = '3.1.0';
+const VERSION = '3.2.0';
 // Where this server runs (shown in the game and on /health). The main server is NA East from Beta 1.3.
 const REGION = String(process.env.REGION || 'na-east').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 16) || 'na-east';
 const REGION_NAMES = { 'na-east': 'NA East', 'na-west': 'NA West', eu: 'Europe', 'eu-west': 'EU West' };
@@ -912,7 +912,12 @@ function leaveMatch(c, notify = true) {
   if (notify) send(c, { type: 'match_left', matchId: match.id });
   broadcast(match, { type: 'player_left', matchId: match.id, playerId: c.id });
   if (match.players.size > 0) { broadcast(match, { type: 'match_update', matchId: match.id, roster: rosterOf(match) }); broadcastVote(match); if (match.ffa) broadcast(match, scoreMsg(match)); }
-  else { clearTimeout(match.vote?.timer); spectatorsOut(match, 'Everyone left the match.'); matches.delete(match.id); log(`match ${match.id} closed`); }
+  else if (match.droneWait > 0 || [...match.spectators || []].some((id) => clients.get(id)?.drone)) {
+    // a developer's drone is still flying over the map: keep it for them (nobody else is put into an empty match)
+    clearTimeout(match.vote?.timer);
+    for (const id of [...match.spectators || []]) { const sc = clients.get(id); if (sc && !sc.drone) { sc.spectating = null; match.spectators.delete(id); send(sc, { type: 'spectate_end', reason: 'Everyone left the match.' }); } }
+    broadcast(match, { type: 'match_update', matchId: match.id, roster: [] });
+  } else { clearTimeout(match.vote?.timer); spectatorsOut(match, 'Everyone left the match.'); matches.delete(match.id); log(`match ${match.id} closed`); }
   if (queues[match.mode]?.length) setTimeout(() => checkQueue(match.mode), 0); // a spot opened (or the match closed)
 }
 function endMatch(match, winner) {
@@ -1137,9 +1142,80 @@ function spectateJoin(c, msg) {
 }
 function spectateLeave(c, notify) {
   const match = c.spectating && matches.get(c.spectating);
-  if (match?.spectators) match.spectators.delete(c.id);
+  if (match) {
+    if (match.spectators?.has(c.id)) match.spectators.delete(c.id);
+    else if (c.drone) match.droneWait = Math.max(0, (match.droneWait || 1) - 1); // left while its map was loading
+  }
   if (c.spectating && notify) send(c, { type: 'spectate_end', reason: 'left' });
+  if (match && !match.players.size && !match.spectators?.size && !match.droneWait && matches.get(match.id) === match) {
+    // a developer's drone was the last one there
+    clearTimeout(match.vote?.timer); matches.delete(match.id); log(`match ${match.id} closed`);
+  }
   c.spectating = null;
+  c.drone = false;
+}
+// ---------- drone (developers, Beta 1.31) ----------
+// A developer flies the drone over a multiplayer map. If a match of that mode is being played on that map they
+// watch it (invisible, like a moderator spectating); otherwise they get the map to themselves in an empty match
+// that nobody else is put into. The game picks the map and mode.
+function devOf(c, msg) {
+  if (!c.account && msg.token) { const u = sessionUser(msg.token); if (u) c.account = u.name; }
+  const key = keyOf(c.account);
+  return key && ops.isDev(key) ? key : null;
+}
+function droneLive() {
+  const out = [];
+  for (const m of matches.values()) {
+    if (m.ended || !m.players.size) continue;
+    out.push({ matchId: m.id, mode: m.mode, mapId: m.phase === 'vote' ? null : m.mapId, phase: m.phase, players: m.players.size, options: m.phase === 'vote' ? m.vote.options : undefined });
+  }
+  return out;
+}
+function droneInfo(c, msg) {
+  if (!devOf(c, msg)) return send(c, { type: 'drone_error', message: 'Drone mode is for developers.' });
+  send(c, { type: 'drone_info', maps: MAPS, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, ffa: v.ffa }])), live: droneLive() });
+}
+function droneJoin(c, msg) {
+  if (REGIONAL) return send(c, { type: 'spectate_error', message: 'Drone mode runs on the main server.' });
+  if (!devOf(c, msg)) return send(c, { type: 'spectate_error', message: 'Drone mode is for developers.' });
+  if (c.matchId) return send(c, { type: 'spectate_error', message: 'Leave your match first.' });
+  const mode = modeOf(msg.mode), mapId = MAPS.includes(String(msg.mapId || '')) ? String(msg.mapId) : null;
+  if (!mapId) return send(c, { type: 'spectate_error', message: 'Pick a map.' });
+  spectateLeave(c, false);
+  removeFromQueue(c);
+  let match = null;
+  for (const m of matches.values()) if (m.mode === mode && !m.ended && m.players.size && m.phase === 'live' && m.mapId === mapId && (!match || m.players.size > match.players.size)) match = m;
+  const watching = !!match;
+  if (!match) {
+    match = {
+      id: newId('m'), mode, ffa: MODES[mode].ffa, scoreLimit: MODES[mode].scoreLimit, score: { alpha: 0, bravo: 0 },
+      players: new Map(), tags: new Map(), ended: false, createdAt: now(), phase: 'live', mapId, drone: true,
+      vote: { options: [mapId], votes: new Map(), endsAt: 0, timer: null },
+    };
+    matches.set(match.id, match);
+  }
+  // The game loads the map first and then says spectate_ready; only then does it get the match's messages (a
+  // flood of positions during a long map load can stall the connection until the server drops it).
+  c.spectating = match.id;
+  c.drone = true;
+  match.droneWait = (match.droneWait || 0) + 1;
+  send(c, {
+    type: 'spectate_start', drone: true, watching, matchId: match.id, mode: match.mode, ffa: match.ffa, phase: match.phase, mapId: match.mapId,
+    roster: rosterOf(match), score: { ...match.score }, scoreLimit: match.scoreLimit, players: match.ffa ? boardOf(match) : undefined, target: null, targetName: '', ended: match.ended,
+  });
+  log(`drone: ${c.account} is flying over ${mapId} (${mode}${watching ? `, watching match ${match.id} with ${match.players.size} player(s)` : ', empty map'})`);
+}
+function droneReady(c) {
+  if (!c.drone || !c.spectating) return;
+  const match = matches.get(c.spectating);
+  if (!match) { c.spectating = null; c.drone = false; return send(c, { type: 'spectate_end', reason: 'The match closed.' }); }
+  if (match.spectators?.has(c.id)) return;
+  match.droneWait = Math.max(0, (match.droneWait || 1) - 1);
+  (match.spectators ||= new Set()).add(c.id);
+  send(c, { type: 'match_update', matchId: match.id, roster: rosterOf(match) });
+  send(c, scoreMsg(match));
+  for (const t of match.tags.values()) send(c, { type: 'tag_spawned', matchId: match.id, tag: t });
+  for (const p of match.players.values()) if (p.state) send(c, { type: 'player_state', matchId: match.id, playerId: p.id, state: p.state });
 }
 function spectatorsOut(match, reason) {
   if (!match.spectators?.size) return;
@@ -1319,7 +1395,9 @@ function handle(c, raw) {
     case 'party_ready_start': case 'party_ready_reply': case 'party_ready_cancel':
       handleSocial(c, msg); break;
     case 'bug_report': mod.onBug(c, msg); break;
-    case 'spectate_join': spectateJoin(c, msg); break;
+    case 'spectate_join': msg.drone ? droneJoin(c, msg) : spectateJoin(c, msg); break;
+    case 'drone_info': droneInfo(c, msg); break;
+    case 'spectate_ready': droneReady(c); break;
     case 'spectate_leave': spectateLeave(c, true); break;
     case 'logout': onLogout(c, msg); break;
     case 'verify_code': onVerifyCode(c, msg).catch((e) => { log(`verify error: ${e.message}`); authError(c, 'server', 'The server could not check the code. Try again.'); }); break;
