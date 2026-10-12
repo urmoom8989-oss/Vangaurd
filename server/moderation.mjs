@@ -618,6 +618,15 @@ export function createModeration(d) {
         send(res, 200, { ok: true, ...ops.view() });
         return true;
       }
+      case 'ops/weekly': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;
+        const r = ops.weekly(body.mode ? String(body.mode) : null);
+        if (need(!r.error, r.error)) return true;
+        addLog(by, 'weekly', null, body.mode ? `pinned ${body.mode}` : 'automatic'); save(false);
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
       case 'ops/dlc/app': {
         if (need(post, 'Use POST.', 405)) return true;
         if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;

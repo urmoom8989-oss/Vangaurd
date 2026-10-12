@@ -20,7 +20,7 @@ export const DLC = {
 export function createOps(d) {
   // d: { DATA_DIR, now, log, keyOf, nameOf, userOf, roleOf, ownerKey, env }
   const FILE = pathMod.join(d.DATA_DIR, 'ops.json');
-  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null, dlc: {}, dlcApps: {} };
+  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null, dlc: {}, dlcApps: {}, weekly: null };
   try {
     const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     if (raw && typeof raw === 'object') for (const k of Object.keys(st)) if (raw[k] !== undefined) st[k] = raw[k];
@@ -30,6 +30,7 @@ export function createOps(d) {
   if (!Array.isArray(st.steam.allow)) st.steam.allow = [];
   if (!st.dlc || typeof st.dlc !== 'object') st.dlc = {};
   if (!st.dlcApps || typeof st.dlcApps !== 'object') st.dlcApps = {};
+  if (typeof st.weekly !== 'string') st.weekly = null; // Release 1.0: a weekly mode the owner pinned (null = automatic)
   function save() {
     try {
       fs.mkdirSync(d.DATA_DIR, { recursive: true });
@@ -181,6 +182,7 @@ export function createOps(d) {
     devEdit: (key, add) => listEdit(st.devs, key, add),
     setSteamRequired: (on) => { st.steam.required = !!on; save(); },
     dlcOf, dlcEdit, dlcApps, setDlcApp,
+    setWeekly: (mode) => { st.weekly = typeof mode === 'string' && /^[a-z]{2,12}$/.test(mode) ? mode : null; save(); },
     steamVerify,
   };
 }

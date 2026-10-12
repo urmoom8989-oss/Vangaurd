@@ -144,11 +144,13 @@ jobs:
           - **Mac**: \`Vangaurd-${FILE_LABEL}-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-${FILE_LABEL}-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
 
           What's new:
-          - The Halloween Pack DLC (\$2.99 on Steam): the Skeleton and Pumpkin Head operators and the animated Halloween camo.
+          - The Halloween Pack DLC (\$2.99 on Steam): the Skeleton and Pumpkin Head operators (you see their arms in first person too) and the animated Halloween camo.
           - An Operators screen on the main menu.
-          - Halloween decorations and a light purple, foggy sky on every map (until 10 November).
-          - Easier daily challenges.
-          - Drone mode works with a controller.
+          - A weekly game mode online next to Team Deathmatch (Kill Confirmed this week, then Gun Game, changing every Monday).
+          - North American and European servers (Settings > Account).
+          - Enemies only show on the minimap while your team has a UAV up.
+          - Halloween on every map until 10 November: pumpkin patches, graveyards, cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky.
+          - A new level-up sound, easier daily challenges, and Drone mode on a controller.
 
           Online play requires this version once it is released. Installed games ask to update when they start.
           NOTES

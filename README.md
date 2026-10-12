@@ -7,8 +7,9 @@ and keyboard.
 ## Release 1.0 downloads
 
 The current game (Release 1.0: the Halloween Pack DLC with the Skeleton and Pumpkin Head operators and the animated
-Halloween camo, an Operators screen on the main menu, Halloween decorations and a purple sky on the maps, easier daily
-challenges, controller support in Drone mode; Beta 1.32: Replays in the menu for developers; Beta 1.31: the start-up
+Halloween camo, an Operators screen on the main menu, a weekly online mode next to Team Deathmatch, North American and
+European servers, enemies on the minimap only with a UAV, Halloween decorations and a purple sky on the maps, easier
+daily challenges, controller support in Drone mode; Beta 1.32: Replays in the menu for developers; Beta 1.31: the start-up
 screen shows when the servers are offline, a developer Drone mode in multiplayer; Beta 1.3: weapon levels, weapon
 mounting, killstreaks, daily and weekly challenges, animated level camos, plus everything from earlier betas) is kept
 ready-built in `prebuilt/`. GitHub Actions (**Build Vangaurd**, on every push to `main` or by hand) builds the Mac and
@@ -21,6 +22,10 @@ so installed games are not asked to update and the server keeps Beta 1.32 (build
 build 29 show "Version unavailable" at start-up and can't play online, except for the owner's account. To release it
 to everyone, mark the release as the latest on GitHub (or set `PRERELEASE: "false"` and push), or set the latest build
 to 29 in the console.
+
+Europe: the matches for European players run on a second Railway service, **Vangaurd EU** (same repository, root
+`/server`, region europe-west4), with `REGION=eu`, `MAIN_SERVER_URL` (the main server) and the same `INTERNAL_KEY` as
+the main server; the main server lists it in `REGIONS`. The main server only offers Europe while the EU server answers.
 
 DLC: the Halloween Pack is a Steam DLC. Put its Steam DLC App ID in the console (Server tab → DLC), or set
 `STEAM_DLC_HALLOWEEN` on the server. Players who own it on Steam get it in the game; the owner can also grant any DLC

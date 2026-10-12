@@ -22,11 +22,17 @@ const MAPS = ['vardanek', 'kessel', 'foundry', 'freighter', 'airfield', 'lindenh
 const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
+  // Release 1.0: Gun Game online (free-for-all): every kill moves you to the next of the game's 11 guns
+  gg: { name: 'Gun Game (free-for-all)', scoreLimit: Math.max(1, Number(process.env.GG_SCORE_LIMIT) || 11), ffa: true },
 };
+// Release 1.0: the weekly mode. Online play always has Team Deathmatch plus one more mode that changes every Monday
+// at 00:00 UTC; Team Deathmatch is never in the rotation. The owner can pin this week's mode in the console.
+const WEEKLY_POOL = ['kc', 'gg'];
+const WEEK_MS = 7 * 864e5, WEEK0 = Date.UTC(2026, 9, 12); // Monday 12 October 2026: Kill Confirmed
 const VERSION = '4.0.0';
 // Where this server runs (shown in the game and on /health). The main server is NA East from Beta 1.3.
 const REGION = String(process.env.REGION || 'na-east').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 16) || 'na-east';
-const REGION_NAMES = { 'na-east': 'NA East', 'na-west': 'NA West', eu: 'Europe', 'eu-west': 'EU West' };
+const REGION_NAMES = { 'na-east': 'North America', 'na-west': 'NA West', eu: 'Europe', 'eu-west': 'EU West' };
 // Regions (Beta 1.3). The main server keeps accounts, friends, parties and moderation. Regional match servers
 // (e.g. Europe) run the same code with MAIN_SERVER_URL and INTERNAL_KEY set: they only host matches and ask the
 // main server who a player is (and whether they're banned, Steam, maintenance). The main server lists them to the
@@ -661,7 +667,7 @@ function handleSocial(c, msg) {
 }
 
 const clients = new Map(); // id -> client
-const queues = { tdm: [], kc: [] }; // arrays of client ids
+const queues = Object.fromEntries(Object.keys(MODES).map((m) => [m, []])); // arrays of client ids
 const countdowns = {}; // mode -> { endsAt, timer }
 const matches = new Map(); // matchId -> match
 
@@ -670,6 +676,12 @@ const now = () => Date.now();
 const num = (v, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const cleanName = (s) => String(s || 'Player').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20) || 'Player';
 const modeOf = (m) => (MODES[m] ? m : 'tdm');
+const shortName = (m) => (MODES[m]?.name || m).replace(/ \(.*\)$/, '');
+function weekly(t = now()) {
+  const wk = Math.floor((t - WEEK0) / WEEK_MS), n = WEEKLY_POOL.length;
+  const pin = !REGIONAL && WEEKLY_POOL.includes(ops.state.weekly) ? ops.state.weekly : null, mode = pin || WEEKLY_POOL[((wk % n) + n) % n];
+  return { mode, name: shortName(mode), endsAt: WEEK0 + (wk + 1) * WEEK_MS, pinned: !!pin, pool: WEEKLY_POOL.map((m) => ({ id: m, name: shortName(m) })) };
+}
 
 function send(c, msg) {
   if (c && c.ws.readyState === WebSocket.OPEN) {
@@ -835,6 +847,11 @@ async function joinQueue(c, msg) {
   removeFromQueue(c);
   c.name = c.account;
   const mode = modeOf(msg.mode);
+  // Release 1.0: Team Deathmatch or this week's mode (a regional server takes any mode in the rotation)
+  if (mode !== 'tdm' && (REGIONAL ? !WEEKLY_POOL.includes(mode) : mode !== weekly().mode)) {
+    const w = weekly();
+    return send(c, { type: 'error', code: 'mode_unavailable', message: `${shortName(mode)} isn't on this week. This week's mode is ${w.name}.`, weekly: w });
+  }
   partyFollow(c, mode);
   const open = openMatchFor(mode, c);
   if (open) { addToMatch(open, c, true); if (c.accountKey) pushAround(c.accountKey); return; }
@@ -979,6 +996,8 @@ function onHit(c, msg) {
     const tag = { id: newId('t'), x: pos.x, y: pos.y, z: pos.z, team: target.team, victimId: target.id, killerId: attacker.id, createdAt: now() };
     match.tags.set(tag.id, tag);
     broadcast(match, { type: 'tag_spawned', matchId: match.id, tag });
+  } else if (match.ffa) {
+    addPlayerScore(match, attacker, 1); // Gun Game: a kill is a point (and the next gun)
   } else {
     addScore(match, attacker.team, 1);
   }
@@ -1038,7 +1057,7 @@ function onState(c, msg) {
     position: { x, y, z }, x, y, z,
     yaw: num(s.yaw), pitch: num(s.pitch),
     stance: typeof s.stance === 'string' ? s.stance.slice(0, 12) : 'stand',
-    moving: !!s.moving, sprinting: !!s.sprinting, sliding: !!s.sliding, quiet: !!s.quiet,
+    moving: !!s.moving, sprinting: !!s.sprinting, sliding: !!s.sliding, quiet: !!s.quiet, ghost: !!s.ghost,
     weaponId: typeof s.weaponId === 'string' ? s.weaponId.slice(0, 24) : null,
     variant: typeof s.variant === 'string' ? s.variant.slice(0, 24) : null,
     op: typeof s.op === 'string' && /^[a-z0-9_-]{1,24}$/.test(s.op) ? s.op : null, // Release 1.0: the player's operator
@@ -1282,6 +1301,24 @@ function regionMaintenance(message) {
   for (const r of REGIONS) internalPost(r.url, '/internal/maintenance', { message }).catch((e) => log(`region ${r.id} maintenance failed: ${e.message}`));
 }
 // main: who is this token? (asked by a regional server when a player queues there)
+// Release 1.0: tell every game when the weekly mode changes (Monday 00:00 UTC, or the owner pinned one)
+let weeklyLast = null;
+function weeklyTell() { const w = weekly(); weeklyLast = w.mode; broadcastAll({ type: 'weekly', weekly: w }); }
+setInterval(() => { if (weekly().mode !== weeklyLast) weeklyLast === null ? (weeklyLast = weekly().mode) : (log(`weekly mode is now ${weekly().name}`), weeklyTell()); }, 60e3).unref?.();
+// Release 1.0: only offer regional servers that answer (checked every minute), so a region that is down or not
+// deployed yet is never picked; players then stay on this server.
+const regionUp = new Map();
+const liveRegions = () => REGIONS.filter((r) => regionUp.get(r.id));
+async function checkRegions() {
+  await Promise.all(REGIONS.map(async (r) => {
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 4000);
+    let ok = false;
+    try { const res = await fetch(`${r.url}/health`, { signal: ctl.signal }); ok = res.ok && (await res.json().catch(() => ({})))?.regional === true; } catch {} finally { clearTimeout(to); }
+    if (ok !== !!regionUp.get(r.id)) log(`region ${r.id} is ${ok ? 'up' : 'down'}`);
+    regionUp.set(r.id, ok);
+  }));
+}
+if (!REGIONAL && REGIONS.length) { checkRegions(); setInterval(checkRegions, 60e3).unref?.(); }
 async function internalSession(body) {
   const u = sessionUser(body.token);
   if (!u) return { error: 'session_expired', message: 'Your sign-in has expired. Please sign in again.' };
@@ -1332,7 +1369,7 @@ function maintenanceKick() {
   return n;
 }
 mod.attachOps({
-  view: () => ({ ...ops.view(), latest: { build: latest.build, label: latest.label, source: latest.source }, region: REGION, live: Object.fromEntries(Object.keys(MODES).map((m) => { const lm = modeMatch(m); return [m, { inMatch: lm ? lm.players.size : 0, waiting: queues[m].length, max: MAX_PLAYERS }]; })) }),
+  view: () => ({ ...ops.view(), weekly: weekly(), latest: { build: latest.build, label: latest.label, source: latest.source }, region: REGION, live: Object.fromEntries(Object.keys(MODES).map((m) => { const lm = modeMatch(m); return [m, { inMatch: lm ? lm.players.size : 0, waiting: queues[m].length, max: MAX_PLAYERS }]; })) }),
   announce(by, body) {
     const r = ops.setAnnouncement(by, body);
     if (!r.error) broadcastAll({ type: 'announcement', announcement: r.announcement });
@@ -1357,6 +1394,11 @@ mod.attachOps({
     const r = ops.dlcEdit(key, id, add);
     if (!r.error) for (const c of online.get(key) || []) send(c, { type: 'dlc', dlc: ops.dlcOf(key) });
     return r;
+  },
+  weekly(mode) {
+    if (mode && !WEEKLY_POOL.includes(mode)) return { error: 'That mode is not in the weekly rotation.' };
+    ops.setWeekly(mode || null), weeklyTell();
+    return { weekly: weekly() };
   },
   dlcApp(id, appId) {
     const r = ops.setDlcApp(id, appId);
@@ -1519,7 +1561,7 @@ const server = http.createServer((req, res) => {
     for (const m of matches.values()) players += m.players.size;
     const body = JSON.stringify({
       ok: true, service: 'vangaurd-matchmaking', version: VERSION, region: REGION, regional: REGIONAL, regions: REGIONS.map((r) => r.id), maintenance: ops.state.maintenance.on, announcement: ops.announcementView(), requireSteam: !!ops.state.steam.required,
-      queued: queues.tdm.length + queues.kc.length, queuedByMode: { tdm: queues.tdm.length, kc: queues.kc.length },
+      queued: Object.values(queues).reduce((n, q) => n + q.length, 0), queuedByMode: Object.fromEntries(Object.entries(queues).map(([m, q]) => [m, q.length])), weekly: weekly(),
       matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, matches: matches.size, playersInMatches: players, connected: clients.size,
       maps: MAPS, mapVoteSeconds: VOTE_S, versionGate: GATE, accounts: Object.keys(accounts.users).length, saves: Object.keys(saves).length, email: mailer.enabled ? mailer.kind : false, emailReady: emailState.ok, emailStatus: emailState.detail, emailRequired: EMAIL_REQUIRED, online: online.size, parties: parties.size, accountsPersistent: !!process.env.DATA_DIR, minClientBuild: latest.build, latestLabel: latest.label, latestSource: latest.source, modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, { name: v.name, scoreLimit: v.scoreLimit, ffa: v.ffa }])),
     });
@@ -1555,8 +1597,8 @@ wss.on('connection', (ws, req) => {
   });
   ws.on('error', () => {});
   send(c, {
-    type: 'connected', playerId: c.id, version: VERSION, matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label, emailAuth: mailer.enabled, steamUpdates: !RELEASE_PAGE,
-    region: REGION, regionName: REGION_NAMES[REGION] || REGION.toUpperCase(), regions: !REGIONAL && REGIONS.length ? [{ id: REGION, name: REGION_NAMES[REGION] || REGION, url: null }, ...REGIONS] : null, announcement: ops.announcementView(), maintenance: ops.state.maintenance.on ? { message: ops.maintenanceMessage() } : null, requireSteam: !!ops.state.steam.required,
+    type: 'connected', playerId: c.id, version: VERSION, weekly: weekly(), matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label, emailAuth: mailer.enabled, steamUpdates: !RELEASE_PAGE,
+    region: REGION, regionName: REGION_NAMES[REGION] || REGION.toUpperCase(), regions: !REGIONAL && liveRegions().length ? [{ id: REGION, name: REGION_NAMES[REGION] || REGION, url: null }, ...liveRegions()] : null, announcement: ops.announcementView(), maintenance: ops.state.maintenance.on ? { message: ops.maintenanceMessage() } : null, requireSteam: !!ops.state.steam.required,
     dlcApps: ops.dlcApps(),
   });
 });
