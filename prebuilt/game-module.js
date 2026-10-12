@@ -56696,60 +56696,94 @@ function vgLevelUpSound() {
   }).then((buf) => vgSnd.lvup = buf).catch(() => null);
   return vgSnd.lvupP.then((buf) => buf ? vgSndPlay(buf, "ui", 0.9) : pgCtx?.services?.audio?.ui?.("notify")), !0;
 }
-// A deep, evil laugh for the main menu at Halloween: made here, not recorded. Pitched-down "ha"s from a buzzing
-// voice through vowel formants, with a growl an octave below and a long cold reverb.
-async function vgLaughBuffer(ac) {
-  const sr = 44100, len = Math.ceil(sr * 5.2), oc = new OfflineAudioContext(1, len, sr);
-  const out = oc.createGain();
-  out.gain.value = 0.9;
-  // reverb: a dark, decaying noise tail
-  const ir = oc.createBuffer(2, Math.ceil(sr * 2.6), sr);
-  for (let ch = 0; ch < 2; ch++) {
-    const d = ir.getChannelData(ch);
-    let lp = 0;
-    for (let i = 0; i < d.length; i++) lp += (Math.random() * 2 - 1 - lp) * 0.22, d[i] = lp * Math.pow(1 - i / d.length, 2.4) * 0.9;
+// A deep, evil laugh for the main menu at Halloween ("heh heh... MWAH-ha-ha-ha-ha-haaa"), made here rather than
+// recorded. To sound like a voice and not a machine: a breathy glottal pulse (not a plain buzz) with small random
+// wobbles in pitch and loudness from one vocal-cord cycle to the next, air on every "h", a gravelly creak at the
+// end of each "ha", vowel formants that move a little, and a dark room around it.
+async function vgLaughBuffer() {
+  const sr = 44100, len = Math.ceil(sr * 5.4), src = new Float32Array(len);
+  let seed = 1337;
+  const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647, gauss = () => (rnd() + rnd() + rnd() - 1.5) * 1.15;
+  // [start s, length s, pitch from, pitch to (Hz), loudness, creak at the end 0..1]
+  const syl = [
+    [0.05, 0.13, 98, 90, 0.32, 0.3], [0.27, 0.14, 96, 86, 0.36, 0.4],
+    [0.72, 0.34, 128, 104, 1, 0.25],
+    [1.14, 0.17, 118, 104, 0.92, 0.35], [1.37, 0.16, 114, 100, 0.88, 0.35], [1.58, 0.16, 110, 97, 0.84, 0.4],
+    [1.78, 0.16, 106, 93, 0.8, 0.45], [1.98, 0.17, 102, 90, 0.76, 0.5], [2.2, 1.15, 104, 66, 0.82, 0.85]
+  ].map(([t, d, a, b, v, c]) => [t + 0.12 + (rnd() - 0.5) * 0.03, d * (0.94 + rnd() * 0.12), a, b, v, c]);
+  // the voice, one glottal cycle at a time
+  let n = 0, drift = 0;
+  while (n < len) {
+    const t = n / sr, s = syl.find(([a, d]) => t >= a - 0.02 && t < a + d + 0.08);
+    if (!s) {
+      n += Math.floor(sr * 0.004);
+      continue;
+    }
+    const [a, d, f0a, f0b, vol, creak] = s, k = Math.min(1, Math.max(0, (t - a) / d));
+    drift += (gauss() * 0.004 - drift * 0.08);
+    const late = Math.max(0, (k - 0.55) / 0.45) * creak, fry = late > 0.35 && rnd() < late * 0.7;
+    let f0 = f0a * Math.pow(f0b / f0a, k) * (1 + drift + 0.012 * Math.sin(t * 2 * Math.PI * 5.3)) * (1 + gauss() * 0.018);
+    fry && (f0 *= 0.45 + rnd() * 0.25);
+    const T = Math.max(40, Math.round(sr / f0)), amp = vol * (0.82 + rnd() * 0.3) * (fry ? 0.55 + rnd() * 0.5 : 1);
+    // loudness through the syllable: quick soft rise, a little hold, a falling tail
+    const env = (x) => {
+      const u = (x - a) / d;
+      return u < 0 ? 0 : u < 0.12 ? Math.sin(u / 0.12 * Math.PI / 2) : u < 0.5 ? 1 : u <= 1 ? Math.pow(1 - (u - 0.5) / 0.5, 1.6) * (d > 0.6 ? 1 : 0.9) + 0.02 : Math.max(0, 0.02 - (u - 1) * 0.2);
+    };
+    // Rosenberg pulse (open 40%, closing 16%), differentiated: that's what comes out of the mouth
+    const op = 0.4 + (rnd() - 0.5) * 0.06, cl = 0.16;
+    let prev = 0;
+    for (let i = 0; i < T && n + i < len; i++) {
+      const p = i / T, g = p < op ? 0.5 * (1 - Math.cos(Math.PI * p / op)) : p < op + cl ? Math.cos(Math.PI * (p - op) / (2 * cl)) : 0, e = env((n + i) / sr);
+      // breath: noise that blows mostly while the cords are open
+      const breath = (rnd() * 2 - 1) * (0.07 + 0.22 * g) * (fry ? 0.6 : 1);
+      src[n + i] += ((g - prev) * 6 * amp + breath * amp * 0.5) * e;
+      prev = g;
+    }
+    n += T;
   }
-  const verb = oc.createConvolver(), wet = oc.createGain(), dry = oc.createGain();
-  verb.buffer = ir, wet.gain.value = 0.55, dry.gain.value = 0.85, out.connect(dry), out.connect(verb), verb.connect(wet), dry.connect(oc.destination), wet.connect(oc.destination);
-  const shaper = oc.createWaveShaper(), curve = new Float32Array(1024);
-  for (let i = 0; i < 1024; i++) {
-    const x = i / 511.5 - 1;
-    curve[i] = Math.tanh(x * 2.2) / Math.tanh(2.2);
+  // the "h" before every "ha" (and the "mw" of "mwah" is a hum that opens up)
+  for (const [a, d, , , vol] of syl) {
+    const h0 = Math.floor((a - 0.075) * sr), h1 = Math.floor((a + 0.03) * sr);
+    for (let i = Math.max(0, h0); i < h1 && i < len; i++) {
+      const u = (i - h0) / (h1 - h0);
+      src[i] += (rnd() * 2 - 1) * 0.28 * vol * Math.sin(u * Math.PI) * (d > 0.3 && d < 0.6 ? 0.4 : 1);
+    }
   }
-  shaper.curve = curve, shaper.connect(out);
-  const body = oc.createBiquadFilter();
-  body.type = "lowshelf", body.frequency.value = 220, body.gain.value = 9, body.connect(shaper);
-  const formants = [[640, 6, 1], [1080, 9, 0.55], [2450, 12, 0.22], [3300, 14, 0.1]].map(([f, q, g]) => {
-    const bp = oc.createBiquadFilter(), gg = oc.createGain();
-    return bp.type = "bandpass", bp.frequency.value = f, bp.Q.value = q, gg.gain.value = g * 2.6, bp.connect(gg), gg.connect(body), bp;
+  const oc = new OfflineAudioContext(1, len, sr), buf = oc.createBuffer(1, len, sr);
+  buf.copyToChannel(src, 0);
+  const s = oc.createBufferSource();
+  s.buffer = buf;
+  // a big, deep throat: vowel "ah" formants (a little lower than an average man's), moving slightly per "ha"
+  const sum = oc.createGain(), fm = [[640, 3.5, 1], [1060, 5, 0.55], [2380, 7, 0.24], [3250, 9, 0.12], [4100, 10, 0.05]].map(([f, q, gn]) => {
+    const bp = oc.createBiquadFilter(), g = oc.createGain();
+    return bp.type = "bandpass", bp.frequency.value = f, bp.Q.value = q, g.gain.value = gn * 3, s.connect(bp), bp.connect(g), g.connect(sum), bp;
   });
-  const voice = oc.createGain(), env = voice.gain;
-  voice.gain.value = 0;
-  for (const f of formants) voice.connect(f);
-  const osc = oc.createOscillator(), sub = oc.createOscillator(), subG = oc.createGain();
-  osc.type = "sawtooth", sub.type = "sawtooth", subG.gain.value = 0.55, osc.connect(voice), sub.connect(subG), subG.connect(voice);
-  const noise = oc.createBufferSource(), nb = oc.createBuffer(1, len, sr), nd = nb.getChannelData(0);
-  for (let i = 0; i < len; i++) nd[i] = Math.random() * 2 - 1;
-  const ng = oc.createGain();
-  noise.buffer = nb, ng.gain.value = 0, noise.connect(ng);
-  for (const f of formants) ng.connect(f);
-  // "Ha... ha ha ha ha HAAA": the rhythm and the pitch (falling, very low)
-  const syl = [[0.15, 0.3, 108], [0.62, 0.17, 102], [0.86, 0.17, 98], [1.09, 0.17, 95], [1.32, 0.18, 92], [1.56, 0.19, 89], [1.82, 0.2, 86], [2.12, 0.95, 82]];
-  const t0 = 0.02;
-  osc.frequency.setValueAtTime(108, t0), sub.frequency.setValueAtTime(54, t0);
-  for (const [t, d, f] of syl) {
-    const a = t0 + t;
-    osc.frequency.setValueAtTime(f * 1.08, a), osc.frequency.exponentialRampToValueAtTime(f * 0.86, a + d), sub.frequency.setValueAtTime(f * 0.54, a), sub.frequency.exponentialRampToValueAtTime(f * 0.43, a + d);
-    // breathy "h" then the voiced "a"
-    ng.gain.setValueAtTime(0, a), ng.gain.linearRampToValueAtTime(0.32, a + 0.025), ng.gain.linearRampToValueAtTime(0.06, a + 0.07), ng.gain.linearRampToValueAtTime(0, a + d * 0.9);
-    env.setValueAtTime(0, a + 0.02), env.linearRampToValueAtTime(0.5, a + 0.07), env.setValueAtTime(0.5, a + d * 0.6), env.exponentialRampToValueAtTime(0.001, a + d + (d > 0.5 ? 0.35 : 0.06));
+  for (const [a, d] of syl) {
+    const j = 0.92 + rnd() * 0.16;
+    fm[0].frequency.setValueAtTime(380, a - 0.01), fm[0].frequency.linearRampToValueAtTime(640 * j, a + Math.min(0.08, d * 0.4)), fm[0].frequency.linearRampToValueAtTime(560 * j, a + d);
+    fm[1].frequency.setValueAtTime(980, a - 0.01), fm[1].frequency.linearRampToValueAtTime(1080 * j, a + Math.min(0.08, d * 0.4)), fm[1].frequency.linearRampToValueAtTime(1000 * j, a + d);
   }
-  osc.start(t0), sub.start(t0), noise.start(t0), osc.stop(t0 + 3.6), sub.stop(t0 + 3.6), noise.stop(t0 + 3.6);
-  const buf = await oc.startRendering(), d = buf.getChannelData(0);
+  // chest and warmth, no fizz on top
+  const chest = oc.createBiquadFilter(), top = oc.createBiquadFilter(), dry = oc.createGain(), wet = oc.createGain(), verb = oc.createConvolver(), pre = oc.createDelay(0.1);
+  chest.type = "lowshelf", chest.frequency.value = 180, chest.gain.value = 7, top.type = "lowpass", top.frequency.value = 5200, top.Q.value = 0.5;
+  // a dark stone room: 1.9 s, the highs die first
+  const ir = oc.createBuffer(2, Math.ceil(sr * 1.9), sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const dd = ir.getChannelData(ch);
+    let lp = 0;
+    for (let i = 0; i < dd.length; i++) {
+      const u = i / dd.length, c = 0.08 + 0.5 * (1 - u);
+      lp += (rnd() * 2 - 1 - lp) * c, dd[i] = lp * Math.pow(1 - u, 2.2);
+    }
+  }
+  verb.buffer = ir, pre.delayTime.value = 0.03, dry.gain.value = 0.9, wet.gain.value = 0.28;
+  sum.connect(chest), chest.connect(top), top.connect(dry), top.connect(pre), pre.connect(verb), verb.connect(wet), dry.connect(oc.destination), wet.connect(oc.destination), s.start(0);
+  const out = await oc.startRendering(), dd = out.getChannelData(0);
   let pk = 0;
-  for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
-  if (pk > 0) for (let i = 0; i < d.length; i++) d[i] *= 0.85 / pk;
-  return buf;
+  for (let i = 0; i < dd.length; i++) pk = Math.max(pk, Math.abs(dd[i]));
+  if (pk > 0) for (let i = 0; i < dd.length; i++) dd[i] *= 0.85 / pk;
+  return out;
 }
 function vgMenuLaugh() {
   const B = vgSndBus("amb");
