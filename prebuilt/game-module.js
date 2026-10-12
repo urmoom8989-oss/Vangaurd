@@ -48903,7 +48903,7 @@ function vgBotName() {
   }
   return b.order[b.i++ % b.order.length];
 }
-var VGD = { label: "Beta 1.31", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Beta 1.32", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -50356,6 +50356,8 @@ function vgExtrasSystem(A) {
       D.yaw = e.y, D.pitch = e.x;
     }
     D.vel.set(0, 0, 0), vgDrone.on = !0, D.ses = droneSes(), vgMount.on && vgMountSet(A, null), K.target && cancelTarget();
+    // Beta 1.32: outside a match (Drone mode from the Multiplayer screen) the game's input is off; the drone needs it
+    D.inputWas = A.input.enabled !== !1, A.input.enabled = !0;
     try {
       S.player.setMovementEnabled(!1), D.inv = !D.ses && !net() && gm().stage !== "range", D.inv && S.player.setInvulnerable?.(!0);
     } catch {
@@ -50381,8 +50383,10 @@ function vgExtrasSystem(A) {
 .vg-drone .help { position: absolute; left: 0; right: 0; bottom: 36px; text-align: center; color: rgba(233,236,230,.7); font-size: 11px; }
 @keyframes vgDrn { 50% { opacity: .15; } }
 .vg-drone .sub { position: absolute; left: 40px; top: 58px; color: rgba(233,236,230,.78); text-transform: uppercase; }
+.vg-drone .lk { position: absolute; left: 50%; top: calc(50% + 40px); transform: translateX(-50%); padding: 7px 12px; background: rgba(8,11,13,.72); border: 1px solid rgba(242,193,78,.5); color: #f2c14e; display: none; }
+.vg-drone.nolock .lk { display: block; }
 .vg-drone.clean > * { display: none !important; }
-body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .od-fps-counter, body.vg-drone-clean .vg-toast { display: none !important; }`, document.head.appendChild(st), D.el = document.createElement("div"), D.el.className = "vg-drone", D.el.innerHTML = '<div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div><div class="x"></div><div class="tag"><b>DRONE</b><i></i></div><div class="sub"></div><div class="tel"></div><div class="help"></div>', document.body.appendChild(D.el);
+body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .od-fps-counter, body.vg-drone-clean .vg-toast { display: none !important; }`, document.head.appendChild(st), D.el = document.createElement("div"), D.el.className = "vg-drone", D.el.innerHTML = '<div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div><div class="x"></div><div class="tag"><b>DRONE</b><i></i></div><div class="sub"></div><div class="tel"></div><div class="lk">Click to look around with the mouse</div><div class="help"></div>', document.body.appendChild(D.el);
     }
     opt.overview && (D.clean = !1), droneClean(D.clean), D.el.querySelector(".help").textContent = D.ses ? `WASD fly · SPACE up · C down · SHIFT fast · AIM slow · H hide UI · F10 follow players${vgAuth.dev ? " · F8 record · F9 replays" : ""} · ESC leave` : `WASD fly · SPACE up · C down · SHIFT fast · AIM slow · H hide UI${net() && vgAuth.dev ? " · F8 record" : ""} · F10 exit`, D.el.querySelector(".sub").textContent = "", D.t = 0;
     return D.el.style.display = "", ev.emit("drone:toggle", { on: !0 }), !0;
@@ -50390,6 +50394,7 @@ body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .o
   function droneExit() {
     if (!vgDrone.on) return;
     vgDrone.on = !1, A.input.setLookHandler(null), vgKS.blockFire = droneSes();
+    D.inputWas === !1 && (A.input.releaseAll?.(), A.input.enabled = !1), D.inputWas = null;
     // in a multiplayer drone session the spectator view keeps the player still and the interface hidden
     if (!droneSes()) try {
       S.player.setMovementEnabled(!0), D.inv && S.player.setInvulnerable?.(!1), A.camera.layers.enable(A.layers.VIEWMODEL), S.hud?.setVisible?.(!0);
@@ -50414,7 +50419,7 @@ body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .o
     const cam = A.camera;
     cam.position.copy(D.pos), cam.parent && cam.parent !== A.scene && cam.parent.worldToLocal?.(cam.position), cam.rotation.set(D.pitch, D.yaw, 0, "YXZ"), cam.updateMatrixWorld(!0);
     if (D.t -= dt, D.t <= 0 && D.el) {
-      D.t = 0.1;
+      D.t = 0.1, D.el.classList.toggle("nolock", !A.input.locked && !(typeof document < "u" && document.pointerLockElement));
       const hdg = ((-D.yaw * 180 / Math.PI) % 360 + 360) % 360;
       D.el.querySelector(".tel").innerHTML = `ALT ${(D.pos.y - gy).toFixed(1)} M<br>SPD ${D.vel.length().toFixed(1)} M/S<br>HDG ${hdg.toFixed(0).padStart(3, "0")}°`;
       if (D.ses) {
@@ -50598,12 +50603,48 @@ function vgReplaySystem(A) {
     if (R.playing) return;
     R.rec = { v: 1, map: S.world?.mapId || "", mode: gm().matchType || "", at: Date.now(), by: vgAuth.user || "", t0: A.time.t, acc: 0, actors: {}, frames: [], ev: [] }, toast("Replay recording · F8 to stop", 2.2), recUi();
   }
+  // Beta 1.32: the last 8 replays are kept on this device (IndexedDB), so they are still there after a restart.
+  const IDB = "vangaurd-replays";
+  function idb() {
+    return new Promise((res, rej) => {
+      if (typeof indexedDB > "u") return rej(new Error("no IndexedDB"));
+      const q = indexedDB.open(IDB, 1);
+      q.onupgradeneeded = () => q.result.objectStoreNames.contains("r") || q.result.createObjectStore("r"), q.onsuccess = () => res(q.result), q.onerror = () => rej(q.error);
+    });
+  }
+  async function persist() {
+    try {
+      const db = await idb();
+      await new Promise((res) => {
+        const tx = db.transaction("r", "readwrite");
+        tx.objectStore("r").put(R.list.slice(0, 8), "list"), tx.oncomplete = tx.onerror = tx.onabort = () => res();
+      }), db.close();
+    } catch (err) {
+      A.reportError?.("replay", "save", err);
+    }
+  }
+  async function restore() {
+    try {
+      const db = await idb(), v = await new Promise((res) => {
+        const g = db.transaction("r").objectStore("r").get("list");
+        g.onsuccess = () => res(g.result), g.onerror = () => res(null);
+      });
+      db.close();
+      if (!Array.isArray(v)) return;
+      for (const d of v) d && d.v === 1 && Array.isArray(d.frames) && d.actors && !R.list.some((x) => x.at === d.at && x.map === d.map) && R.list.push(d);
+      R.list.sort((a, b) => (b.at || 0) - (a.at || 0)), R.list.length > 8 && (R.list.length = 8), R.loaded = !0;
+    } catch {
+    }
+  }
+  function addReplay(d) {
+    R.list = R.list.filter((x) => !(x.at === d.at && x.map === d.map)), R.list.unshift(d), R.list.length > 8 && (R.list.length = 8), persist();
+  }
   function recStop(keep = !0) {
     const r = R.rec;
     if (!r) return;
     if (R.rec = null, recUi(), keep && r.frames.length > 4) {
       const out = { v: 1, map: r.map, mode: r.mode, at: r.at, by: r.by, dur: r3(r.frames[r.frames.length - 1].t), actors: r.actors, frames: r.frames, ev: r.ev };
-      R.list.unshift(out), R.list.length > 8 && (R.list.length = 8), toast(`Replay saved (${fmtT(out.dur)}) · F9 to watch`, 2.6);
+      addReplay(out), toast(`Replay saved (${fmtT(out.dur)}) · F9 to watch`, 2.6);
     }
   }
   function recTick() {
@@ -50747,14 +50788,19 @@ function vgReplaySystem(A) {
     if (!d) return studioUi(), void 0;
     if (d.map && S.world?.mapId !== d.map) return toast(`This replay was recorded on ${mapName(d.map)}. Open Drone mode on ${mapName(d.map)} (Multiplayer screen) or start a match there to watch it.`, 3.2), studioUi(idx);
     vgDrone.on && vgKS.api?.drone?.exit?.(), vgMount.on && vgMountSet(A, null), P.data = d, P.idx = idx, P.t = 0, P.evI = 0, P.speed = 1, P.play = !0, P.cam = P.cam || "follow", P.target = d.actors.me ? "me" : Object.keys(d.actors)[0], R.playing = !0, vgKS.blockFire = !0;
-    P.scaleWas = A.time.scale, A.time.scale = 0, P.hidden = [];
+    P.scaleWas = A.time.scale, A.time.scale = 0, P.hidden = [], P.inputWas = A.input.enabled !== !1, A.input.enabled = !0;
     for (const ag of S.ai?.agents || []) ag?.object && ag.object.visible && (ag.object.visible = !1, P.hidden.push(ag.object));
     try {
       S.player?.setMovementEnabled?.(!1), A.camera.layers.disable(A.layers.VIEWMODEL), S.hud?.setVisible?.(!1);
     } catch {
     }
-    const ps = S.player?.state;
-    ps?.position && (P.pos.copy(ps.position), P.pos.y += 1.7, P.yaw = ps.yaw || 0, P.pitch = ps.pitch || 0), A.input.setLookHandler((dx, dy) => {
+    const ps = S.player?.state, Bn = S.world?.bounds;
+    if (!Object.keys(d.actors).length && Bn) {
+      // nobody in it (e.g. recorded over an empty map): start the free camera above the map
+      const cx = (Bn.min.x + Bn.max.x) / 2, cz = (Bn.min.z + Bn.max.z) / 2, size = Math.max(40, Math.min(Bn.max.x - Bn.min.x, Bn.max.z - Bn.min.z));
+      P.cam = "free", P.pos.set(cx, (S.world?.groundHeight?.(cx, cz + size * 0.42, 120) ?? 0) + 30, cz + size * 0.42), P.yaw = 0, P.pitch = -0.42;
+    } else ps?.position && (P.pos.copy(ps.position), P.pos.y += 1.7, P.yaw = ps.yaw || 0, P.pitch = ps.pitch || 0);
+    A.input.setLookHandler((dx, dy) => {
       const k2 = (A.settings.get("controls.sensitivity", 3) || 3) * 7e-4;
       P.cam === "free" ? (P.yaw -= dx * k2, P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - dy * k2))) : (P.orbit -= dx * k2, P.pitch = Math.max(-1.2, Math.min(1.2, P.pitch - dy * k2)));
     }), P.last = performance.now(), seek(0), studioUi(idx), ev.emit("replay:studio", { open: !0 });
@@ -50762,6 +50808,7 @@ function vgReplaySystem(A) {
   function studioClose() {
     if (!P.data) return studioUi(-1);
     ghostsClear(), P.data = null, R.playing = !1, vgKS.blockFire = vgDrone.on, A.time.scale = P.scaleWas || 1;
+    P.inputWas === !1 && (A.input.releaseAll?.(), A.input.enabled = !1), P.inputWas = null;
     for (const o of P.hidden) o.visible = !0;
     P.hidden = [];
     const droneSes = typeof vgSpec < "u" && vgSpec.active && !!vgSpec.drone;
@@ -50772,6 +50819,26 @@ function vgReplaySystem(A) {
     studioUi(-1), ev.emit("replay:studio", { open: !1 });
     // back to the drone in a multiplayer drone session
     droneSes && setTimeout(() => vgKS.api?.drone?.start?.(), 0);
+    // opened from the menu (Replays): back to that menu
+    const back = R.fromMenu;
+    R.fromMenu = null, back && R.menu?.back?.(back);
+  }
+  // Replays (menu, Beta 1.32): load the map the replay was recorded on, then play it.
+  async function menuWatch(idx) {
+    const d = R.list[idx];
+    if (!isDev() || !d || P.data || R.loadingMap) return;
+    if (net()) return toast("Leave the online match to watch replays.", 2.4);
+    const from = R.menu?.screen?.() || "main";
+    R.loadingMap = !0;
+    try {
+      if (d.map && S.world?.mapId !== d.map) R.menu?.loading?.(`Loading ${mapName(d.map)} for the replay…`), await S.world.loadMap(d.map);
+    } catch (err) {
+      A.reportError?.("replay", "load-map", err);
+    } finally {
+      R.loadingMap = !1;
+    }
+    if (d.map && S.world?.mapId !== d.map) return R.menu?.back?.(from), toast(`Could not load ${mapName(d.map)}.`, 2.6);
+    R.menu?.close?.(), R.fromMenu = from, studioOpen(idx), R.playing || (R.fromMenu = null, R.menu?.back?.(from));
   }
   function mapName(id) {
     try {
@@ -50863,7 +50930,7 @@ function vgReplaySystem(A) {
         try {
           const d = JSON.parse(await file.files[0].text());
           if (!d || d.v !== 1 || !Array.isArray(d.frames) || !d.actors) throw new Error("not a Vangaurd replay");
-          R.list.unshift(d), studioUi(0);
+          addReplay(d), studioUi(0);
         } catch (err) {
           toast(`Could not import: ${err.message}`, 2.6);
         }
@@ -50907,8 +50974,9 @@ function vgReplaySystem(A) {
   }
   function onKey(e) {
     if (!isDev()) return;
-    if (e.code === "F8" && !e.repeat) return e.preventDefault(), e.stopPropagation(), R.rec ? recStop() : recStart();
-    if (e.code === "F9" && !e.repeat) return e.preventDefault(), e.stopPropagation(), P.data ? studioClose() : P.ui ? (P.ui.remove(), P.ui = null) : studioOpen(0);
+    const inMenu = ["entry", "main", "armory", "loadouts"].includes(S.hud?.menu);
+    if (e.code === "F8" && !e.repeat) return e.preventDefault(), e.stopPropagation(), R.rec ? recStop() : inMenu || recStart();
+    if (e.code === "F9" && !e.repeat) return e.preventDefault(), e.stopPropagation(), P.data ? studioClose() : P.ui ? (P.ui.remove(), P.ui = null) : inMenu ? vgReplayPick() : studioOpen(0);
     if (!P.data || e.repeat && !/^(KeyJ|KeyL|Comma|Period)$/.test(e.code)) return;
     const k = e.code;
     let used = !0;
@@ -50940,7 +51008,7 @@ function vgReplaySystem(A) {
   }
   return {
     init() {
-      ev.on("combat:shot", onShot), ev.on("combat:explosion", onBoom), ev.on("network:message", onNet), wrapVfx(), typeof window < "u" && (window.addEventListener("keydown", onKey, !0), window.addEventListener("wheel", onWheel, { passive: !0 })), R.api = { start: recStart, stop: recStop, open: studioOpen, close: studioClose, seek, state: P, setCam, togglePlay, dev: (on) => (vgAuth.dev = !!on), listOpen: () => !!(P.ui && !P.data), closeList: () => P.ui && !P.data && (P.ui.remove(), P.ui = null) }, typeof window < "u" && (window.__VGRP__ = R);
+      ev.on("combat:shot", onShot), ev.on("combat:explosion", onBoom), ev.on("network:message", onNet), wrapVfx(), typeof window < "u" && (window.addEventListener("keydown", onKey, !0), window.addEventListener("wheel", onWheel, { passive: !0 })), R.api = { start: recStart, stop: recStop, open: studioOpen, close: studioClose, seek, state: P, setCam, togglePlay, dev: (on) => (vgAuth.dev = !!on), listOpen: () => !!(P.ui && !P.data), closeList: () => P.ui && !P.data && (P.ui.remove(), P.ui = null), watch: menuWatch, add: addReplay, export: exportRp, remove: (i) => (R.list.splice(i, 1), persist()), restore, mapName }, restore(), typeof window < "u" && (window.__VGRP__ = R);
     },
     tick() {
       R.rec && (recTick(), recUi());
@@ -54549,6 +54617,64 @@ function vgDronePick() {
   }), setTimeout(() => go.focus(), 30);
 }
 typeof window < "u" && (window.__VGDRONE__ = { pick: () => vgDronePick(), dev: () => !!vgAuth.dev });
+/* ------------------------------------------------------------------ Beta 1.32: Replays in the menu (developers) */
+// The menu's Replays item (or F9 in a menu): your last 8 replays, kept on this device. Watch loads the map the
+// replay was recorded on and plays it in the replay studio; closing the studio comes back to the menu.
+var vgReplayCss = `
+.vg-rep .card.vg-rl { width: min(760px, 94vw); }
+.vg-rl .list { display: grid; gap: 8px; max-height: min(52vh, 430px); overflow-y: auto; margin: 0 0 4px; }
+.vg-rl .it { display: flex; align-items: center; gap: 12px; padding: 8px; background: rgba(255,255,255,.04); border: 1px solid rgba(236,240,234,.12); }
+.vg-rl .it .im { flex: none; width: 128px; aspect-ratio: 16 / 9; background: #151a1d center / cover no-repeat; }
+.vg-rl .it .tx { flex: 1; min-width: 0; }
+.vg-rl .it b { display: block; font-size: 14px; letter-spacing: .1em; text-transform: uppercase; }
+.vg-rl .it small { display: block; margin-top: 4px; color: #a9b0a8; font-size: 12px; line-height: 1.4; }
+.vg-rl .it .bt { display: flex; gap: 6px; flex: none; }
+.vg-rl .it button { padding: 8px 11px; background: rgba(255,255,255,.06); border: 1px solid rgba(236,240,234,.22); color: #e9ece6; font: 800 11px/1 inherit; font-family: inherit; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; }
+.vg-rl .it button.pri { background: #f2c14e; border-color: #f2c14e; color: #111; }
+.vg-rl .it button:hover { filter: brightness(1.1); }
+.vg-rl .none { padding: 18px 4px; color: #a9b0a8; font-size: 13.5px; line-height: 1.5; }
+@media (max-width: 620px) { .vg-rl .it { flex-wrap: wrap; } .vg-rl .it .im { width: 96px; } .vg-rl .it .bt { width: 100%; } .vg-rl .it .bt button { flex: 1; } }
+`;
+function vgReplayPick() {
+  if (typeof document > "u" || !vgAuth.dev || document.querySelector(".vg-rep") || vgReplay.playing || vgSpec.active) return;
+  if (!document.getElementById("vg-rl-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-rl-style", st.textContent = vgReplayCss, document.head.appendChild(st);
+  }
+  const d = vgRepDialog('<h3>Replays</h3><p class="sub">Developers only. Your last 8 replays, kept on this computer. Press F8 in a match or in Drone mode to record one. Watch loads the map it was recorded on. In the replay: K play/pause, J/L skip, 1–4 cameras, H hides the interface, F9 or Esc goes back.</p><div class="list"></div><div class="msg" aria-live="polite"></div><div class="acts"><button type="button" data-imp>Import…</button><button type="button" class="pri" data-c>Close</button></div><input type="file" accept=".json,application/json" hidden data-file>');
+  d.querySelector(".card").classList.add("vg-rl");
+  const list = d.querySelector(".list"), msg = d.querySelector(".msg"), api = vgReplay.api || {};
+  const fmt = (t) => `${Math.floor((t || 0) / 60)}:${String(Math.floor((t || 0) % 60)).padStart(2, "0")}`;
+  const render = () => {
+    const L = vgReplay.list || [];
+    list.innerHTML = L.length ? L.map((r, i) => {
+      const shot = typeof wmShots < "u" && wmShots[r.map], n = Object.keys(r.actors || {}).length, when = r.at ? new Date(r.at) : null;
+      return `<div class="it"><span class="im"${shot ? ` style="background-image:url('${shot}')"` : ""}></span><span class="tx"><b>${vgEsc(vgMapName(r.map) || "Unknown map")}</b><small>${vgEsc(r.mode === "kc" ? "Kill Confirmed" : r.mode === "tdm" ? "Team Deathmatch" : r.mode || "Match")} · ${fmt(r.dur)} · ${n} soldier${n === 1 ? "" : "s"}${when ? ` · ${vgEsc(when.toLocaleDateString())} ${vgEsc(when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}` : ""}${r.by ? ` · ${vgEsc(r.by)}` : ""}</small></span><span class="bt"><button type="button" class="pri" data-w="${i}">Watch</button><button type="button" data-x="${i}">Export</button><button type="button" data-del="${i}">Delete</button></span></div>`;
+    }).join("") : '<div class="none">No replays yet. Press <b>F8</b> in a match (or while flying in Drone mode) to start recording and F8 again to stop.</div>';
+    list.querySelectorAll("[data-w]").forEach((b) => b.addEventListener("click", () => {
+      d.close(), api.watch?.(+b.dataset.w);
+    })), list.querySelectorAll("[data-x]").forEach((b) => b.addEventListener("click", () => api.export?.(vgReplay.list[+b.dataset.x]))), list.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => {
+      const i = +b.dataset.del;
+      if (b.dataset.sure !== "1") return b.dataset.sure = "1", b.textContent = "Sure?", void 0;
+      api.remove?.(i), render();
+    }));
+  };
+  const file = d.querySelector("[data-file]");
+  d.querySelector("[data-c]").addEventListener("click", d.close), d.querySelector("[data-imp]").addEventListener("click", () => file.click()), file.addEventListener("change", async () => {
+    try {
+      const r = JSON.parse(await file.files[0].text());
+      if (!r || r.v !== 1 || !Array.isArray(r.frames) || !r.actors) throw new Error("not a Vangaurd replay");
+      api.add?.(r), msg.textContent = "Replay imported.", msg.className = "msg ok", render();
+    } catch (err) {
+      msg.textContent = `Could not import: ${err.message}`, msg.className = "msg err";
+    }
+    file.value = "";
+  }), render();
+  // replays saved on this computer may still be loading right after the game starts
+  vgReplay.loaded || api.restore?.().then?.(() => document.body.contains(d) && render());
+  setTimeout(() => (d.querySelector("[data-w]") || d.querySelector("[data-c]"))?.focus(), 30);
+}
+typeof window < "u" && (window.__VGREPLAYS__ = { pick: () => vgReplayPick() });
 /* ------------------------------------------------------------------ Beta 1.2: report menu, bug reports */
 var vgCurMap = null;
 var VG_BUG_CATS = [["gameplay", "Gameplay"], ["graphics", "Graphics"], ["controls", "Controls"], ["online", "Online"], ["menus", "Menus"], ["performance", "Performance"], ["other", "Other"]];
@@ -54720,6 +54846,7 @@ typeof window < "u" && vgNet.listeners.push((m) => vgReadyMsg(m));
 /* ------------------------------------------------------------------ Beta 1.2: news & patch notes */
 // Only the current version's notes are shown (Beta 1.21: older versions are no longer listed).
 var VG_PATCH_NOTES = [
+  { v: "Beta 1.32", items: ["Small fixes and improvements."] },
   { v: "Beta 1.31", items: ["The game now shows when the servers are offline or under maintenance, even if you are not signed in.", "The sign-in page now tells you on its own when the servers go down."] },
   { v: "Beta 1.3", items: ["Fixed Matchmaking", "Many QoL Fixes", "You can now see on the report page who the last player who killed you was.", "Switched from NA West Servers to NA East Servers", "Fixed a Bug where if you would Slide or go Prone it would not show it on another players screen", "Weapon Leveling", "Weapon Mounting", "Kill Streaks", "Daily and Weekly Challenges and more!"] },
   { v: "Beta 1.21", items: ["Dive to prone from mid-air: press prone while jumping or falling.", "Fixed being able to mantle through some windows into buildings."] }
@@ -56116,7 +56243,7 @@ function cJ(A) {
   vgFr?.addButtons(n);
   typeof window < "u" && setInterval(() => {
     const on = F.sessionType === "multiplayer" && !!vgAuth.user, st = vgNetStats();
-    vgDroneItem && (vgDroneItem.style.display = on && vgAuth.dev && !F.waitingForPlayers && !F.multiplayerMatch ? "" : "none"), vgLobNet.style.display = on ? "" : "none", on && (vgLobNet.innerHTML = st.open ? `<span class="${st.ping == null ? "" : st.ping < 70 ? "g" : st.ping < 130 ? "y" : "r"}">●</span> PING ${st.ping == null ? "--" : Math.round(st.ping)} ms · LOSS ${st.loss.toFixed(0)}%` : '<span class="r">●</span> Connecting…');
+    vgDroneItem && (vgDroneItem.style.display = on && vgAuth.dev && !F.waitingForPlayers && !F.multiplayerMatch ? "" : "none"), vgReplaysItem && (vgReplaysItem.style.display = vgAuth.dev && vgAuth.user && !F.waitingForPlayers && !F.multiplayerMatch ? "" : "none"), vgLobNet.style.display = on ? "" : "none", on && (vgLobNet.innerHTML = st.open ? `<span class="${st.ping == null ? "" : st.ping < 70 ? "g" : st.ping < 130 ? "y" : "r"}">●</span> PING ${st.ping == null ? "--" : Math.round(st.ping)} ms · LOSS ${st.loss.toFixed(0)}%` : '<span class="r">●</span> Connecting…');
   }, 1e3);
   NA("div", "emb", Q, R2), NA("div", "op", Q).textContent = "Vangaurd", NA("h1", "", Q, "<span>VANGAURD</span>"), NA("div", "sub", Q).textContent = "";
   const d = NA("div", "od-menu", u), f = [
@@ -56168,6 +56295,9 @@ function cJ(A) {
     de(d, "Back", "Return to deployment selection", () => tt("entry"))
   ], vgDroneItem = (() => {
     const b2 = de(d, "Drone mode", "Developers · fly over a multiplayer map", () => vgDronePick());
+    return b2.classList.add("vg-dev-item"), b2.style.display = "none", d.insertBefore(b2, E[E.length - 1]), b2;
+  })(), vgReplaysItem = (() => {
+    const b2 = de(d, "Replays", "Developers · watch your recorded replays", () => vgReplayPick());
     return b2.classList.add("vg-dev-item"), b2.style.display = "none", d.insertBefore(b2, E[E.length - 1]), b2;
   })(), C = NA("div", "od-card", u), y = NA("div", "od-card-head", C), w = NA("div", "k", y), m = NA("div", "t", C), D = NA("div", "p", C), M = NA("div", "map", C), x = NA("canvas", "", M), S = NA("div", "stats", C), U = NA("div", "od-mp-status", u);
   U.setAttribute("role", "status"), U.setAttribute("aria-live", "polite");
@@ -56623,6 +56753,7 @@ function cJ(A) {
     reason && vgToast(reason);
   }
   vgSpec.stop = specStop, vgSpec.start = specStart;
+  vgReplay.menu = { close: () => ni(), back: (scr) => tt(scr === "entry" ? "entry" : "main"), screen: () => F.screen, loading: (t) => Bt(t) };
   const cA = [], bA = (yA) => {
     yA?.source !== "player" || yA.target?.team === "player" || yA.target?.team === "friendly" || (iJ(yA.weaponId, yA.zone === "head", vgKillDist(yA)), F.screen === "armory" && z());
   }, GA = () => {

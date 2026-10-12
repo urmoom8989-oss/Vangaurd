@@ -24,11 +24,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUILD_LABEL: "Beta 1.31"
-  FILE_LABEL: "Beta-1.31"
-  RELEASE_TAG: "beta-1.31"
-  # Fixed per version (Beta 1.21 was build 25, Beta 1.3 was 26).
-  BUILD_NUMBER: "27"
+  BUILD_LABEL: "Beta 1.32"
+  FILE_LABEL: "Beta-1.32"
+  RELEASE_TAG: "beta-1.32"
+  # Fixed per version (Beta 1.21 was build 25, Beta 1.3 was 26, Beta 1.31 was 27).
+  BUILD_NUMBER: "28"
   # steamworks.js (Steam detection) is added at build time and shipped next to the app.
   STEAMWORKS_VERSION: "0.4.0"
 
@@ -45,8 +45,8 @@ jobs:
         run: npm install --no-save --no-audit --no-fund "steamworks.js@${STEAMWORKS_VERSION}"
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
-      - name: Stamp the app version (1.31.<build>; installers need plain numbers, players see "Beta 1.31")
-        run: npm pkg set version="1.31.${BUILD_NUMBER}"
+      - name: Stamp the app version (1.32.<build>; installers need plain numbers, players see "Beta 1.32")
+        run: npm pkg set version="1.32.${BUILD_NUMBER}"
       - name: Build Mac app (Apple Silicon + Intel)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -73,9 +73,9 @@ jobs:
         run: npm install --no-save --no-audit --no-fund "steamworks.js@${STEAMWORKS_VERSION}"
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
-      - name: Stamp the app version (1.31.<build>; installers need plain numbers, players see "Beta 1.31")
+      - name: Stamp the app version (1.32.<build>; installers need plain numbers, players see "Beta 1.32")
         shell: bash
-        run: npm pkg set version="1.31.${BUILD_NUMBER}"
+        run: npm pkg set version="1.32.${BUILD_NUMBER}"
       - name: Build Windows app
         run: npx electron-builder --win nsis zip --x64 --publish never
       - uses: actions/upload-artifact@v4
@@ -105,7 +105,7 @@ jobs:
           cat > out/version.json <<JSON
           {
             "label": "${BUILD_LABEL}",
-            "version": "1.31.${BUILD_NUMBER}",
+            "version": "1.32.${BUILD_NUMBER}",
             "build": ${BUILD_NUMBER},
             "tag": "${RELEASE_TAG}",
             "commit": "${GITHUB_SHA::7}",
@@ -131,8 +131,7 @@ jobs:
           - **Mac**: \`Vangaurd-${FILE_LABEL}-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-${FILE_LABEL}-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
 
           What's new:
-          - The game now shows when the servers are offline or under maintenance, even if you are not signed in.
-          - The sign-in page now tells you on its own when the servers go down.
+          - Small fixes and improvements.
 
           Online play requires this version. Installed games ask to update when they start.
           NOTES
@@ -148,7 +147,7 @@ jobs:
           cat > out/version.json <<JSON
           {
             "label": "${BUILD_LABEL}",
-            "version": "1.31.${BUILD_NUMBER}",
+            "version": "1.32.${BUILD_NUMBER}",
             "build": ${BUILD_NUMBER},
             "commit": "${GITHUB_SHA::7}"
           }
