@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('vangaurdDesktop', {
   quit: () => ipcRenderer.invoke('vangaurd:quit'),
   // Beta 1.3: whether the game was started from Steam (present, Steam ID, a session ticket the server can check)
   steam: () => ipcRenderer.invoke('vangaurd:steam'),
+  // Release 1.0: DLC ownership on Steam, and its store page
+  steamDlc: (appId) => ipcRenderer.invoke('vangaurd:steam-dlc', Number(appId) || 0),
+  steamStore: (appId) => ipcRenderer.invoke('vangaurd:steam-store', Number(appId) || 0),
   revealed: () => ipcRenderer.invoke('vangaurd:revealed'),
   onReveal: (cb) => {
     const h = () => { try { cb(); } catch { /* page handler */ } };

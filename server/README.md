@@ -1,6 +1,6 @@
-# Vangaurd matchmaking server 3.2
+# Vangaurd matchmaking server 4.0
 
-This is the online server for Vangaurd Beta 1.31. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
+This is the online server for Vangaurd Release 1.0. It replaces the matchmaking service on Railway (it replaces the earlier prototype that needed 6 queued players).
 
 What it does:
 
@@ -13,6 +13,8 @@ What it does:
 - **Steam (Beta 1.3).** **Require Steam** in the Server tab refuses players whose game wasn't started from Steam, except the owner and the players on the "play without Steam" list there.
 - **Developers (Beta 1.3).** Developers (the owner, and anyone added in the Server tab) get the in-game replay recorder and can sign in during maintenance.
 - **Drone mode (developers, Beta 1.31).** The Multiplayer screen has **Drone mode** for developers: pick a mode and a map. If a match of that mode is being played on that map the developer watches it from the drone, invisible like a moderator spectating; otherwise the server opens an empty match on that map just for them (nobody is ever put into it). The map stays open while the drone flies and closes when it leaves. Developers can also use the F10 drone in their own online matches. Players who are not developers are refused (`drone_info`, `spectate_join` with `drone: true`).
+- **Unreleased versions (Release 1.0).** A game newer than the newest released build (for example Release 1.0, build 29, while it is a GitHub pre-release and the newest release is build 28) is refused at sign-in, registration and matchmaking with "This version of Vangaurd is not available yet" (`code: 'unavailable'`), except for the owner. Releasing the version (marking it as the latest release, or setting the build in the console) lets everyone in.
+- **DLC and operators (Release 1.0).** The Halloween Pack is a Steam DLC. Set its Steam DLC App ID in the console's Server tab (DLC) or with `STEAM_DLC_HALLOWEEN`; the game checks ownership with Steam. The owner can grant any DLC to any player there (and take it back); grants are sent to the player at once and logged. Players' chosen operator (`op`) is relayed with their state so others see it.
 - **Usernames** can never contain "Parallel" or "Developer" (any spelling with digits, - or _ in between). Existing accounts keep working.
 - **Only the newest game build can play online.** The game sends its build number when it queues. The newest build is the highest of the `version.json` on the latest GitHub release (read every 5 minutes), `latest.json` in this folder, the build set in the console's Server tab, and `MIN_CLIENT_BUILD`. Older builds are turned away with an "update to play online" message. Builds from before Beta 0.9 send no build number and are always turned away.
 - **Ping marks** (middle mouse in the game) are relayed to the player's teammates.

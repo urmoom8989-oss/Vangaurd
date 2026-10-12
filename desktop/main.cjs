@@ -149,6 +149,27 @@ ipcMain.handle('vangaurd:steam', async () => {
   return { ...steamState, ticket: steamTicket?.hex || null, kind: steamTicket?.kind || null };
 });
 ipcMain.handle('vangaurd:app-info', () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch }));
+// Release 1.0: DLC on Steam. Whether this Steam account owns a DLC (by its Steam App ID), and opening its store page
+// in the Steam overlay (or the browser when Steam isn't running).
+ipcMain.handle('vangaurd:steam-dlc', async (_e, appId) => {
+  const id = Math.floor(Number(appId)) || 0;
+  if (!steamClient || !id) return { owned: false, steam: !!steamClient };
+  try {
+    const a = steamClient.apps;
+    return { owned: !!(a?.isDlcInstalled?.(id) || a?.isSubscribedApp?.(id)), steam: true };
+  } catch (e) {
+    return { owned: false, steam: true, error: String(e?.message || e) };
+  }
+});
+ipcMain.handle('vangaurd:steam-store', async (_e, appId) => {
+  const id = Math.floor(Number(appId)) || 0;
+  if (!id) return { error: 'no app id' };
+  try {
+    if (steamClient?.overlay?.activateToStore) { steamClient.overlay.activateToStore(id, 0); return { overlay: true }; }
+  } catch (e) { log(`Steam: could not open the store overlay (${e?.message || e})`); }
+  await shell.openExternal(`https://store.steampowered.com/app/${id}/`);
+  return { opened: true };
+});
 // Beta 1.3: the game shows its start-up screen (Patching / Logging in) once its window is on screen.
 ipcMain.handle('vangaurd:revealed', () => gameRevealed);
 

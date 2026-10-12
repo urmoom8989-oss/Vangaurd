@@ -605,6 +605,28 @@ export function createModeration(d) {
         send(res, 200, { ok: true, ...ops.view() });
         return true;
       }
+      // ----- Release 1.0: DLC. The owner grants (or takes back) any pack for any player, and sets each pack's
+      // Steam App ID (the game opens that store page and checks Steam ownership).
+      case 'ops/dlc': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can grant DLC.', 403)) return true;
+        const key = findKey(body.name);
+        if (need(key, 'There is no player with that name.', 404)) return true;
+        const add = body.add !== false, r = ops.dlc(key, String(body.dlc || ''), add);
+        if (need(!r.error, r.error)) return true;
+        if (r.changed) { addLog(by, add ? 'dlc_grant' : 'dlc_revoke', key, String(body.dlc)); save(false); }
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
+      case 'ops/dlc/app': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;
+        const r = ops.dlcApp(String(body.dlc || ''), body.appId);
+        if (need(!r.error, r.error)) return true;
+        addLog(by, 'dlc_app', null, `${body.dlc}: ${r.appId}`); save(false);
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
       case 'ops/release': {
         if (need(post, 'Use POST.', 405)) return true;
         if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;

@@ -4,16 +4,27 @@ An original first-person shooter built with Three.js and Vite. You hold a city p
 enemy soldiers. It runs in a desktop browser with WebGL2 (Chrome or Edge recommended) and needs a mouse
 and keyboard.
 
-## Beta 1.32 downloads
+## Release 1.0 downloads
 
-The current game (Beta 1.32: Replays in the menu for developers, the multiplayer drone fixed; Beta 1.31: the start-up screen shows when the servers are offline or under maintenance even
-before signing in, a developer Drone mode in multiplayer; Beta 1.3: weapon levels, weapon mounting, killstreaks, daily and weekly challenges, animated level
-camos, a developer replay recorder, lobby announcements and maintenance mode, Steam detection, plus everything from
-earlier betas) is kept ready-built in `prebuilt/`. GitHub Actions (**Build Vangaurd**, on every push to `main` or by
-hand) builds the Mac and Windows apps and publishes them as the **Vangaurd Beta 1.32** release on the Releases page,
-with a `version.json` that the desktop apps (auto-update) and the server (only the newest build plays online) read.
-No standalone HTML is published. The build number is fixed per version in `.github/workflows/release.yml`
-(`BUILD_NUMBER`, 28 for Beta 1.32).
+The current game (Release 1.0: the Halloween Pack DLC with the Skeleton and Pumpkin Head operators and the animated
+Halloween camo, an Operators screen on the main menu, Halloween decorations and a purple sky on the maps, easier daily
+challenges, controller support in Drone mode; Beta 1.32: Replays in the menu for developers; Beta 1.31: the start-up
+screen shows when the servers are offline, a developer Drone mode in multiplayer; Beta 1.3: weapon levels, weapon
+mounting, killstreaks, daily and weekly challenges, animated level camos, plus everything from earlier betas) is kept
+ready-built in `prebuilt/`. GitHub Actions (**Build Vangaurd**, on every push to `main` or by hand) builds the Mac and
+Windows apps and publishes them on the Releases page with a `version.json` that the desktop apps (auto-update) and the
+server (only the newest build plays online) read. No standalone HTML is published. The build number is fixed per
+version in `.github/workflows/release.yml` (`BUILD_NUMBER`, 29 for Release 1.0).
+
+**Release 1.0 is a preview for now** (`PRERELEASE: "true"` in the workflow): it is published as a GitHub pre-release,
+so installed games are not asked to update and the server keeps Beta 1.32 (build 28) as the newest build. Games on
+build 29 show "Version unavailable" at start-up and can't play online, except for the owner's account. To release it
+to everyone, mark the release as the latest on GitHub (or set `PRERELEASE: "false"` and push), or set the latest build
+to 29 in the console.
+
+DLC: the Halloween Pack is a Steam DLC. Put its Steam DLC App ID in the console (Server tab → DLC), or set
+`STEAM_DLC_HALLOWEEN` on the server. Players who own it on Steam get it in the game; the owner can also grant any DLC
+to any player from the console.
 
 Steam: put the game's Steam App ID in `desktop/steam.json` (`"appId": 1234560, "required": true`) for the Steam build.
 The workflow bundles steamworks.js; the app then checks that Steam is running and gets a session ticket. Turn on

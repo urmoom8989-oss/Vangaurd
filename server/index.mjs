@@ -23,7 +23,7 @@ const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
 };
-const VERSION = '3.2.0';
+const VERSION = '4.0.0';
 // Where this server runs (shown in the game and on /health). The main server is NA East from Beta 1.3.
 const REGION = String(process.env.REGION || 'na-east').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 16) || 'na-east';
 const REGION_NAMES = { 'na-east': 'NA East', 'na-west': 'NA West', eu: 'Europe', 'eu-west': 'EU West' };
@@ -156,12 +156,19 @@ function failed(c) {
   const f = failures.get(c.ip);
   if (!f || now() - f.t > 10 * 60e3) failures.set(c.ip, { n: 1, t: now() }); else f.n++;
 }
+// Release 1.0: a game build newer than the published one (latest.build) has not been released yet. Only the owner
+// may sign in or play with it; everyone else is told the version is not available.
+const UNAVAILABLE = 'This version of Vangaurd is not available yet.';
+function unreleasedFor(c, key) {
+  return GATE && (c.build || 0) > latest.build && !ops.isOwner(key);
+}
 function authOk(c, u, token, created = false) {
   const key = keyOf(u.name), g = ops.gate(c, key);
   if (g) return refuseGate(c, g);
+  if (unreleasedFor(c, key)) { log(`refused unreleased build ${c.build} for ${u.name}`); return refuseGate(c, { code: 'unavailable', message: UNAVAILABLE }); }
   c.account = u.name;
   c.name = u.name;
-  send(c, { type: 'auth_ok', username: u.name, token, created, developer: ops.isDev(key), moderator: !!mod.roleOf(key) });
+  send(c, { type: 'auth_ok', username: u.name, token, created, developer: ops.isDev(key), moderator: !!mod.roleOf(key), dlc: ops.dlcOf(key) });
   mod.noteDevice(u, c.device);
   goOnline(c);
 }
@@ -179,6 +186,8 @@ function refuseBanned(c, v) {
 }
 async function onRegister(c, msg) {
   if (limited(c)) return authError(c, 'too_many', 'Too many attempts. Wait a few minutes and try again.');
+  // an unreleased game build can't create accounts (only the owner may use it, and the owner has one)
+  if (GATE && (c.build || 0) > latest.build) return authError(c, 'unavailable', UNAVAILABLE);
   c.device = cleanDevice(msg.device) || c.device;
   { const b = mod.checkDevice(c.device); if (b) return refuseBanned(c, b); }
   await ops.noteSteam(c, msg);
@@ -821,6 +830,7 @@ async function joinQueue(c, msg) {
     return;
   }
   if (!REGIONAL) { const g = ops.gate(c, keyOf(c.account)); if (g) { send(c, { type: 'error', code: g.code, message: g.message }); if (g.code === 'maintenance') send(c, { type: 'maintenance', message: g.message }); return; } }
+  if (!REGIONAL && unreleasedFor(c, keyOf(c.account))) return send(c, { type: 'error', code: 'unavailable', message: UNAVAILABLE });
   if (c.matchId) leaveMatch(c, false);
   removeFromQueue(c);
   c.name = c.account;
@@ -1031,6 +1041,7 @@ function onState(c, msg) {
     moving: !!s.moving, sprinting: !!s.sprinting, sliding: !!s.sliding, quiet: !!s.quiet,
     weaponId: typeof s.weaponId === 'string' ? s.weaponId.slice(0, 24) : null,
     variant: typeof s.variant === 'string' ? s.variant.slice(0, 24) : null,
+    op: typeof s.op === 'string' && /^[a-z0-9_-]{1,24}$/.test(s.op) ? s.op : null, // Release 1.0: the player's operator
     alive: s.alive !== false && p.alive,
   };
   broadcast(match, { type: 'player_state', matchId: match.id, playerId: p.id, state: p.state }, c.id);
@@ -1342,6 +1353,16 @@ mod.attachOps({
     for (const c of online.get(key) || []) send(c, { type: 'role', developer: ops.isDev(key), moderator: !!mod.roleOf(key) });
     return changed;
   },
+  dlc(key, id, add) {
+    const r = ops.dlcEdit(key, id, add);
+    if (!r.error) for (const c of online.get(key) || []) send(c, { type: 'dlc', dlc: ops.dlcOf(key) });
+    return r;
+  },
+  dlcApp(id, appId) {
+    const r = ops.setDlcApp(id, appId);
+    if (!r.error) broadcastAll({ type: 'dlc_apps', dlcApps: ops.dlcApps() });
+    return r;
+  },
   release(by, body) {
     const r = ops.setRelease(by, body);
     if (!r.error) { const prev = latest.build; latest.build = 0; raiseLatest(Math.max(r.release.build, Math.floor(Number(process.env.MIN_CLIENT_BUILD) || 0)), r.release.label, 'console'); if (latest.build < prev) log(`latest client build lowered ${prev} -> ${latest.build} by the console`); }
@@ -1352,6 +1373,7 @@ function handle(c, raw) {
   let msg;
   try { msg = JSON.parse(raw); } catch { return; }
   if (!msg || typeof msg !== 'object') return;
+  if (typeof msg.clientBuild === 'number' && Number.isFinite(msg.clientBuild)) c.build = Math.floor(msg.clientBuild);
   switch (msg.type) {
     case 'join_queue': joinQueue(c, msg).catch((e) => log(`join error: ${e.message}`)); break;
     case 'cancel_queue': {
@@ -1535,6 +1557,7 @@ wss.on('connection', (ws, req) => {
   send(c, {
     type: 'connected', playerId: c.id, version: VERSION, matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label, emailAuth: mailer.enabled, steamUpdates: !RELEASE_PAGE,
     region: REGION, regionName: REGION_NAMES[REGION] || REGION.toUpperCase(), regions: !REGIONAL && REGIONS.length ? [{ id: REGION, name: REGION_NAMES[REGION] || REGION, url: null }, ...REGIONS] : null, announcement: ops.announcementView(), maintenance: ops.state.maintenance.on ? { message: ops.maintenanceMessage() } : null, requireSteam: !!ops.state.steam.required,
+    dlcApps: ops.dlcApps(),
   });
 });
 setInterval(() => {

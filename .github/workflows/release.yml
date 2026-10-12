@@ -24,11 +24,17 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUILD_LABEL: "Beta 1.32"
-  FILE_LABEL: "Beta-1.32"
-  RELEASE_TAG: "beta-1.32"
-  # Fixed per version (Beta 1.21 was build 25, Beta 1.3 was 26, Beta 1.31 was 27).
-  BUILD_NUMBER: "28"
+  BUILD_LABEL: "Release 1.0"
+  FILE_LABEL: "Release-1.0"
+  RELEASE_TAG: "release-1.0"
+  # Fixed per version (Beta 1.21 was build 25, Beta 1.3 was 26, Beta 1.31 was 27, Beta 1.32 was 28).
+  BUILD_NUMBER: "29"
+  # Installers need plain numbers: Release 1.0 build 29 is app version 2.0.29.
+  APP_VERSION: "2.0"
+  # "true" publishes a GitHub pre-release: it is not the latest release, so installed games are not asked to
+  # update, the server keeps the previous build as the newest, and only the owner can play this build online.
+  # Set it to "false" (or mark the release as latest on GitHub) to release this version to everyone.
+  PRERELEASE: "true"
   # steamworks.js (Steam detection) is added at build time and shipped next to the app.
   STEAMWORKS_VERSION: "0.4.0"
 
@@ -45,8 +51,8 @@ jobs:
         run: npm install --no-save --no-audit --no-fund "steamworks.js@${STEAMWORKS_VERSION}"
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
-      - name: Stamp the app version (1.32.<build>; installers need plain numbers, players see "Beta 1.32")
-        run: npm pkg set version="1.32.${BUILD_NUMBER}"
+      - name: Stamp the app version (<APP_VERSION>.<build>; installers need plain numbers, players see BUILD_LABEL)
+        run: npm pkg set version="${APP_VERSION}.${BUILD_NUMBER}"
       - name: Build Mac app (Apple Silicon + Intel)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -73,9 +79,9 @@ jobs:
         run: npm install --no-save --no-audit --no-fund "steamworks.js@${STEAMWORKS_VERSION}"
       - name: Prepare game files
         run: node tools/build-release.mjs --dist dist
-      - name: Stamp the app version (1.32.<build>; installers need plain numbers, players see "Beta 1.32")
+      - name: Stamp the app version (<APP_VERSION>.<build>; installers need plain numbers, players see BUILD_LABEL)
         shell: bash
-        run: npm pkg set version="1.32.${BUILD_NUMBER}"
+        run: npm pkg set version="${APP_VERSION}.${BUILD_NUMBER}"
       - name: Build Windows app
         run: npx electron-builder --win nsis zip --x64 --publish never
       - uses: actions/upload-artifact@v4
@@ -105,7 +111,7 @@ jobs:
           cat > out/version.json <<JSON
           {
             "label": "${BUILD_LABEL}",
-            "version": "1.32.${BUILD_NUMBER}",
+            "version": "${APP_VERSION}.${BUILD_NUMBER}",
             "build": ${BUILD_NUMBER},
             "tag": "${RELEASE_TAG}",
             "commit": "${GITHUB_SHA::7}",
@@ -124,18 +130,29 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete "$RELEASE_TAG" --yes --cleanup-tag || true
+          if [ "$PRERELEASE" = "true" ]; then
+            INTRO="Vangaurd ${BUILD_LABEL} (preview). This version is not released yet: only the owner can play it online. Everyone else keeps the current version."
+            FLAG="--prerelease --latest=false"
+          else
+            INTRO="Vangaurd ${BUILD_LABEL}."
+            FLAG="--latest"
+          fi
           cat > notes.md <<NOTES
-          Vangaurd ${BUILD_LABEL}.
+          ${INTRO}
 
           - **Windows**: \`Vangaurd-${FILE_LABEL}-Setup.exe\` installs the game; \`Vangaurd-${FILE_LABEL}-win.zip\` runs without installing. If SmartScreen appears, choose **More info → Run anyway**.
           - **Mac**: \`Vangaurd-${FILE_LABEL}-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-${FILE_LABEL}-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
 
           What's new:
-          - Small fixes and improvements.
+          - The Halloween Pack DLC (\$2.99 on Steam): the Skeleton and Pumpkin Head operators and the animated Halloween camo.
+          - An Operators screen on the main menu.
+          - Halloween decorations and a light purple, foggy sky on every map (until 10 November).
+          - Easier daily challenges.
+          - Drone mode works with a controller.
 
-          Online play requires this version. Installed games ask to update when they start.
+          Online play requires this version once it is released. Installed games ask to update when they start.
           NOTES
-          gh release create "$RELEASE_TAG" out/* --target "$GITHUB_SHA" --latest --title "Vangaurd ${BUILD_LABEL}" --notes-file notes.md
+          gh release create "$RELEASE_TAG" out/* --target "$GITHUB_SHA" $FLAG --title "Vangaurd ${BUILD_LABEL}" --notes-file notes.md
 
   summary:
     needs: [release]
@@ -147,7 +164,7 @@ jobs:
           cat > out/version.json <<JSON
           {
             "label": "${BUILD_LABEL}",
-            "version": "1.32.${BUILD_NUMBER}",
+            "version": "${APP_VERSION}.${BUILD_NUMBER}",
             "build": ${BUILD_NUMBER},
             "commit": "${GITHUB_SHA::7}"
           }
@@ -163,6 +180,6 @@ jobs:
           {
             echo "## Vangaurd ${BUILD_LABEL} (build ${BUILD_NUMBER})"
             echo ""
-            echo "Published as the GitHub release ${RELEASE_TAG} (Mac and Windows apps + version.json)."
+            if [ "$PRERELEASE" = "true" ]; then echo "Published as the GitHub pre-release ${RELEASE_TAG} (not the latest release: only the owner can play it online)."; else echo "Published as the GitHub release ${RELEASE_TAG} (Mac and Windows apps + version.json)."; fi
             echo "The apps are also in this run's Artifacts for 30 days (e.g. to upload to Steam)."
           } >> "$GITHUB_STEP_SUMMARY"

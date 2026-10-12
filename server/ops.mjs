@@ -11,10 +11,16 @@ import pathMod from 'node:path';
 
 const clean = (v, n) => String(v ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]+/g, ' ').trim().slice(0, n);
 
+// Release 1.0: downloadable content. Each pack is sold on Steam as a DLC (its Steam App ID is set in the console or
+// with STEAM_DLC_<ID>); the owner can also grant any pack to anyone from the console. Add future packs here.
+export const DLC = {
+  halloween: { id: 'halloween', name: 'Halloween Pack', price: '$2.99', items: 'Skeleton and Pumpkin Head operators and the animated Halloween camo' },
+};
+
 export function createOps(d) {
   // d: { DATA_DIR, now, log, keyOf, nameOf, userOf, roleOf, ownerKey, env }
   const FILE = pathMod.join(d.DATA_DIR, 'ops.json');
-  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null };
+  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null, dlc: {}, dlcApps: {} };
   try {
     const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     if (raw && typeof raw === 'object') for (const k of Object.keys(st)) if (raw[k] !== undefined) st[k] = raw[k];
@@ -22,6 +28,8 @@ export function createOps(d) {
   if (!Array.isArray(st.devs)) st.devs = [];
   if (!st.steam || typeof st.steam !== 'object') st.steam = { required: false, allow: [] };
   if (!Array.isArray(st.steam.allow)) st.steam.allow = [];
+  if (!st.dlc || typeof st.dlc !== 'object') st.dlc = {};
+  if (!st.dlcApps || typeof st.dlcApps !== 'object') st.dlcApps = {};
   function save() {
     try {
       fs.mkdirSync(d.DATA_DIR, { recursive: true });
@@ -124,6 +132,30 @@ export function createOps(d) {
     return { release: st.release };
   }
 
+  // ---------- DLC: who owns what (granted from the console; Steam purchases are checked by the game)
+  const dlcApp = (id) => {
+    const e = Math.floor(Number(env[`STEAM_DLC_${String(id).toUpperCase()}`]) || 0);
+    return Math.floor(Number(st.dlcApps[id]) || 0) || e || 0;
+  };
+  const dlcApps = () => Object.fromEntries(Object.keys(DLC).map((id) => [id, dlcApp(id)]));
+  // The owner has every pack (to test them); everyone else has what was granted to them.
+  const dlcOf = (key) => (isOwner(key) ? Object.keys(DLC) : (st.dlc[key] || []).filter((id) => DLC[id]));
+  function dlcEdit(key, id, add) {
+    if (!DLC[id]) return { error: 'There is no such DLC.' };
+    const list = st.dlc[key] || [], has = list.includes(id);
+    if (add && !has) st.dlc[key] = [...list, id];
+    if (!add && has) { st.dlc[key] = list.filter((x) => x !== id); if (!st.dlc[key].length) delete st.dlc[key]; }
+    save();
+    return { changed: add !== has };
+  }
+  function setDlcApp(id, appId) {
+    if (!DLC[id]) return { error: 'There is no such DLC.' };
+    const n = Math.floor(Number(appId) || 0);
+    if (n < 0 || n > 4294967295) return { error: 'That is not a Steam App ID.' };
+    n ? st.dlcApps[id] = n : delete st.dlcApps[id];
+    save();
+    return { appId: dlcApp(id) };
+  }
   const names = (keys) => keys.map((k) => ({ name: d.nameOf(k) || k }));
   function view() {
     return {
@@ -131,6 +163,7 @@ export function createOps(d) {
       maintenance: { ...st.maintenance, by: st.maintenance.by ? d.nameOf(st.maintenance.by) : null, message: st.maintenance.message },
       steam: { required: !!st.steam.required, verify: steamVerify, allow: names(st.steam.allow) },
       devs: names(st.devs), owner: d.nameOf(d.ownerKey()), release: st.release,
+      dlcs: Object.values(DLC).map((x) => ({ ...x, steamAppId: dlcApp(x.id), owners: names(Object.keys(st.dlc).filter((k) => st.dlc[k].includes(x.id))) })),
     };
   }
   function listEdit(list, key, add) {
@@ -147,6 +180,7 @@ export function createOps(d) {
     steamAllowEdit: (key, add) => listEdit(st.steam.allow, key, add),
     devEdit: (key, add) => listEdit(st.devs, key, add),
     setSteamRequired: (on) => { st.steam.required = !!on; save(); },
+    dlcOf, dlcEdit, dlcApps, setDlcApp,
     steamVerify,
   };
 }

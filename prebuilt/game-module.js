@@ -23513,7 +23513,8 @@ var Rv = "opus-of-duty.settings.v1", EP = class {
       const e = A.requestPointerLock?.({ unadjustedMovement: !0 });
       e && e.catch && e.catch(() => {
         try {
-          A.requestPointerLock();
+          A.requestPointerLock()?.catch?.(() => {
+          });
         } catch {
         }
       });
@@ -48903,7 +48904,7 @@ function vgBotName() {
   }
   return b.order[b.i++ % b.order.length];
 }
-var VGD = { label: "Beta 1.32", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
+var VGD = { label: "Release 1.0", build: Math.max(0, Math.floor(Number("__VGD_BUILD__")) || 0) };
 // The build number stays internal (update checks); players only see the version.
 VGD.text = `Vangaurd · ${VGD.label}`;
 typeof window < "u" && (window.__VGD__ = VGD);
@@ -48941,10 +48942,12 @@ var camoDefs = [
   // Challenge camos (Beta 1.2): unlocked by headshot and longshot kills (35 m or more) instead of level.
   { id: "headhunter", name: "Headhunter", lv: 0, ch: { hs: 100 }, kind: "digital", pal: ["#8c1414", "#4a0b0b", "#b32a22", "#140707"], thr: [0.48, 0.57, 0.64], P: [3, 3], px: 40, rough: 0.5, metal: 0.12, scale: 2.4, desc: "Challenge: 100 headshot kills. Crimson digital for people who aim high." },
   { id: "farsight", name: "Farsight", lv: 0, ch: { ls: 50 }, kind: "hex", pal: ["#1d6c74", "#123f46", "#0a2125"], rough: 0.36, metal: 0.45, scale: 5, desc: "Challenge: 50 longshot kills (35 m or more). Deep teal plating." },
+  // Release 1.0: Halloween Pack (DLC)
+  { id: "halloween", name: "Halloween", lv: 0, dlc: "halloween", kind: "halloween", rough: 0.55, metal: 0.12, glow: 0.25, fx: 10, scale: 1.7, live: !0, desc: "Halloween Pack (DLC): jack-o'-lanterns that flicker like candles, bats and cobwebs, with purple mist drifting across the gun (animated)." },
   { id: "deadeye", name: "Deadeye", lv: 0, ch: { hs: 250, ls: 100 }, kind: "forged", pal: ["#f2c14e", "#2a1d08"], rough: 0.22, metal: 0.95, glow: 0.12, flow: [0.035, 0], fx: 9, scale: 2.4, live: !0, desc: "Master challenge: 250 headshot kills and 100 longshot kills. Gold-and-black folded steel with a glint that sweeps along the gun (animated)." }
 ];
 // Level camos in level order (Beta 1.3 added animated ones in between), challenge camos last.
-camoDefs.sort((a, b) => (a.ch ? 1 : 0) - (b.ch ? 1 : 0) || (a.ch ? 0 : a.lv - b.lv));
+camoDefs.sort((a, b) => (a.dlc ? 2 : a.ch ? 1 : 0) - (b.dlc ? 2 : b.ch ? 1 : 0) || (a.ch || a.dlc ? 0 : a.lv - b.lv));
 // Challenge progress for a camo (null for level camos) and whether a camo is unlocked.
 function camoChallenge(d) {
   if (!d?.ch) return null;
@@ -48965,7 +48968,7 @@ function vgKillDist(k) {
   return null;
 }
 function camoUnlocked(d, level = pgLevel().level) {
-  return d?.ch ? camoChallenge(d).done : level >= (d?.lv || 0);
+  return d?.dlc ? vgDlcOwned(d.dlc) : d?.ch ? camoChallenge(d).done : level >= (d?.lv || 0);
 }
 function camoDef(A) {
   return camoDefs.find((e) => e.id === A) || camoDefs[0];
@@ -49191,7 +49194,63 @@ function camoPixels(A, e = 256) {
 }
 
 var camoTexCache = {}, camoSwatchCache = {}, camoTimeU = { value: 0 };
+// Release 1.0: the Halloween camo is painted (jack-o'-lanterns, bats, cobwebs on purple mist), tiling seamlessly.
+function camoHalloweenCanvas(e) {
+  const t = document.createElement("canvas");
+  t.width = t.height = e;
+  const g = t.getContext("2d"), r = camoRng(1031), k = e / 256, wrap = (fn) => {
+    for (const ox of [-e, 0, e]) for (const oy of [-e, 0, e]) g.save(), g.translate(ox, oy), fn(), g.restore();
+  };
+  g.fillStyle = "#130a1d", g.fillRect(0, 0, e, e);
+  for (let i = 0; i < 26; i++) {
+    const x = r() * e, y = r() * e, rad = (30 + r() * 70) * k, c = r() < 0.6 ? "86,36,128" : "40,18,70";
+    wrap(() => {
+      const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+      gr.addColorStop(0, `rgba(${c},.55)`), gr.addColorStop(1, `rgba(${c},0)`), g.fillStyle = gr, g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    });
+  }
+  // cobwebs
+  g.strokeStyle = "rgba(190,175,215,.32)", g.lineWidth = 1 * k;
+  for (const [cx, cy] of [[0.12, 0.2], [0.72, 0.64]]) wrap(() => {
+    const X = cx * e, Y = cy * e, R = 52 * k;
+    for (let a = 0; a < 8; a++) g.beginPath(), g.moveTo(X, Y), g.lineTo(X + Math.cos(a * 0.785) * R, Y + Math.sin(a * 0.785) * R), g.stroke();
+    for (let ring = 1; ring <= 4; ring++) {
+      g.beginPath();
+      for (let a = 0; a <= 8; a++) {
+        const rr = R * ring / 4.4 * (a % 2 ? 0.94 : 1), px = X + Math.cos(a * 0.785) * rr, py = Y + Math.sin(a * 0.785) * rr;
+        a ? g.quadraticCurveTo(X + Math.cos((a - 0.5) * 0.785) * rr * 0.86, Y + Math.sin((a - 0.5) * 0.785) * rr * 0.86, px, py) : g.moveTo(px, py);
+      }
+      g.stroke();
+    }
+  });
+  // jack-o'-lanterns
+  const pump = (x, y, R) => {
+    g.fillStyle = "#3b4a14", g.fillRect(x - 3 * k, y - R - 7 * k, 6 * k, 9 * k);
+    const gr = g.createRadialGradient(x - R * 0.3, y - R * 0.3, R * 0.2, x, y, R * 1.1);
+    gr.addColorStop(0, "#f58b1e"), gr.addColorStop(1, "#9c3f05"), g.fillStyle = gr;
+    for (const dx of [-0.42, 0.42, 0]) g.beginPath(), g.ellipse(x + dx * R, y, R * (dx ? 0.62 : 0.66), R * 0.86, 0, 0, Math.PI * 2), g.fill();
+    g.strokeStyle = "rgba(90,30,0,.6)", g.lineWidth = 1.4 * k;
+    for (const dx of [-0.25, 0.25]) g.beginPath(), g.ellipse(x + dx * R, y, R * 0.42, R * 0.84, 0, Math.PI * 0.6, Math.PI * 1.4 + (dx > 0 ? Math.PI * 0.8 : 0)), g.stroke();
+    g.fillStyle = "#ffe36a", g.beginPath();
+    for (const s of [-1, 1]) g.moveTo(x + s * R * 0.48, y - R * 0.34), g.lineTo(x + s * R * 0.14, y - R * 0.3), g.lineTo(x + s * R * 0.32, y - R * 0.04), g.closePath();
+    g.moveTo(x - R * 0.56, y + R * 0.18);
+    for (const [px, py] of [[-0.4, 0.38], [-0.28, 0.28], [-0.14, 0.42], [0, 0.3], [0.14, 0.42], [0.28, 0.28], [0.4, 0.38], [0.56, 0.18], [0.36, 0.56], [0, 0.62], [-0.36, 0.56]]) g.lineTo(x + px * R, y + py * R);
+    g.closePath(), g.fill();
+  };
+  for (const [x, y, s] of [[0.27, 0.3, 26], [0.78, 0.18, 19], [0.6, 0.72, 30], [0.12, 0.8, 17], [0.9, 0.52, 15], [0.45, 0.08, 16], [0.38, 0.55, 20], [0.85, 0.88, 18]]) wrap(() => pump(x * e, y * e, s * k));
+  // bats
+  g.fillStyle = "#050208";
+  const bat = (x, y, s, a) => {
+    g.save(), g.translate(x, y), g.rotate(a), g.scale(s * k, s * k), g.beginPath(), g.moveTo(0, -2), g.quadraticCurveTo(4, -6, 9, -5), g.quadraticCurveTo(13, -6, 16, -2), g.quadraticCurveTo(12, -2, 11, 2), g.quadraticCurveTo(8, 0, 6, 3), g.quadraticCurveTo(3, 1, 0, 4), g.quadraticCurveTo(-3, 1, -6, 3), g.quadraticCurveTo(-8, 0, -11, 2), g.quadraticCurveTo(-12, -2, -16, -2), g.quadraticCurveTo(-13, -6, -9, -5), g.quadraticCurveTo(-4, -6, 0, -2), g.fill(), g.restore();
+  };
+  for (let i = 0; i < 7; i++) {
+    const x = r() * e, y = r() * e, s = 0.7 + r() * 0.7, a = (r() - 0.5) * 0.7;
+    wrap(() => bat(x, y, s, a));
+  }
+  return t;
+}
 function camoCanvas(A, e = 256) {
+  if (A.kind === "halloween") return camoHalloweenCanvas(e);
   const t = document.createElement("canvas");
   t.width = t.height = e;
   const i = t.getContext("2d"), a = i.createImageData(e, e);
@@ -49204,6 +49263,7 @@ function camoTexture(A) {
   const t = new _u(camoCanvas(e, 256));
   return t.wrapS = t.wrapT = fa, t.colorSpace = Ii, t.anisotropy = 4, t.name = `camo:${e.id}`, camoTexCache[e.id] = t;
 }
+typeof window < "u" && (window.__VGCAMO__ = { tex: (id) => camoTexture(id), canvas: (id, n) => camoCanvas(camoDef(id), n), view: () => camoView, defs: () => camoDefs });
 function camoSwatch(A, e = 96) {
   const t = camoDef(A);
   if (t.id === "none") return "";
@@ -49269,6 +49329,11 @@ vec3 camoHue(vec3 c, float a) { const vec3 k = vec3(0.57735); float ca = cos(a);
             float camoH = camoHash(floor(camoP * 30.0));
             camoEC = camoC * smoothstep(0.55, 0.95, camoL) * camoPu * 1.2 + vec3(1.0, 0.9, 0.8) * pow(max(0.0, sin(camoT * 3.1 + camoH * 50.0)), 30.0) * step(0.85, camoH) * 3.0;
             camoC = max(camoHue(camoC, sin(camoT * 0.25) * 0.35), vec3(0.0));
+          } else if (uCamoFx > 9.5) {
+            float camoFace = smoothstep(0.62, 0.82, camoC.g) * smoothstep(0.85, 0.98, camoC.r) * (1.0 - smoothstep(0.32, 0.55, camoC.b));
+            float camoFl = 0.72 + 0.28 * sin(camoT * 9.0 + camoP.x * 3.0) * sin(camoT * 5.7 + camoP.y * 2.3) + 0.08 * sin(camoT * 23.0);
+            float camoMist = smoothstep(0.7, 1.0, 0.5 + 0.5 * sin(camoP.x * 2.3 + camoT * 0.55 + sin(camoP.y * 1.7 - camoT * 0.4 + camoP.z) * 1.6)) * (1.0 - smoothstep(0.15, 0.4, camoL));
+            camoEC = vec3(1.0, 0.6, 0.14) * camoFace * camoFl * 2.6 + vec3(0.3, 0.08, 0.5) * camoMist * 0.12;
           } else {
             float camoB = vObjPos.z * 1.2 + vObjPos.y * 0.6 - (fract(camoT * 0.2) * 3.2 - 1.6);
             float camoGd = smoothstep(0.45, 0.8, camoL);
@@ -49625,17 +49690,18 @@ function wpnAddXp(id, amount, kill = !0) {
 /* ------------------------------------------------------------------ Beta 1.3: daily and weekly challenges */
 // Three daily challenges (new ones at local midnight) and three weekly ones (new on Monday). They are picked from
 // the date, so everyone gets the same set; progress is kept with your progression (and your cloud save).
+// Release 1.0: daily challenges made easier (about a third less to do, same XP).
 var CH_DAILY = [
-  { t: "kills", n: [15, 20, 25], xp: 1500, text: (n) => `Get ${n} kills` },
-  { t: "class", n: [8, 10, 12], xp: 2000, cls: ["ar", "smg", "lmg", "sniper", "shotgun", "pistol"], text: (n, c) => `Get ${n} kills with ${WPN_CLASS_NAME[c]}` },
-  { t: "head", n: [5, 8], xp: 2000, text: (n) => `Get ${n} headshot kills` },
-  { t: "long", n: [3, 5], xp: 2000, text: (n) => `Get ${n} longshot kills (35 m or more)` },
-  { t: "win", n: [1, 2], xp: 2000, text: (n) => n > 1 ? `Win ${n} matches` : "Win a match" },
-  { t: "play", n: [2, 3], xp: 1500, text: (n) => `Finish ${n} matches` },
-  { t: "streak", n: [5, 7], xp: 2500, text: (n) => `Get a ${n}-kill streak` },
-  { t: "ks", n: [2, 3], xp: 2000, text: (n) => `Call in ${n} killstreaks` },
-  { t: "mount", n: [3, 5], xp: 2000, text: (n) => `Get ${n} kills while mounted` },
-  { t: "nade", n: [2, 3], xp: 2000, text: (n) => `Get ${n} grenade kills` }
+  { t: "kills", n: [10, 12, 15], xp: 1500, text: (n) => `Get ${n} kills` },
+  { t: "class", n: [5, 6, 8], xp: 2000, cls: ["ar", "smg", "lmg", "sniper", "shotgun", "pistol"], text: (n, c) => `Get ${n} kills with ${WPN_CLASS_NAME[c]}` },
+  { t: "head", n: [3, 5], xp: 2000, text: (n) => `Get ${n} headshot kills` },
+  { t: "long", n: [2, 3], xp: 2000, text: (n) => `Get ${n} longshot kills (35 m or more)` },
+  { t: "win", n: [1, 1], xp: 2000, text: (n) => n > 1 ? `Win ${n} matches` : "Win a match" },
+  { t: "play", n: [1, 2], xp: 1500, text: (n) => n > 1 ? `Finish ${n} matches` : "Finish a match" },
+  { t: "streak", n: [3, 5], xp: 2500, text: (n) => `Get a ${n}-kill streak` },
+  { t: "ks", n: [1, 2], xp: 2000, text: (n) => n > 1 ? `Call in ${n} killstreaks` : "Call in a killstreak" },
+  { t: "mount", n: [2, 3], xp: 2000, text: (n) => `Get ${n} kills while mounted` },
+  { t: "nade", n: [1, 2], xp: 2000, text: (n) => n > 1 ? `Get ${n} grenade kills` : "Get a grenade kill" }
 ];
 var CH_WEEKLY = [
   { t: "kills", n: [120, 150], xp: 8000, text: (n) => `Get ${n} kills` },
@@ -50388,7 +50454,7 @@ function vgExtrasSystem(A) {
 .vg-drone.clean > * { display: none !important; }
 body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .od-fps-counter, body.vg-drone-clean .vg-toast { display: none !important; }`, document.head.appendChild(st), D.el = document.createElement("div"), D.el.className = "vg-drone", D.el.innerHTML = '<div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div><div class="x"></div><div class="tag"><b>DRONE</b><i></i></div><div class="sub"></div><div class="tel"></div><div class="lk">Click to look around with the mouse</div><div class="help"></div>', document.body.appendChild(D.el);
     }
-    opt.overview && (D.clean = !1), droneClean(D.clean), D.el.querySelector(".help").textContent = D.ses ? `WASD fly · SPACE up · C down · SHIFT fast · AIM slow · H hide UI · F10 follow players${vgAuth.dev ? " · F8 record · F9 replays" : ""} · ESC leave` : `WASD fly · SPACE up · C down · SHIFT fast · AIM slow · H hide UI${net() && vgAuth.dev ? " · F8 record" : ""} · F10 exit`, D.el.querySelector(".sub").textContent = "", D.t = 0;
+    opt.overview && (D.clean = !1), droneClean(D.clean), D.pad = null, D.el.querySelector(".help").textContent = D.ses ? `WASD fly · SPACE up · C down · SHIFT fast · AIM slow · H hide UI · F10 follow players${vgAuth.dev ? " · F8 record · F9 replays" : ""} · ESC leave` : `WASD fly · SPACE up · C down · SHIFT fast · AIM slow · H hide UI${net() && vgAuth.dev ? " · F8 record" : ""} · F10 exit`, D.el.querySelector(".sub").textContent = "", D.t = 0;
     return D.el.style.display = "", ev.emit("drone:toggle", { on: !0 }), !0;
   }
   function droneExit() {
@@ -50419,7 +50485,13 @@ body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .o
     const cam = A.camera;
     cam.position.copy(D.pos), cam.parent && cam.parent !== A.scene && cam.parent.worldToLocal?.(cam.position), cam.rotation.set(D.pitch, D.yaw, 0, "YXZ"), cam.updateMatrixWorld(!0);
     if (D.t -= dt, D.t <= 0 && D.el) {
-      D.t = 0.1, D.el.classList.toggle("nolock", !A.input.locked && !(typeof document < "u" && document.pointerLockElement));
+      const pad = !!A.flags?.padActive;
+      D.t = 0.1, D.el.classList.toggle("nolock", !pad && !A.input.locked && !(typeof document < "u" && document.pointerLockElement));
+      if (pad !== D.pad) {
+        D.pad = pad;
+        const h = D.el.querySelector(".help");
+        D.ses ? h.textContent = pad ? `Left stick fly · Right stick look · A up · B down · RT fast · LT slow · X hide UI · Y follow players${vgAuth.dev ? " · View record" : ""} · Menu leave` : `WASD fly · SPACE up · C down · SHIFT fast · AIM slow · H hide UI · F10 follow players${vgAuth.dev ? " · F8 record · F9 replays" : ""} · ESC leave` : h.textContent = pad ? `Left stick fly · Right stick look · A up · B down · RT fast · LT slow · X hide UI${net() && vgAuth.dev ? " · View record" : ""} · Y back to your soldier` : `WASD fly · SPACE up · C down · SHIFT fast · AIM slow · H hide UI${net() && vgAuth.dev ? " · F8 record" : ""} · F10 exit`;
+      }
       const hdg = ((-D.yaw * 180 / Math.PI) % 360 + 360) % 360;
       D.el.querySelector(".tel").innerHTML = `ALT ${(D.pos.y - gy).toFixed(1)} M<br>SPD ${D.vel.length().toFixed(1)} M/S<br>HDG ${hdg.toFixed(0).padStart(3, "0")}°`;
       if (D.ses) {
@@ -50500,6 +50572,18 @@ body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .o
       ev.on("combat:kill", onKillEv), ev.on("player:died", () => {
         K.kills = 0, K.got.clear(), K.target && cancelTarget(), vgMount.on && vgMountSet(A, null), ui(!0);
       }), ev.on("ai:death", (o) => o?.agent?.key && K.botK.delete(o.agent.key)), ev.on("network:message", (m) => m?.type === "streak" && onRemote(m)), ev.on("loadout:changed", () => ui(!0));
+      ev.on("world:map-changed", () => setTimeout(() => {
+        try {
+          vgDecorate(A);
+        } catch (err) {
+          A.reportError?.("extras", "halloween", err);
+        }
+      }, 0));
+      try {
+        S.world?.mapId && vgDecorate(A);
+      } catch (err) {
+        A.reportError?.("extras", "halloween", err);
+      }
       typeof window < "u" && window.addEventListener("keydown", (e) => {
         e.code === "F10" && !e.repeat && (e.preventDefault(), e.stopPropagation(), droneToggle());
         if (e.code === "KeyH" && !e.repeat && vgDrone.on && !(typeof vgReplay < "u" && vgReplay.playing)) {
@@ -50590,10 +50674,10 @@ function vgReplaySystem(A) {
   }
   function meta(id) {
     const ps = S.player?.state;
-    if (id === "me") return { name: vgAuth.user || Uc(), team: gm().playerTeam || "player", kind: "me" };
+    if (id === "me") return { name: vgAuth.user || Uc(), team: gm().playerTeam || "player", kind: "me", op: vgOpCurrent() };
     if (id.startsWith("n:")) {
       const p = net()?.pose(id.slice(2));
-      return { name: p?.name || "Player", team: p?.team || "", kind: "net" };
+      return { name: p?.name || "Player", team: p?.team || "", kind: "net", op: p?.op || "default" };
     }
     const ag = (S.ai?.agents || []).find((x) => x.key === id);
     return { name: ag?.name || "Soldier", team: ag?.team || "", kind: "ai" };
@@ -50710,6 +50794,10 @@ function vgReplaySystem(A) {
     let sol = null;
     try {
       sol = S.ai?.netSoldier?.(`replay-${id}`, [...id].reduce((h, c) => h * 31 + c.charCodeAt(0) >>> 0, 7) % 97) || null;
+    } catch {
+    }
+    try {
+      sol && P.data?.actors?.[id]?.op && vgOpApply(sol, P.data.actors[id].op);
     } catch {
     }
     return g = { sol, placed: !1, dead: !1, prev: V(), vel: V() }, sol && (A.scene.add(sol.group), sol.group.visible = !0), P.ghosts.set(id, g), g;
@@ -51587,7 +51675,7 @@ function kcTeamOk(t) {
 }
 /* Controller support (Xbox / PlayStation through the browser Gamepad API).
    In a match the sticks and buttons drive the game; in menus they send arrow keys, Enter and Escape. */
-var padLayout = "RT fire · LT aim · A jump · B crouch · X reload · Y switch weapon · LB tactical · RB grenade · L3 sprint · R3 melee · D-pad up ping (double-tap: enemy) · D-pad down prone · D-pad right interact · View scoreboard · Menu pause";
+var padLayout = "RT fire · LT aim · A jump · B crouch · X reload · Y switch weapon · LB tactical · RB grenade · L3 sprint · R3 melee · D-pad up ping (double-tap: enemy) · D-pad down prone · D-pad right interact · View scoreboard · Menu pause · View + Y drone (offline)";
 function padSystem(A, H) {
   const inp = A.input, st = { active: !1, raf: 0, last: 0, prev: [], held: {}, navT: {}, sprint: !1, moving: !1, told: !1 }, eye = new b(), fwd = new b(), v = new b();
   const S = (k, d) => {
@@ -51709,11 +51797,24 @@ function padSystem(A, H) {
       }
       st.active = !0, A.flags && (A.flags.padActive = !0), st.told || (st.told = !0, A.services.hud?.notify?.(`Controller connected · ${String(g.id || "Gamepad").replace(/\s*\(.*$/, "").slice(0, 40)}`, { kind: "info", duration: 2.4 })), A.events.emit("pad:active", { active: !0, id: g.id });
     }
+    if (droneDrive(b, bv, ax, dt, zL, zR)) {
+      st.prev = b;
+      return;
+    }
     if (H.inPlay()) {
       H.lock();
+      // View + Y: the drone (like F10)
+      if (b[8] && b[3] && !st.prev[3]) {
+        release(), st.prev = b;
+        try {
+          vgKS.api?.drone?.toggle?.();
+        } catch {
+        }
+        return;
+      }
       const mx = mcurve(ax[0], zL), my = -mcurve(ax[1], zL);
       mx || my ? (inp.injectMove(mx, my), st.moving = !0) : st.moving && (inp.injectMove(null), st.moving = !1);
-      for (const i in ACT) for (const a2 of [].concat(ACT[i])) setAct(a2, !!b[i]);
+      for (const i in ACT) for (const a2 of [].concat(ACT[i])) setAct(a2, !!b[i] && !(i === "3" && b[8]));
       setAct("ads", (bv[6] || 0) > 0.35), setAct("fire", (bv[7] || 0) > 0.35), b[9] && !st.prev[9] && H.pause();
       b[10] && !st.prev[10] && (st.sprint = !st.sprint), (my < 0.35 || st.held.ads || st.held.fire) && (st.sprint = !1), setAct("sprint", st.sprint);
       let rx = curve(ax[2], zR), ry = curve(ax[3], zR);
@@ -51723,6 +51824,33 @@ function padSystem(A, H) {
     } else
       release(), nav(b, ax, t);
     st.prev = b;
+  }
+  // Release 1.0: the drone on a controller. Flying: left stick moves, right stick looks, A up, B down, RT fast,
+  // LT slow, X hides the interface, Y follows the players (Drone mode) or goes back to your soldier (in a match),
+  // View records a replay (developers), Menu leaves Drone mode (or pauses in a match). Following players in Drone
+  // mode: D-pad / LB / RB switch player, X first person / chase, Y back to the drone, B or Menu leaves.
+  function droneDrive(b, bv, ax, dt, zL, zR) {
+    const ses = typeof vgSpec < "u" && vgSpec.active && !!vgSpec.drone, on = typeof vgDrone < "u" && vgDrone.on;
+    if (!on && !ses) return !1;
+    if (A.services.hud?.menu && A.services.hud.menu !== "none" || document.querySelector(".vg-rep") || typeof vgReplay < "u" && vgReplay.playing) return !1;
+    const edge = (i) => b[i] && !st.prev[i], D = vgKS.api?.drone;
+    if (on) {
+      const mx = mcurve(ax[0], zL), my = -mcurve(ax[1], zL);
+      mx || my ? (inp.injectMove(mx, my), st.moving = !0) : st.moving && (inp.injectMove(null), st.moving = !1);
+      for (const a of Object.keys(st.held)) ["jump", "crouch", "ads", "sprint"].includes(a) || setAct(a, !1);
+      setAct("jump", !!b[0]), setAct("crouch", !!b[1]), setAct("ads", (bv[6] || 0) > 0.35), setAct("sprint", (bv[7] || 0) > 0.35 || !!b[10]), st.sprint = !1;
+      let rx = curve(ax[2], zR), ry = curve(ax[3], zR);
+      S("invertY", !1) && (ry = -ry);
+      const ms = Number(A.settings.get("controls.sensitivity", 3)) || 3, pxPerRad = 1 / (7e-4 * ms), degPerSec = 38 * Number(S("lookSens", 5)) * ((bv[6] || 0) > 0.35 ? 0.45 : 1);
+      (rx || ry) && look(rx * degPerSec * dt * Math.PI / 180 * pxPerRad, ry * degPerSec * 0.72 * dt * Math.PI / 180 * pxPerRad);
+      edge(2) && D?.clean?.(!D.state?.clean), edge(3) && D?.toggle?.(), edge(8) && vgAuth.dev && vgReplay.api && (vgReplay.rec ? vgReplay.api.stop() : vgReplay.api.start());
+      edge(9) && (ses ? vgSpec.stop?.("") : (D?.exit?.(), H.pause()));
+      return !0;
+    }
+    // Drone mode, following the players
+    release();
+    (edge(14) || edge(4)) && tap("ArrowLeft", "ArrowLeft"), (edge(15) || edge(5)) && tap("ArrowRight", "ArrowRight"), edge(2) && tap("KeyV", "v"), edge(3) && D?.toggle?.(), (edge(1) || edge(9)) && tap("Escape", "Escape");
+    return !0;
   }
   function deactivate() {
     release(), st.active = !1, A.flags && (A.flags.padActive = !1), A.events.emit("pad:active", { active: !1 });
@@ -53170,6 +53298,7 @@ var loCss = `
 .od-camo-tile .sw { aspect-ratio: 1.5; background-size: 160% auto; }
 .od-camo-tile .nm { font-size: calc(var(--u) * 10.5); letter-spacing: .1em; text-transform: uppercase; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .od-camo-tile.ch em { background: rgba(120,20,16,.85); }
+.od-camo-tile.dlc em { background: linear-gradient(90deg, #ff8a1f, #7b2fbf); color: #fff; }
 .od-camo-ch { display: block; margin-top: calc(var(--u) * 6); }
 .od-camo-ch i { display: block; position: relative; height: calc(var(--u) * 4); margin-top: calc(var(--u) * 6); background: rgba(236,240,234,.14); overflow: hidden; }
 .od-camo-ch i b { position: absolute; inset: 0; background: var(--accent); transform-origin: 0 50%; }
@@ -53818,14 +53947,16 @@ function vgNetStart() {
         vgNet.stopped = !0, ws.close();
         return;
       }
-      ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build, device: vgDevice(), steam: vgBoot.steam || void 0 })), vgAnnFrom(m), vgRegionsFrom(m);
+      ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build, device: vgDevice(), steam: vgBoot.steam || void 0 })), vgAnnFrom(m), vgRegionsFrom(m), vgDlcApps(m.dlcApps), vgPubBuild(m);
     }
-    else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, vgAuth.dev = !!m.developer, ws.send(JSON.stringify({ type: "social_state" })), vgSyncBegin();
+    else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, vgAuth.dev = !!m.developer, Array.isArray(m.dlc) && vgDlcSet(m.dlc), ws.send(JSON.stringify({ type: "social_state" })), vgSyncBegin();
     else if (m.type === "role") vgAuth.dev = !!m.developer;
+    else if (m.type === "dlc") vgDlcSet(m.dlc, !0);
+    else if (m.type === "dlc_apps") vgDlcApps(m.dlcApps);
     else if (m.type === "announcement") vgAnnFrom(m);
     else if (m.type === "maintenance") return vgMaintenance(m.message);
     else if (m.type === "banned" || m.type === "auth_error") {
-      vgNet.stopped = !0, ws.close(), (m.type === "banned" || m.code === "banned") && vgBanned(m.ban, m.message), (m.code === "maintenance" || m.code === "steam_required") && vgBootFail(m.code, m.message);
+      vgNet.stopped = !0, ws.close(), (m.type === "banned" || m.code === "banned") && vgBanned(m.ban, m.message), (m.code === "maintenance" || m.code === "steam_required" || m.code === "unavailable") && vgBootFail(m.code, m.message);
       return;
     } else if (m.type === "kicked") {
       vgKick.fn ? vgKick.fn(m.message, "social") : vgToast(m.message || "A moderator disconnected you."), vgNet.retry = Math.max(vgNet.retry, 4);
@@ -54517,6 +54648,8 @@ var vgSpecCss = `
 .vg-spec .stats b { display: block; font-size: 20px; }
 .vg-spec .keys { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; padding: 10px 16px; background: rgba(8,11,13,.66); font-size: 12.5px; letter-spacing: .06em; white-space: nowrap; }
 .vg-spec .keys i { display: inline-block; min-width: 18px; margin-right: 4px; padding: 2px 6px; border: 1px solid rgba(236,240,234,.4); font-style: normal; font-weight: 700; text-align: center; }
+.vg-spec .keys.kp, .vg-spec.pad .keys.kk { display: none; }
+.vg-spec.pad .keys.kp { display: flex; }
 .vg-spec .keys button { pointer-events: auto; padding: 8px 12px; background: #f2c14e; border: 0; color: #111; font: 800 11px/1 inherit; font-family: inherit; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; }
 `;
 /* ------------------------------------------------------------------ Beta 1.31: Drone mode in multiplayer (developers) */
@@ -54602,7 +54735,16 @@ function vgDronePick() {
   } catch {
     msg.textContent = "Can't reach the Vangaurd server.", msg.classList.add("err");
   }
-  d.onclose = () => {
+  d.onkey = (ev) => {
+    const k = ev.code, ids = all().map((m) => m.id), i = Math.max(0, ids.indexOf(map)), ae = document.activeElement;
+    if (k === "ArrowLeft" || k === "ArrowRight" || k === "ArrowUp" || k === "ArrowDown") {
+      const n = ids.length, j = k === "ArrowLeft" ? i - 1 : k === "ArrowRight" ? i + 1 : k === "ArrowUp" ? i - 3 : i + 3;
+      return n && (map = ids[(j % n + n) % n], render(), maps.querySelector(`[data-map="${map}"]`)?.focus()), !0;
+    }
+    if (k === "KeyQ" || k === "KeyE") return mode = mode === "tdm" ? "kc" : "tdm", render(), !0;
+    if (k === "Enter" || k === "NumpadEnter" || k === "Space") return ae?.matches?.("[data-c]") ? d.close() : go.disabled || go.click(), !0;
+    return !1;
+  }, d.onclose = () => {
     try {
       ws?.close();
     } catch {
@@ -54660,6 +54802,19 @@ function vgReplayPick() {
     }));
   };
   const file = d.querySelector("[data-file]");
+  d.onkey = (ev) => {
+    const k = ev.code, bs = [...d.querySelectorAll(".card button")], ae = document.activeElement, i = bs.indexOf(ae);
+    if (k === "ArrowDown" || k === "ArrowUp" || k === "ArrowLeft" || k === "ArrowRight") {
+      const rows = [...d.querySelectorAll(".it")], r = rows.findIndex((x) => x.contains(ae));
+      if ((k === "ArrowDown" || k === "ArrowUp") && rows.length) {
+        const nr = r < 0 ? 0 : Math.max(0, Math.min(rows.length, r + (k === "ArrowDown" ? 1 : -1)));
+        (nr >= rows.length ? d.querySelector("[data-c]") : rows[nr].querySelector("[data-w]"))?.focus();
+      } else bs.length && bs[((i < 0 ? 0 : i + (k === "ArrowRight" || k === "ArrowDown" ? 1 : -1)) % bs.length + bs.length) % bs.length].focus();
+      return !0;
+    }
+    if (k === "Enter" || k === "NumpadEnter" || k === "Space") return i >= 0 && bs[i].click(), !0;
+    return !1;
+  };
   d.querySelector("[data-c]").addEventListener("click", d.close), d.querySelector("[data-imp]").addEventListener("click", () => file.click()), file.addEventListener("change", async () => {
     try {
       const r = JSON.parse(await file.files[0].text());
@@ -54699,7 +54854,8 @@ function vgRepDialog(html) {
   const d = document.createElement("div");
   d.className = "vg-rep", d.innerHTML = `<div class="card" role="dialog" aria-modal="true">${html}</div>`, document.body.appendChild(d);
   const key = (ev) => {
-    ev.stopImmediatePropagation(), ev.key === "Escape" && (ev.preventDefault(), close());
+    if (ev.stopImmediatePropagation(), ev.type === "keydown" && d.onkey?.(ev)) return ev.preventDefault();
+    ev.key === "Escape" && (ev.preventDefault(), close());
   }, close = () => {
     d.remove();
     for (const t of ["keydown", "keyup"]) window.removeEventListener(t, key, !0);
@@ -54846,6 +55002,7 @@ typeof window < "u" && vgNet.listeners.push((m) => vgReadyMsg(m));
 /* ------------------------------------------------------------------ Beta 1.2: news & patch notes */
 // Only the current version's notes are shown (Beta 1.21: older versions are no longer listed).
 var VG_PATCH_NOTES = [
+  { v: "Release 1.0", items: ["New: the Halloween Pack DLC ($2.99 on Steam) with two new operators, Skeleton and Pumpkin Head, and the animated Halloween camo.", "New: an Operators screen on the main menu to choose who you play as. Other players see your operator in matches.", "Halloween on every map: pumpkins, jack-o'-lanterns, candles, tombstones and a light purple, foggy sky (until 10 November).", "Daily challenges are easier.", "Drone mode now works with a controller."] },
   { v: "Beta 1.32", items: ["Small fixes and improvements."] },
   { v: "Beta 1.31", items: ["The game now shows when the servers are offline or under maintenance, even if you are not signed in.", "The sign-in page now tells you on its own when the servers go down."] },
   { v: "Beta 1.3", items: ["Fixed Matchmaking", "Many QoL Fixes", "You can now see on the report page who the last player who killed you was.", "Switched from NA West Servers to NA East Servers", "Fixed a Bug where if you would Slide or go Prone it would not show it on another players screen", "Weapon Leveling", "Weapon Mounting", "Kill Streaks", "Daily and Weekly Challenges and more!"] },
@@ -55113,9 +55270,9 @@ function vgBuildProbe() {
         return;
       }
       if (m.type === "connected") {
-        got = !0, vgAnnFrom(m), vgRegionsFrom(m);
+        got = !0, vgAnnFrom(m), vgRegionsFrom(m), vgDlcApps(m.dlcApps);
         const old = vgCheckBuild(m);
-        if (tell({ ok: !0, maintenance: m.maintenance || null, outdated: old }), old) return done();
+        if (tell({ ok: !0, maintenance: m.maintenance || null, outdated: old, unreleased: vgUnreleased(m) }), old) return done();
         try {
           ws.send(JSON.stringify({ type: "hello", clientBuild: VGD.build, device: vgDevice() }));
         } catch {
@@ -55171,7 +55328,8 @@ function vgAuthSet(user, token, remember) {
     !user && sessionStorage.removeItem(VG_AUTH_KEY);
   } catch {
   }
-  user && oJ(user), user && token && vgBanClear(), user && token ? (vgNet.stopped = !1, vgNetStart()) : vgNetStop();
+  user && oJ(user), user && token && vgBanClear(), user && token ? (vgNet.stopped = !1, vgNetStart()) : vgNetStop(), user || vgDlcSet([]);
+  if (!user && vgUnreleased(null) && typeof document < "u") return setTimeout(() => vgBootFail("unavailable"), 0), void 0;
   for (const el of document.querySelectorAll(".vg-who")) el.textContent = user ? `● ${user}` : "Offline";
   for (const f of vgAuth.listeners) try {
     f(vgAuth);
@@ -55217,7 +55375,7 @@ function vgAuthCall(msg, ms = 9e3) {
       } catch {
         return;
       }
-      m.type === "connected" ? vgCheckBuild(m) ? fin({ error: "outdated", message: "This version of Vangaurd is out of date." }) : ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build, device: vgDevice(), steam: msg.steam || vgBoot.steam || void 0 })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created, developer: !!m.developer }) : m.type === "auth_code" ? fin({ code: !0, pending: m.pending, purpose: m.purpose, to: m.to, ttl: m.ttl, resendIn: m.resendIn }) : m.type === "auth_need_email" ? fin({ needEmail: !0, pending: m.pending, user: m.username }) : m.type === "banned" ? (vgBanned(m.ban, m.message), fin({ error: "banned", message: m.message || "This account is banned." })) : m.type === "auth_error" ? (m.code === "banned" && vgBanned(m.ban, m.message), fin({ error: m.code || "error", message: m.message || "Sign-in failed." })) : m.type === "logged_out" && fin({ ok: !0 });
+      m.type === "connected" ? vgCheckBuild(m) ? fin({ error: "outdated", message: "This version of Vangaurd is out of date." }) : ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build, device: vgDevice(), steam: msg.steam || vgBoot.steam || void 0 })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created, developer: !!m.developer, dlc: Array.isArray(m.dlc) ? m.dlc : null }) : m.type === "auth_code" ? fin({ code: !0, pending: m.pending, purpose: m.purpose, to: m.to, ttl: m.ttl, resendIn: m.resendIn }) : m.type === "auth_need_email" ? fin({ needEmail: !0, pending: m.pending, user: m.username }) : m.type === "banned" ? (vgBanned(m.ban, m.message), fin({ error: "banned", message: m.message || "This account is banned." })) : m.type === "auth_error" ? (m.code === "banned" && vgBanned(m.ban, m.message), fin({ error: m.code || "error", message: m.message || "Sign-in failed." })) : m.type === "logged_out" && fin({ ok: !0 });
     }), ws.addEventListener("error", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." })), ws.addEventListener("close", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." }));
   });
 }
@@ -55298,9 +55456,9 @@ function vgAuthUI() {
   const WHAT = { register: "to finish creating your account", login: "to sign in", add_email: "to add it to your account", reset: "to reset your password" };
   // One answer from the server moves the screen on: signed in, enter a code, add an email, or an error.
   function handle(r) {
-    if (lock(!1), r.error === "maintenance" || r.error === "steam_required") return vgBootFail(r.error, r.message);
+    if (lock(!1), r.error === "maintenance" || r.error === "steam_required" || r.error === "unavailable") return vgBootFail(r.error, r.message);
     if (r.ok) {
-      r.developer != null && (vgAuth.dev = !!r.developer), pw.value = pw2.value = np.value = np2.value = code.value = "", pending = null, vgAuthSet(r.user, r.token, rem.checked), ui.hide();
+      r.developer != null && (vgAuth.dev = !!r.developer), r.dlc && vgDlcSet(r.dlc), pw.value = pw2.value = np.value = np2.value = code.value = "", pending = null, vgAuthSet(r.user, r.token, rem.checked), ui.hide();
       try {
         pgCtx?.services.hud?.notify?.(r.created ? `Welcome to Vangaurd, ${r.user}` : purpose === "reset" ? `Password changed. Signed in as ${r.user}` : `Signed in as ${r.user}`, { kind: "info", duration: 2.6 });
       } catch {
@@ -55454,7 +55612,8 @@ function vgBootUI() {
     vgBootHide(), vgAuthSet(null, null, !1);
   }), d.querySelector("[data-signin]").addEventListener("click", () => {
     // During maintenance the owner, moderators and developers can still sign in.
-    vgBoot.run++, vgBootHide(), vgAuth.staffNote = !0, vgAuthUI().show("Only Vangaurd staff can sign in during maintenance.");
+    const unav = vgBoot.failed === "unavailable";
+    vgBoot.run++, vgBootHide(), vgAuth.staffNote = !0, vgAuthUI().show(unav ? `${VGD.label} isn't released yet. Only the owner can sign in.` : "Only Vangaurd staff can sign in during maintenance.");
   }), d.querySelector("[data-quit]").addEventListener("click", () => {
     try {
       window.vangaurdDesktop?.quit ? window.vangaurdDesktop.quit() : window.close();
@@ -55482,9 +55641,9 @@ function vgBootFail(kind, message) {
   const d = vgBootUI();
   if (!d) return;
   vgBoot.run++, vgBoot.on = !0, vgBoot.failed = kind, vgAuth.ui?.hide?.(), d.classList.add("on", "failed");
-  const title = kind === "steam_required" ? "Steam required" : "Login failed";
+  const title = kind === "steam_required" ? "Steam required" : kind === "unavailable" ? "Version unavailable" : "Login failed";
   kind === "maintenance" && message && !/maintenance/i.test(message) && (message = `Vangaurd is undergoing maintenance. ${message}`);
-  d.querySelector("#vg-boot-fh").textContent = title, d.querySelector("[data-m]").textContent = message || (kind === "maintenance" ? "Vangaurd is undergoing maintenance. Please try again later." : kind === "offline" ? "Unable to contact the Vangaurd services. Check your connection and try again." : "Sign-in failed. Try again."), d.querySelector("[data-off]").hidden = kind !== "offline" || vgSteamLocked(), d.querySelector("[data-signin]").hidden = kind !== "maintenance" || !!vgAuth.user, d.querySelector("[data-quit]").hidden = kind !== "steam_required" && !(kind === "offline" && vgSteamLocked());
+  d.querySelector("#vg-boot-fh").textContent = title, d.querySelector("[data-m]").textContent = message || (kind === "maintenance" ? "Vangaurd is undergoing maintenance. Please try again later." : kind === "offline" ? "Unable to contact the Vangaurd services. Check your connection and try again." : kind === "unavailable" ? `This version of Vangaurd (${VGD.label}) is not available yet.` : "Sign-in failed. Try again."), d.querySelector("[data-off]").hidden = kind !== "offline" || vgSteamLocked(), d.querySelector("[data-signin]").hidden = !(kind === "maintenance" || kind === "unavailable") || !!vgAuth.user, d.querySelector("[data-signin]").textContent = kind === "unavailable" ? "Sign in" : "Staff sign-in", d.querySelector("[data-quit]").hidden = kind !== "steam_required" && kind !== "unavailable" && !(kind === "offline" && vgSteamLocked());
   try {
     document.pointerLockElement && document.exitPointerLock();
   } catch {
@@ -55546,6 +55705,7 @@ async function vgBootRun() {
     const [st] = await Promise.all([probeP, steamP]);
     if (!alive()) return;
     if (vgUpd.open || st.outdated) return vgBootHide();
+    if (st.unreleased || st.offline && vgUnreleased(null)) return vgBootFail("unavailable");
     if (st.offline) return vgBootFail("offline");
     if (st.maintenance) return vgBootFail("maintenance", st.maintenance.message || "");
     return vgBootHide(), vgAuthUI().show();
@@ -55560,10 +55720,11 @@ async function vgBootRun() {
       remember = !!localStorage.getItem(VG_AUTH_KEY);
     } catch {
     }
-    vgAuthSet(r.user, sv.token, remember), r.developer != null && (vgAuth.dev = !!r.developer), await wait(Math.max(500, 2200 - (performance.now() - t0)));
+    vgAuthSet(r.user, sv.token, remember), r.developer != null && (vgAuth.dev = !!r.developer), r.dlc && vgDlcSet(r.dlc), await wait(Math.max(500, 2200 - (performance.now() - t0)));
     if (!alive()) return;
     return vgBootHide();
   }
+  if (r.error === "unavailable" || r.error === "offline" && vgUnreleased(null)) return vgBootFail("unavailable", r.error === "unavailable" ? r.message : "");
   if (r.error === "maintenance" || r.error === "steam_required" || r.error === "offline") return vgBootFail(r.error, r.message);
   if (r.error === "banned" || r.error === "outdated") return vgBootHide();
   vgBootHide(), vgAuthUI().show(r.message || "Please sign in again.");
@@ -55582,6 +55743,665 @@ function vgMaintenance(message) {
   vgBootFail("maintenance", message);
 }
 
+/* ------------------------------------------------------------------ Release 1.0: operators */
+// How your soldier looks to other players (and in replays). The Halloween Pack (DLC) adds two:
+//   Skeleton      bones in combat gear, glowing eyes
+//   Pumpkin Head  a carved, glowing jack-o'-lantern head, a long torn coat and torn trousers with green zombie
+//                 skin showing through the holes
+// The skeleton is its own skinned body built from bones and joints on the soldier's rig; the pumpkin head is the
+// soldier's body with a coat skirt added, a torn-cloth shader and a pumpkin on the head bone.
+var VG_OPS = [
+  { id: "default", name: "Standard", tag: "Vangaurd", desc: "The standard Vangaurd operator in field fatigues, plate carrier and helmet.", dlc: null },
+  { id: "skeleton", name: "Skeleton", tag: "Halloween Pack", desc: "Nothing left but bones, a grin and two glowing eyes. Still carries a rifle.", dlc: "halloween" },
+  { id: "pumpkin", name: "Pumpkin Head", tag: "Halloween Pack", desc: "A carved jack-o'-lantern for a head, a long torn coat and ripped trousers with green zombie skin showing through.", dlc: "halloween" }
+];
+var vgOps = { geos: {}, mats: {}, head: null, listeners: [] };
+function vgOpDef(id) {
+  return VG_OPS.find((o) => o.id === id) || VG_OPS[0];
+}
+function vgOpOwned(id) {
+  const d = vgOpDef(id);
+  return d.id === id && (!d.dlc || vgDlcOwned(d.dlc));
+}
+// The operator you play as (only one you own).
+function vgOpCurrent() {
+  let id = "default";
+  try {
+    id = pgCtx?.settings?.get?.("player.operator", "default") || "default";
+  } catch {
+  }
+  return vgOpOwned(id) ? id : "default";
+}
+function vgOpSet(id) {
+  if (!vgOpOwned(id)) return !1;
+  try {
+    pgCtx?.settings?.set?.("player.operator", id);
+  } catch {
+  }
+  vgOpHands();
+  for (const f of vgOps.listeners) try {
+    f(id);
+  } catch {
+  }
+  return !0;
+}
+
+// ---------- bodies
+// The soldier body (like HY) with extra parts added before it is finished.
+function vgBodyGeo(q, variant, extra) {
+  wn = q < 0.4, Zl = q < 0.8, DS(wn ? 0 : Zl ? 1 : 99);
+  try {
+    const t = new IH();
+    RY(t, q), bY(t, q), xY(t, q), SY(t, q), GY(t, q), kY(t, q), UY(t, q);
+    const i = t.count;
+    pY(t, q, variant), extra?.(t, q);
+    const a = t.toGeometry();
+    return a.userData.variant = variant, a.userData.headStart = i, a;
+  } finally {
+    DS(99);
+  }
+}
+function vgFinish(geo) {
+  const n = NY(geo);
+  return geo.dispose(), LY(n);
+}
+// A bone (shaft with knobbly ends) from a to b, rigid on one bone of the rig.
+function vgShaft(t, a, bb, r, bone, q, { knob = 1.55, mat = ce.HELMET } = {}) {
+  const d = bb.clone().sub(a), L = d.length();
+  if (L < 1e-4) return;
+  const seg = Math.max(5, Math.round(9 * q)), rings = Math.max(4, Math.round(9 * q)), part = Ks(seg, rings, (u, v, out) => {
+    const g = u * Math.PI * 2, k = 1 + (knob - 1) * (Math.exp(-v * v * 70) + Math.exp(-(1 - v) * (1 - v) * 70)), w = 1 - 0.18 * Math.sin(v * Math.PI);
+    out.set(Math.cos(g) * r * k * w, Math.sin(g) * r * k * w, v * L);
+  }, { wrapU: !0, capV0: !0, capV1: !0 }).orientOutward(), qn = new Oe().setFromUnitVectors(new b(0, 0, 1), d.normalize());
+  part.map((p) => p.applyQuaternion(qn).add(a)), t.add(part, { mat, bone, dirt: 0.25, wear: 0.4 });
+}
+function vgBall(t, c, rx, ry, rz, bone, q, mat = ce.HELMET) {
+  const p = Fd(rx, ry, rz, Math.max(6, Math.round(12 * q)), Math.max(4, Math.round(8 * q)));
+  p.map((v) => v.add(c)), t.add(p, { mat, bone, dirt: 0.2, wear: 0.3 });
+}
+function vgSkeletonGeo(q) {
+  const t = new IH(), P = (n) => Hc(n), BN = ce.HELMET, DK = ce.RUBBER, V = (x, y, z) => new b(x, y, z);
+  // skull
+  const C = P("head").add(V(0, 0.098, 4e-3));
+  vgBall(t, C.clone().add(V(0, 0.012, -6e-3)), 0.08, 0.092, 0.096, "head", q);
+  vgBall(t, C.clone().add(V(0, -0.034, 0.04)), 0.06, 0.05, 0.058, "head", q);
+  vgBall(t, C.clone().add(V(0, -0.078, 0.032)), 0.052, 0.026, 0.052, "head", q);
+  for (const s of [1, -1]) {
+    vgBall(t, C.clone().add(V(s * 0.031, 4e-3, 0.08)), 0.022, 0.021, 0.014, "head", q, DK);
+    vgBall(t, C.clone().add(V(s * 0.05, -0.022, 0.058)), 0.018, 0.012, 0.02, "head", q);
+  }
+  vgBall(t, C.clone().add(V(0, -0.03, 0.094)), 0.01, 0.016, 8e-3, "head", q, DK);
+  vgBall(t, C.clone().add(V(0, -0.062, 0.078)), 0.038, 7e-3, 0.012, "head", q, DK);
+  for (let i = 0; i < 8; i++) {
+    const a = (i - 3.5) * 0.16;
+    vgBall(t, C.clone().add(V(Math.sin(a) * 0.04, -0.056, 0.067 + Math.cos(a) * 0.016)), 5e-3, 7e-3, 4e-3, "head", q);
+    vgBall(t, C.clone().add(V(Math.sin(a) * 0.038, -0.07, 0.064 + Math.cos(a) * 0.015)), 5e-3, 6e-3, 4e-3, "head", q);
+  }
+  // spine and neck
+  const sp = [["pelvis", "spine1"], ["spine1", "spine2"], ["spine2", "chest"], ["chest", "neck"], ["neck", "head"]];
+  for (const [a, c] of sp) {
+    const A = P(a), B = P(c);
+    for (let i = 0; i < 3; i++) {
+      const p = A.clone().lerp(B, (i + 0.5) / 3).add(V(0, 0, -0.045 + (a === "neck" ? 0.03 : 0)));
+      vgBall(t, p, a === "neck" ? 0.017 : 0.021, 0.013, 0.019, i < 2 ? a : c, q), vgBall(t, p.clone().add(V(0, 0, -0.022)), 6e-3, 0.012, 0.012, i < 2 ? a : c, q);
+    }
+  }
+  // ribs, sternum, shoulder blades
+  for (let i = 0; i < 6; i++) {
+    const y = 1.405 - i * 0.042, rx = 0.118 + 0.022 * Math.sin((i + 1) / 7 * Math.PI), rz = 0.088, bone = i < 3 ? "chest" : "spine2", rr = 6.5e-3;
+    for (const s of [1, -1]) {
+      const part = Ks(Math.max(5, Math.round(8 * q)), Math.max(10, Math.round(18 * q)), (u, v, out) => {
+        const th = Math.PI * (1 - 0.86 * v), cx = s * Math.sin(th) * rx, cz = -0.012 + Math.cos(th) * rz * (th > Math.PI / 2 ? 0.75 : 1), cy = y - 0.035 * v * v, g = u * Math.PI * 2, nx = s * Math.sin(th), nz = Math.cos(th);
+        out.set(cx + nx * Math.cos(g) * rr, cy + Math.sin(g) * rr, cz + nz * Math.cos(g) * rr);
+      }, { wrapU: !0, capV0: !0, capV1: !0 }).orientOutward();
+      t.add(part, { mat: BN, bone, dirt: 0.25, wear: 0.4 });
+    }
+  }
+  vgBall(t, V(0, 1.32, 0.083), 0.02, 0.085, 0.01, "chest", q);
+  for (const s of [1, -1]) vgBall(t, V(s * 0.085, 1.36, -0.07), 0.05, 0.062, 0.011, "chest", q);
+  // pelvis
+  {
+    const pc = P("pelvis"), ring = Ks(Math.max(16, Math.round(30 * q)), Math.max(6, Math.round(10 * q)), (u, v, out) => {
+      const a = u * Math.PI * 2, g = v * Math.PI * 2, tilt = 0.035 * Math.cos(a), rx = 0.088, rz = 0.062, tr = 0.012, th = 0.024 + 0.018 * Math.max(0, Math.abs(Math.sin(a)) - 0.3);
+      out.set(Math.sin(a) * (rx + Math.cos(g) * tr), pc.y - 0.015 + tilt + Math.sin(g) * th, Math.cos(a) * (rz + Math.cos(g) * tr) + 4e-3);
+    }, { wrapU: !0 }).orientOutward();
+    t.add(ring, { mat: BN, bone: "pelvis", dirt: 0.25, wear: 0.4 });
+    for (const s of [1, -1]) vgBall(t, pc.clone().add(V(s * 0.082, 0.035, -0.012)), 0.032, 0.03, 0.014, "pelvis", q), vgBall(t, pc.clone().add(V(s * 0.06, -0.045, 0.02)), 0.016, 0.018, 0.014, "pelvis", q);
+    vgBall(t, pc.clone().add(V(0, -0.01, -0.06)), 0.026, 0.045, 0.014, "pelvis", q);
+  }
+  // arms and legs
+  for (const S of ["L", "R"]) {
+    const s = S === "L" ? 1 : -1;
+    vgShaft(t, P(`clav${S}`).add(V(0, 0, 0.05)), P(`upperarm${S}`), 9e-3, `clav${S}`, q);
+    vgBall(t, P(`upperarm${S}`), 0.026, 0.026, 0.026, `upperarm${S}`, q);
+    vgShaft(t, P(`upperarm${S}`), P(`forearm${S}`), 0.015, `upperarm${S}`, q);
+    vgBall(t, P(`forearm${S}`), 0.02, 0.02, 0.02, `forearm${S}`, q);
+    for (const o of [-1, 1]) vgShaft(t, P(`forearm${S}`).add(V(o * 8e-3, 0, o * 6e-3)), P(`hand${S}`).add(V(o * 0.01, 0, o * 4e-3)), 8e-3, `forearm${S}`, q, { knob: 1.4 });
+    const H = P(`hand${S}`), dir = H.clone().sub(P(`forearm${S}`)).normalize(), side = V(1, 0, 0).cross(dir).normalize();
+    vgBall(t, H, 0.022, 0.016, 0.02, `hand${S}`, q);
+    for (let f = 0; f < 4; f++) {
+      const o = (f - 1.5) * 0.013, a = H.clone().addScaledVector(side, o * 0.6).add(V(s * 3e-3, 0, 0)), m = a.clone().addScaledVector(dir, 0.055).addScaledVector(side, o * 0.3), e = m.clone().addScaledVector(dir, 0.045 - Math.abs(f - 1.5) * 6e-3).add(V(0, 0, 0.012));
+      vgShaft(t, a, m, 4e-3, `hand${S}`, q, { knob: 1.5 }), vgShaft(t, m, e, 3.5e-3, `hand${S}`, q, { knob: 1.5 });
+    }
+    vgShaft(t, H.clone().addScaledVector(side, -0.02), H.clone().addScaledVector(side, -0.04).addScaledVector(dir, 0.04).add(V(0, 0, 0.02)), 4.5e-3, `hand${S}`, q);
+    vgShaft(t, P(`thigh${S}`).add(V(-s * 0.02, 0.02, 0)), P(`shin${S}`), 0.021, `thigh${S}`, q);
+    vgBall(t, P(`shin${S}`).add(V(0, 0.01, 0.035)), 0.02, 0.022, 0.012, `shin${S}`, q), vgBall(t, P(`shin${S}`), 0.026, 0.024, 0.026, `shin${S}`, q);
+    vgShaft(t, P(`shin${S}`).add(V(0, 0, 0.01)), P(`foot${S}`), 0.015, `shin${S}`, q), vgShaft(t, P(`shin${S}`).add(V(s * 0.016, 0, -0.01)), P(`foot${S}`).add(V(s * 0.014, 0.01, -8e-3)), 8e-3, `shin${S}`, q, { knob: 1.3 });
+    vgBall(t, P(`foot${S}`), 0.022, 0.022, 0.03, `foot${S}`, q), vgBall(t, P(`foot${S}`).add(V(0, -0.04, -0.03)), 0.02, 0.022, 0.024, `foot${S}`, q);
+    for (let f = 0; f < 3; f++) vgShaft(t, P(`foot${S}`).add(V((f - 1) * 0.018, -0.04, 0.01)), P(`toe${S}`).add(V((f - 1) * 0.022, 0, 0.03)), 6e-3, `foot${S}`, q);
+  }
+  return t.toGeometry();
+}
+// A long coat skirt (waist to below the knees) with a torn hem, for the Pumpkin Head.
+function vgCoatParts(t, q) {
+  const thL = ZA.thighL, thR = ZA.thighR, pv = ZA.pelvis, jag = (u) => 0.05 * (Math.sin(u * 61.7) * 0.6 + Math.sin(u * 23.3 + 1.7) * 0.4) + 0.035 * Math.max(0, Math.sin(u * 9.1 + 0.4));
+  const wf = (p) => {
+    const w = Math.min(1, Math.max(0, (0.97 - p.y) / 0.42)) * 0.62;
+    return [[pv, 1 - w], [p.x >= 0 ? thL : thR, w]];
+  };
+  for (const inner of [!1, !0]) {
+    const part = Ks(Math.max(16, Math.round(44 * q)), Math.max(4, Math.round(9 * q)), (u, v, out) => {
+      const a = (0.06 + u * 0.88) * Math.PI * 2, top = 1.0, bot = 0.5 + jag(u), y = top - (top - bot) * v, rx = 0.172 + 0.075 * v, rz = 0.13 + 0.06 * v + (Math.cos(a) < 0 ? 0.015 : 0), off = inner ? -4e-3 : 0;
+      out.set(Math.sin(a) * (rx + off), y, Math.cos(a) * (rz + off) - 0.01);
+    }, { wrapU: !1 });
+    inner ? part.flip() : part.orientOutward(), t.add(part, { mat: ce.CRIMSON, weightFn: wf, dirt: (p) => 0.3 + 0.5 * Math.max(0, 0.75 - p.y), wear: 0.3 });
+  }
+  // a turned-up collar
+  const col = Ks(Math.max(12, Math.round(30 * q)), 3, (u, v, out) => {
+    const a = (0.12 + u * 0.76) * Math.PI * 2, y = 1.47 + v * 0.07, r = 0.085 + v * 0.03;
+    out.set(Math.sin(a) * r, y, Math.cos(a) * r * 0.95 - 0.02);
+  }, { wrapU: !1 });
+  col.orientOutward(), t.add(col, { mat: ce.CRIMSON, bones: ["chest", "neck"], k: 6 });
+}
+// Three detail levels, like the AI soldiers.
+function vgOpGeos(id) {
+  if (vgOps.geos[id]) return vgOps.geos[id];
+  const out = [];
+  for (const q of [1, 0.5, 0.25]) out.push(vgFinish(id === "skeleton" ? vgSkeletonGeo(q) : vgBodyGeo(q, dd[1], vgCoatParts)));
+  return vgOps.geos[id] = out;
+}
+
+// ---------- materials
+function vgOpMatColors(m, cols) {
+  const U = m.userData.uniforms;
+  for (const [k, c] of Object.entries(cols)) U.uMatA.value[+k]?.set(c[0], c[1], c[2], c[3] ?? U.uMatA.value[+k].w);
+}
+function vgOpMaterial(id) {
+  if (vgOps.mats[id]) return vgOps.mats[id];
+  let m;
+  if (id === "skeleton") {
+    m = KY({ dirt: 0.6 }), vgOpMatColors(m, { [ce.HELMET]: [0.62, 0.56, 0.44, 0.72], [ce.RUBBER]: [0.012, 0.01, 0.01, 0.9] }), m.name = "op_skeleton";
+  } else {
+    // Pumpkin Head: dark coat and trousers, zombie-green skin, and holes torn in the cloth that show the skin
+    m = KY({ dirt: 1.2 });
+    const zs = [0.13, 0.24, 0.06, 0.7];
+    vgOpMatColors(m, { [ce.FATIGUE]: [0.075, 0.058, 0.045, 0.92], [ce.CRIMSON]: [0.06, 0.045, 0.035, 0.9], [ce.VEST]: [0.045, 0.035, 0.028, 0.8], [ce.WEBBING]: [0.035, 0.03, 0.025, 0.8], [ce.PAD]: [0.04, 0.032, 0.026, 0.85], [ce.BOOT]: [0.03, 0.022, 0.018, 0.7], [ce.HELMET]: [0.03, 0.03, 0.03, 0.8], [ce.KNIT]: zs, [ce.SKIN]: zs, [ce.GLOVE]: zs });
+    const prev = m.onBeforeCompile;
+    m.onBeforeCompile = (c, r) => {
+      prev.call(m, c, r), c.vertexShader = c.vertexShader.replace("#include <common>", `#include <common>
+varying vec3 vTornP;`).replace("#include <uv_vertex>", `#include <uv_vertex>
+  vTornP = position;`), c.fragmentShader = c.fragmentShader.replace("#include <common>", `#include <common>
+varying vec3 vTornP;
+float vgTH(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float vgTN(vec3 p) {
+  vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(vgTH(i), vgTH(i + vec3(1, 0, 0)), f.x), mix(vgTH(i + vec3(0, 1, 0)), vgTH(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(vgTH(i + vec3(0, 0, 1)), vgTH(i + vec3(1, 0, 1)), f.x), mix(vgTH(i + vec3(0, 1, 1)), vgTH(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}`).replace("diffuseColor.rgb = base;", `if ( mid == 0 || mid == 10 ) {
+      // torn cloth: holes show green zombie skin, with dark frayed edges (more holes on the trousers)
+      float tn = vgTN( vTornP * 13.0 ) * 0.62 + vgTN( vTornP * 31.0 + 3.1 ) * 0.38;
+      float legs = 1.0 - smoothstep( 0.84, 0.95, vTornP.y );
+      float knee = exp( -pow( ( vTornP.y - 0.5 ) / 0.09, 2.0 ) );
+      float thr = mid == 10 ? 0.7 : mix( 0.79, 0.6 - 0.07 * knee, legs );
+      float hole = smoothstep( thr, thr + 0.015, tn ), rim = smoothstep( thr - 0.07, thr, tn ) * ( 1.0 - hole );
+      base = mix( base, base * 0.3, rim );
+      vec3 zskin = vec3( 0.12, 0.23, 0.055 ) * ( 0.7 + 0.6 * sDet.b ) * ( 0.85 + 0.3 * vgTN( vTornP * 60.0 ) );
+      base = mix( base, zskin, hole );
+    }
+    diffuseColor.rgb = base;`);
+    }, m.customProgramCacheKey = () => "vg_op_torn_v1", m.name = "op_pumpkin";
+  }
+  return vgOps.mats[id] = m;
+}
+
+// ---------- the pumpkin (jack-o'-lantern) head, also used to decorate the maps
+function vgPumpkinGeo(R = 0.17, H = 0.14, segs = 48, rings = 28) {
+  const pos = [], uv = [], idx = [];
+  for (let j = 0; j <= rings; j++) {
+    const v = j / rings, ph = v * Math.PI;
+    for (let i = 0; i <= segs; i++) {
+      const u = i / segs, th = (u - 0.5) * Math.PI * 2, lobe = 1 - 0.075 * Math.pow(1 - Math.abs(Math.cos(th * 5)), 1.6), dent = 1 - 0.32 * Math.exp(-Math.pow(ph / 0.42, 2)) - 0.22 * Math.exp(-Math.pow((Math.PI - ph) / 0.4, 2)), s = Math.sin(ph);
+      pos.push(Math.sin(th) * s * R * lobe, Math.cos(ph) * H * dent, Math.cos(th) * s * R * lobe), uv.push(u, 1 - v);
+    }
+  }
+  for (let j = 0; j < rings; j++) for (let i = 0; i < segs; i++) {
+    const a = j * (segs + 1) + i, c = a + segs + 1;
+    idx.push(a, c, a + 1, a + 1, c, c + 1);
+  }
+  const g = new Ke();
+  return g.setAttribute("position", new De(pos, 3)), g.setAttribute("uv", new De(uv, 2)), g.setIndex(idx), g.computeVertexNormals(), g;
+}
+function vgPumpkinTex(face) {
+  const W = 512, Hh = 256, cv = document.createElement("canvas"), em = document.createElement("canvas");
+  cv.width = em.width = W, cv.height = em.height = Hh;
+  const g = cv.getContext("2d"), e = em.getContext("2d"), gr = g.createLinearGradient(0, 0, 0, Hh);
+  gr.addColorStop(0, "#c25a0c"), gr.addColorStop(0.5, "#e8790f"), gr.addColorStop(1, "#b04f0a"), g.fillStyle = gr, g.fillRect(0, 0, W, Hh), e.fillStyle = "#000", e.fillRect(0, 0, W, Hh);
+  for (let i = 0; i <= 10; i++) {
+    const x = i / 10 * W, gg = g.createLinearGradient(x - 22, 0, x + 22, 0);
+    gg.addColorStop(0, "rgba(90,30,0,0)"), gg.addColorStop(0.5, "rgba(90,30,0,.55)"), gg.addColorStop(1, "rgba(90,30,0,0)"), g.fillStyle = gg, g.fillRect(x - 22, 0, 44, Hh);
+  }
+  let sd = 7;
+  const rnd = () => (sd = sd * 16807 % 2147483647) / 2147483647;
+  for (let i = 0; i < 260; i++) g.fillStyle = `rgba(${rnd() < 0.5 ? "255,180,80" : "120,50,0"},${0.06 + rnd() * 0.08})`, g.fillRect(rnd() * W, rnd() * Hh, 2 + rnd() * 6, 1 + rnd() * 3);
+  // top and bottom darker
+  const tb = g.createLinearGradient(0, 0, 0, Hh);
+  if (tb.addColorStop(0, "rgba(40,20,0,.55)"), tb.addColorStop(0.12, "rgba(40,20,0,0)"), tb.addColorStop(0.9, "rgba(40,20,0,0)"), tb.addColorStop(1, "rgba(40,20,0,.5)"), g.fillStyle = tb, g.fillRect(0, 0, W, Hh), face) {
+    // the carved face, centred on the front (u = 0.5): triangle eyes and nose, a jagged grin
+    const cx = W / 2, cy = Hh * 0.5, sh = (ctx, fill) => {
+      ctx.fillStyle = fill, ctx.beginPath();
+      for (const s of [-1, 1]) ctx.moveTo(cx + s * 64, cy - 52), ctx.lineTo(cx + s * 22, cy - 46), ctx.lineTo(cx + s * 46, cy - 12), ctx.closePath();
+      ctx.moveTo(cx - 12, cy - 4), ctx.lineTo(cx + 12, cy - 4), ctx.lineTo(cx, cy + 14), ctx.closePath(), ctx.fill(), ctx.beginPath(), ctx.moveTo(cx - 92, cy + 16);
+      const pts = [[-70, 40], [-56, 30], [-44, 44], [-26, 32], [-12, 48], [8, 34], [24, 48], [42, 32], [56, 44], [72, 30], [92, 16], [64, 60], [30, 70], [0, 72], [-30, 70], [-64, 60]];
+      for (const [x, y] of pts) ctx.lineTo(cx + x, cy + y);
+      ctx.closePath(), ctx.fill();
+    };
+    sh(g, "#1b0a02");
+    const glow = e.createRadialGradient(cx, cy + 10, 6, cx, cy + 10, 110);
+    glow.addColorStop(0, "#fff2a8"), glow.addColorStop(0.45, "#ffb52e"), glow.addColorStop(1, "#ff7a10"), sh(e, glow);
+  }
+  const mk = (c) => {
+    const t = new _u(c);
+    return t.colorSpace = Ii, t.anisotropy = 4, t;
+  };
+  return { map: mk(cv), emissiveMap: face ? mk(em) : null };
+}
+function vgPumpkinMats() {
+  if (vgOps.pmats) return vgOps.pmats;
+  const lit = vgPumpkinTex(!0), plain = vgPumpkinTex(!1), lantern = new Vt({ map: lit.map, emissiveMap: lit.emissiveMap, emissive: new ue(16755246), emissiveIntensity: 1.8, roughness: 0.58, metalness: 0 }), gourd = new Vt({ map: plain.map, roughness: 0.62, metalness: 0 }), stem = new Vt({ color: 4011546, roughness: 0.85 });
+  return lantern.name = "jackolantern", gourd.name = "pumpkin", vgOps.pmats = { lantern, gourd, stem };
+}
+// A flickering candle inside every jack-o'-lantern
+function vgFlicker() {
+  const t = performance.now() / 1e3, M = vgPumpkinMats().lantern;
+  M.emissiveIntensity = 2.2 + 0.45 * Math.sin(t * 9.1) * Math.sin(t * 5.3 + 1.2) + 0.15 * Math.sin(t * 23.7);
+}
+function vgPumpkinMesh(lit = !0, scale = 1) {
+  vgOps.pgeo || (vgOps.pgeo = vgPumpkinGeo(), vgOps.sgeo = new NB(0.016, 0.06, 2, 6));
+  const M = vgPumpkinMats(), g = new yt(), body = new Le(vgOps.pgeo, lit ? M.lantern : M.gourd), st = new Le(vgOps.sgeo, M.stem);
+  return st.position.set(5e-3, 0.135, -6e-3), st.rotation.set(0.25, 0, -0.2), body.castShadow = st.castShadow = !0, body.receiveShadow = !0, lit && (body.onBeforeRender = vgFlicker), g.add(body, st), g.scale.setScalar(scale), g.name = lit ? "jackolantern" : "pumpkin", g;
+}
+// Skeleton eyes: two small glowing points in the sockets
+function vgSkullEyes() {
+  vgOps.eyeMat || (vgOps.eyeMat = new ha({ color: 16742426 }), vgOps.eyeGeo = new Kn(7e-3, 8, 6));
+  const g = new yt();
+  for (const s of [1, -1]) {
+    const e = new Le(vgOps.eyeGeo, vgOps.eyeMat);
+    e.position.set(s * 0.031, 0.106, 0.096), g.add(e);
+  }
+  return g.name = "skull_eyes", g;
+}
+
+// ---------- put an operator on a soldier (netSoldier / vH body): other players, replays, the preview
+function vgOpApply(sol, id) {
+  const body = sol?.body || sol;
+  if (!body?.mesh) return;
+  id = VG_OPS.some((o) => o.id === id) ? id : "default";
+  if ((sol.op || "default") === id) return;
+  sol.op = id, sol.__opBase || (sol.__opBase = { geos: body.geometries, mat: body.mesh.material });
+  body.__opExtra?.removeFromParent(), body.__opExtra = null;
+  if (id === "default") {
+    body.geometries = sol.__opBase.geos, body.mesh.material = sol.__opBase.mat;
+  } else {
+    body.geometries = vgOpGeos(id), body.mesh.material = vgOpMaterial(id);
+    const head = body.bones[ZA.head];
+    if (id === "pumpkin") {
+      const p = vgPumpkinMesh(!0, 1.02);
+      p.position.set(0, 0.096, 0.012), head.add(p), body.__opExtra = p;
+    } else if (id === "skeleton") {
+      const e = vgSkullEyes();
+      head.add(e), body.__opExtra = e;
+    }
+  }
+  const lod = body.lod;
+  body.lod = -1, body.setLOD(Math.max(0, lod));
+}
+
+// ---------- first-person hands: bone-white for the Skeleton, zombie green for the Pumpkin Head
+function vgOpHands() {
+  const cam = pgCtx?.camera;
+  if (!cam) return;
+  const op = vgOpCurrent(), want = op === "skeleton" ? { glove: 15131080, sleeve: null } : op === "pumpkin" ? { glove: 6195251, sleeve: 4734002 } : {};
+  cam.traverse((o) => {
+    const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+    for (const m of ms) {
+      if (m.name !== "glove" && m.name !== "sleeve" || !m.color) continue;
+      m.userData.vgOrig ??= m.color.getHex();
+      const c = want[m.name];
+      m.color.setHex(c ?? m.userData.vgOrig);
+    }
+  });
+}
+typeof window < "u" && setInterval(() => {
+  try {
+    vgOpHands();
+  } catch {
+  }
+}, 2e3);
+typeof window < "u" && (window.__VG10__ = { ops: VG_OPS, current: () => vgOpCurrent(), set: (id) => vgOpSet(id), get deco() { return vgDeco; }, halloween: () => vgHalloweenOn(), camo: (id, role = "primary") => pgSetCamo(role, id), screen: () => vgOpsScreen() });
+/* ------------------------------------------------------------------ Release 1.0: Operators screen */
+// Main menu -> Operators: pick who you play as. A turning 3D preview of each operator; DLC operators show what pack
+// they come in, with "Buy on Steam" (or "Equip" once you own it).
+var vgOpsCss = `
+.vg-ops { position: fixed; inset: 0; z-index: 390; display: grid; grid-template-columns: minmax(280px, 400px) 1fr; background: radial-gradient(ellipse at 70% 40%, rgba(40,34,52,.55), rgba(5,6,9,.94) 70%); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #e9ece6; font-family: inherit; }
+.vg-ops .side { display: flex; flex-direction: column; padding: clamp(18px, 4vh, 42px) clamp(16px, 2.6vw, 34px); background: linear-gradient(90deg, rgba(8,10,12,.92), rgba(8,10,12,.6)); border-right: 1px solid rgba(236,240,234,.08); min-height: 0; }
+.vg-ops .kk { color: #f2c14e; font-size: 11px; font-weight: 800; letter-spacing: .3em; text-transform: uppercase; }
+.vg-ops h2 { margin: 6px 0 18px; font-size: clamp(28px, 3.4vw, 40px); letter-spacing: .16em; text-transform: uppercase; }
+.vg-ops .list { display: grid; gap: 8px; overflow-y: auto; min-height: 0; padding-right: 4px; }
+.vg-ops .op { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(236,240,234,.12); border-left: 3px solid transparent; color: #e9ece6; font-family: inherit; text-align: left; cursor: pointer; }
+.vg-ops .op:hover, .vg-ops .op:focus-visible { background: rgba(255,255,255,.07); outline: none; }
+.vg-ops .op.sel { border-left-color: #f2c14e; background: rgba(242,193,78,.1); }
+.vg-ops .op .ic { flex: none; width: 46px; height: 46px; display: grid; place-items: center; background: rgba(0,0,0,.35); border: 1px solid rgba(236,240,234,.12); }
+.vg-ops .op .ic svg { width: 34px; height: 34px; }
+.vg-ops .op b { display: block; font-size: 15px; letter-spacing: .12em; text-transform: uppercase; }
+.vg-ops .op small { display: block; margin-top: 3px; color: #a9b0a8; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; }
+.vg-ops .op small.dlc { color: #ff9a3c; }
+.vg-ops .op .st { margin-left: auto; flex: none; font-size: 10.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #8e968f; }
+.vg-ops .op .st.on { color: #f2c14e; }
+.vg-ops .op .st.lock { color: #ff9a3c; }
+.vg-ops .foot { margin-top: auto; padding-top: 16px; display: flex; gap: 14px; color: #8e968f; font-size: 12px; letter-spacing: .08em; }
+.vg-ops .foot kbd { display: inline-block; min-width: 18px; margin-right: 5px; padding: 2px 6px; border: 1px solid rgba(236,240,234,.35); font: 700 11px/1.2 inherit; font-family: inherit; text-align: center; }
+.vg-ops .stage { position: relative; min-width: 0; min-height: 0; }
+.vg-ops canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.vg-ops .info { position: absolute; left: clamp(16px, 3vw, 44px); right: clamp(16px, 3vw, 44px); bottom: clamp(16px, 4vh, 40px); display: flex; align-items: flex-end; gap: 24px; pointer-events: none; }
+.vg-ops .info .tx { flex: 1; min-width: 0; max-width: 560px; padding: 16px 20px; background: rgba(8,10,12,.72); border-left: 3px solid #f2c14e; }
+.vg-ops .info .tx b { display: block; font-size: clamp(22px, 2.4vw, 30px); letter-spacing: .14em; text-transform: uppercase; }
+.vg-ops .info .tx .tg { margin-top: 2px; color: #f2c14e; font-size: 11px; font-weight: 800; letter-spacing: .24em; text-transform: uppercase; }
+.vg-ops .info .tx p { margin: 8px 0 0; color: #c3c9c2; font-size: 14px; line-height: 1.5; }
+.vg-ops .info .tx ul { margin: 10px 0 0; padding: 0 0 0 18px; color: #c3c9c2; font-size: 13px; line-height: 1.6; }
+.vg-ops .act { flex: none; pointer-events: auto; display: grid; gap: 8px; min-width: 220px; }
+.vg-ops .act button { padding: 15px 18px; background: #f2c14e; border: 0; color: #111; font: 800 13px/1 inherit; font-family: inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
+.vg-ops .act button.buy { background: linear-gradient(90deg, #ff8a1f, #c2410c); color: #fff; }
+.vg-ops .act button:disabled { background: rgba(255,255,255,.1); color: #c3c9c2; cursor: default; }
+.vg-ops .act button.ghost { background: rgba(255,255,255,.06); color: #e9ece6; border: 1px solid rgba(236,240,234,.24); }
+.vg-ops .act .note { color: #a9b0a8; font-size: 12px; line-height: 1.4; text-align: right; }
+.vg-ops .back { position: absolute; right: clamp(14px, 2vw, 28px); top: clamp(14px, 2vh, 24px); padding: 10px 16px; background: rgba(8,10,12,.7); border: 1px solid rgba(236,240,234,.2); color: #e9ece6; font: 800 11px/1 inherit; font-family: inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
+@media (max-width: 760px) { .vg-ops { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } .vg-ops .side { border-right: 0; } .vg-ops .info { flex-direction: column; align-items: stretch; } .vg-ops .act .note { text-align: left; } }
+`;
+var VG_OP_ICON = {
+  default: '<svg viewBox="0 0 32 32"><path fill="#9aa48f" d="M16 4c-5 0-8.5 3.2-8.5 7.6V14h17v-2.4C24.5 7.2 21 4 16 4z"/><path fill="#c7a98a" d="M10 14h12v4.5c0 3.4-2.7 6-6 6s-6-2.6-6-6z"/><path fill="#55603f" d="M6 28c1.5-3.5 5.2-5 10-5s8.5 1.5 10 5z"/></svg>',
+  skeleton: '<svg viewBox="0 0 32 32"><path fill="#e8dcc0" d="M16 3c-6 0-10 4-10 9.5 0 3 1.3 5.4 3.3 6.8V23h13.4v-3.7c2-1.4 3.3-3.8 3.3-6.8C26 7 22 3 16 3z"/><circle cx="11.6" cy="12.6" r="2.6" fill="#140c08"/><circle cx="20.4" cy="12.6" r="2.6" fill="#140c08"/><circle cx="11.6" cy="12.6" r=".9" fill="#ff7a1a"/><circle cx="20.4" cy="12.6" r=".9" fill="#ff7a1a"/><path fill="#140c08" d="M16 15.4l-1.6 2.7h3.2zM11 21h10v1.2H11z"/><path fill="#e8dcc0" d="M11 23h10v3.5H11z"/><path stroke="#140c08" stroke-width=".8" d="M13 23v3.5M15 23v3.5M17 23v3.5M19 23v3.5"/></svg>',
+  pumpkin: '<svg viewBox="0 0 32 32"><path fill="#4b5a1e" d="M15 3.5l2.4.6-.8 3.5h-1.8z"/><ellipse cx="16" cy="17.5" rx="12.5" ry="10" fill="#e8790f"/><path fill="none" stroke="#a24a08" stroke-width="1.1" d="M16 7.7c-3 3-3 16.6 0 19.6M16 7.7c3 3 3 16.6 0 19.6M10 9.4c-2.6 3.5-2.6 13 0 16.4M22 9.4c2.6 3.5 2.6 13 0 16.4"/><path fill="#ffd25a" d="M9 14l4 .6-2.3 3.4zM23 14l-4 .6 2.3 3.4zM15 18h2l-1 2zM8.5 21l2.4 2 2-1.6 2 1.7 2.2-1.7 2 1.6 2.4-2-1.6 4.2-5 1.4-5-1.4z"/></svg>'
+};
+function vgOpsScreen() {
+  if (typeof document > "u" || document.querySelector(".vg-ops")) return;
+  if (!document.getElementById("vg-ops-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-ops-style", st.textContent = vgOpsCss, document.head.appendChild(st);
+  }
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  const root = document.createElement("div");
+  root.className = "vg-ops", root.setAttribute("role", "dialog"), root.setAttribute("aria-label", "Operators"), root.innerHTML = '<div class="side"><div class="kk">Vangaurd</div><h2>Operators</h2><div class="list" role="listbox"></div><div class="foot"><span><kbd>↑</kbd><kbd>↓</kbd>Choose</span><span><kbd>Enter</kbd>Equip</span><span><kbd>Esc</kbd>Back</span></div></div><div class="stage"><canvas aria-hidden="true"></canvas><button type="button" class="back">Back</button><div class="info"><div class="tx"><b></b><div class="tg"></div><p></p><ul hidden></ul></div><div class="act"><button type="button" data-go></button><button type="button" class="ghost" data-pack hidden></button><div class="note"></div></div></div></div>', document.body.appendChild(root);
+  const $ = (q) => root.querySelector(q), list = $(".list"), go = $("[data-go]"), note = $(".note");
+  let sel = Math.max(0, VG_OPS.findIndex((o) => o.id === vgOpCurrent())), prev = null;
+  try {
+    prev = vgOpPreview($("canvas"));
+  } catch (err) {
+    pgCtx?.reportError?.("hud", "operator-preview", err);
+  }
+  const render = () => {
+    const cur = vgOpCurrent();
+    list.innerHTML = VG_OPS.map((o, i) => {
+      const own = vgOpOwned(o.id), st = o.id === cur ? '<span class="st on">Equipped</span>' : own ? '<span class="st">Owned</span>' : '<span class="st lock">Locked</span>';
+      return `<button type="button" class="op${i === sel ? " sel" : ""}" role="option" aria-selected="${i === sel}" data-i="${i}"><span class="ic">${VG_OP_ICON[o.id] || ""}</span><span><b>${vgEsc(o.name)}</b><small class="${o.dlc ? "dlc" : ""}">${vgEsc(o.dlc ? `${VG_DLC[o.dlc]?.name || "DLC"} · DLC` : o.tag)}</small></span>${st}</button>`;
+    }).join(""), list.querySelectorAll("[data-i]").forEach((b2) => b2.addEventListener("click", () => {
+      sel = +b2.dataset.i, render();
+    }));
+    const o = VG_OPS[sel], own = vgOpOwned(o.id), pack = o.dlc ? VG_DLC[o.dlc] : null;
+    $(".tx b").textContent = o.name, $(".tx .tg").textContent = pack ? `${pack.name} · DLC` : o.tag, $(".tx p").textContent = o.desc;
+    const ul = $(".tx ul");
+    ul.hidden = !pack || own, ul.innerHTML = pack ? `<li>${pack.items.map(vgEsc).join("</li><li>")}</li>` : "";
+    go.classList.toggle("buy", !own), go.disabled = own && o.id === cur, go.textContent = !own ? `Buy on Steam · ${pack?.price || ""}` : o.id === cur ? "Equipped" : "Equip";
+    note.textContent = !own ? `Part of the ${pack?.name || "DLC"}: ${pack?.items?.length || 0} items. It unlocks here as soon as Steam says you own it.` : o.id === cur ? "Other players see you as this operator." : "";
+    prev?.show(o.id);
+  };
+  const act = () => {
+    const o = VG_OPS[sel];
+    vgOpOwned(o.id) ? vgOpSet(o.id) && (vgToast(`Operator: ${o.name}`), render()) : vgDlcBuy(o.dlc);
+  }, close = () => {
+    root.remove(), prev?.dispose(), window.removeEventListener("keydown", key, !0), window.removeEventListener("keyup", stop, !0);
+    const i = vgDlc.listeners.indexOf(render);
+    i >= 0 && vgDlc.listeners.splice(i, 1);
+  }, stop = (ev) => ev.stopImmediatePropagation(), key = (ev) => {
+    ev.stopImmediatePropagation();
+    const k = ev.code;
+    k === "Escape" || k === "Backspace" ? (ev.preventDefault(), close()) : k === "ArrowDown" || k === "KeyS" ? (ev.preventDefault(), sel = (sel + 1) % VG_OPS.length, render(), list.querySelector(".sel")?.focus()) : k === "ArrowUp" || k === "KeyW" ? (ev.preventDefault(), sel = (sel + VG_OPS.length - 1) % VG_OPS.length, render(), list.querySelector(".sel")?.focus()) : (k === "Enter" || k === "NumpadEnter" || k === "Space") && (ev.preventDefault(), act());
+  };
+  go.addEventListener("click", act), $(".back").addEventListener("click", close), window.addEventListener("keydown", key, !0), window.addEventListener("keyup", stop, !0), root.addEventListener("mousedown", (ev) => ev.stopPropagation()), vgDlc.listeners.push(render), render(), setTimeout(() => list.querySelector(".sel")?.focus(), 30), vgDlcCheckSteam();
+  return { close, root };
+}
+// The turning preview: its own small renderer with the operator in its rest pose.
+function vgOpPreview(canvas) {
+  const R = new dM({ canvas, antialias: !0, alpha: !0, powerPreference: "high-performance" });
+  R.outputColorSpace = Ii, R.toneMapping = 4, R.toneMappingExposure = 1.05, R.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)), R.shadowMap.enabled = !1;
+  const sc = new KB(), cam = new ca(36, 1, 0.05, 30), turn = new yt(), hemi = new Qb(14016766, 1709850, 1.3), key = new BC(16774630, 2.6), rim = new BC(12619007, 1.2), fill = new Eb(16777215, 0.25);
+  key.position.set(2.2, 3.2, 3.5), rim.position.set(-3, 2.4, -2.6), sc.add(hemi, key, rim, fill, turn), cam.position.set(0, 0.95, 4.6), cam.lookAt(0, 0.72, 0);
+  const floor = new Le(new Kn(1, 32, 8), new ha({ color: 0, transparent: !0, opacity: 0.38, depthWrite: !1 }));
+  floor.scale.set(0.62, 4e-3, 0.62), turn.add(floor);
+  const bodies = {};
+  let cur = null, raf = 0, ang = -0.5, last = performance.now(), alive = !0;
+  const make = (id) => {
+    if (bodies[id]) return bodies[id];
+    const base = vgPreviewBase();
+    if (!base) return null;
+    const body = new vH({ geometries: base.geos, material: base.mat, name: `op_preview_${id}` });
+    return body.mesh.frustumCulled = !1, vgOpApply(body, id), body.group.visible = !1, turn.add(body.group), body.applyPose(), bodies[id] = body;
+  };
+  let sw = 0, sh = 0;
+  const size = () => {
+    const w = canvas.clientWidth || 640, h = canvas.clientHeight || 480;
+    if (w === sw && h === sh) return;
+    sw = w, sh = h, R.setSize(w, h, !1), cam.aspect = w / Math.max(1, h), cam.fov = cam.aspect < 0.9 ? 44 : 36, cam.updateProjectionMatrix();
+  };
+  const frame = () => {
+    if (!alive) return;
+    raf = requestAnimationFrame(frame);
+    const now = performance.now(), dt = Math.min(0.1, (now - last) / 1e3);
+    last = now, ang += dt * 0.45, turn.rotation.y = ang, size();
+    try {
+      vgFlicker(), R.render(sc, cam);
+    } catch {
+    }
+  };
+  frame();
+  return {
+    show(id) {
+      cur && (cur.group.visible = !1);
+      const b2 = make(id) || make("default");
+      b2 && (b2.group.visible = !0), cur = b2;
+    },
+    dispose() {
+      alive = !1, cancelAnimationFrame(raf);
+      try {
+        R.dispose(), R.forceContextLoss?.();
+      } catch {
+      }
+    }
+  };
+}
+// The standard soldier for the preview (the AI system's geometry and a field-uniform material).
+function vgPreviewBase() {
+  if (vgOps.base) return vgOps.base;
+  let geos = null;
+  try {
+    const s = pgCtx?.services?.ai?.netSoldier?.("op-preview", 1);
+    s && (geos = s.body.geometries, s.dispose?.());
+  } catch {
+  }
+  geos || (geos = [0.5, 0.25, 0.25].map((q, i) => vgFinish(vgBodyGeo(i ? q : 1, dd[1]))));
+  const mat = KY({ tints: { [ce.FATIGUE]: 5065276, [ce.VEST]: 3881516, [ce.HELMET]: 3815984 } });
+  return vgOps.base = { geos, mat };
+}
+/* ------------------------------------------------------------------ Release 1.0: Halloween on the maps */
+// From 1 October to 10 November every map gets pumpkins, carved jack-o'-lanterns with candles inside, a few
+// tombstones and candles, and a light purple, slightly foggy sky. (localStorage "vangaurd.halloween" = "on" / "off"
+// forces it either way for testing.)
+function vgHalloweenOn() {
+  try {
+    const f = typeof localStorage < "u" ? localStorage.getItem("vangaurd.halloween") : null;
+    if (f === "on") return !0;
+    if (f === "off") return !1;
+  } catch {
+  }
+  const d = new Date(), m = d.getMonth() + 1, day = d.getDate();
+  return m === 10 || m === 11 && day <= 10;
+}
+// The dusk lighting with a purple sky and a little more haze (kept light so the maps stay readable).
+function vgHalloweenLight(base) {
+  const L = JSON.parse(JSON.stringify(base || {}));
+  return Object.assign(L, { sunElevation: 7, intensity: 0.46, exposure: 1.18, sunTint: [1, 0.66, 0.92], skyTint: [0.86, 0.66, 1.16], skySaturation: 1.15 }), L.haze = { ...L.haze || {}, density: 3.2e-3, hazeTint: [1.04, 0.8, 1.3], airTint: [0.78, 0.58, 1.38], ambientTint: [0.98, 0.88, 1.14], skyHaze: 0.36 }, L.dust = { ...L.dust || {}, density: 2.2e-3 }, L.bounceFill = [0.15, 0.1, 0.17], L;
+}
+var vgDeco = { group: null, map: null };
+function vgDecorate(A) {
+  const W = A?.services?.world;
+  if (vgDeco.group && (vgDeco.group.removeFromParent(), vgDeco.group.traverse((o) => o.isInstancedMesh && o.dispose?.()), vgDeco.group = null), vgDeco.map = null, !vgHalloweenOn() || !W?.bounds || !W.mapId) return;
+  let sd = 0;
+  for (const ch of String(W.mapId)) sd = sd * 31 + ch.charCodeAt(0) >>> 0;
+  const rnd = camoRng(sd || 1), pts = [];
+  for (const p of [...W.spawnPoints?.player || [], ...W.spawnPoints?.ai || []]) p?.position && pts.push(p.position);
+  for (const c of W.coverPoints || []) {
+    const p = c?.position || c;
+    p && Number.isFinite(p.x) && pts.push(p);
+  }
+  for (let i = pts.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [pts[i], pts[j]] = [pts[j], pts[i]];
+  }
+  const items = [], used = [], V3 = (x, y, z) => new b(x, y, z), up = V3(0, 1, 0), tmp = V3(0, 0, 0), dir = V3(0, 0, 0);
+  const free = (x, z, r) => used.every((u) => Math.hypot(u[0] - x, u[1] - z) > r);
+  for (const p of pts) {
+    if (items.length >= 46) break;
+    if (!free(p.x, p.z, 3.2)) continue;
+    const a = rnd() * Math.PI * 2, dist = 0.7 + rnd() * 0.9, x = p.x + Math.cos(a) * dist, z = p.z + Math.sin(a) * dist, y = W.groundHeight?.(x, z, p.y + 1.6);
+    if (!Number.isFinite(y) || Math.abs(y - p.y) > 1.2) continue;
+    // keep it out of walls: nothing between the spot and the point it came from
+    tmp.set(p.x, p.y + 0.4, p.z), dir.set(x - p.x, y - p.y, z - p.z);
+    const L = dir.length();
+    if (L > 0.01 && (dir.multiplyScalar(1 / L), W.raycast?.(tmp, dir, L + 0.35))) continue;
+    used.push([x, z]);
+    const k = rnd(), yaw = rnd() * Math.PI * 2;
+    if (k < 0.42) items.push({ t: "lit", x, y, z, s: 1.3 + rnd() * 0.6, yaw: Math.atan2(p.x - x, p.z - z) + (rnd() - 0.5) * 0.6 });
+    else if (k < 0.78) {
+      const n = 1 + Math.floor(rnd() * 3);
+      for (let i = 0; i < n; i++) {
+        const xx = x + (rnd() - 0.5) * 0.7, zz = z + (rnd() - 0.5) * 0.7, yy = W.groundHeight?.(xx, zz, y + 1);
+        Number.isFinite(yy) && Math.abs(yy - y) < 0.3 && items.push({ t: "gourd", x: xx, y: yy, z: zz, s: 0.8 + rnd() * 0.9, yaw: rnd() * 6.3 });
+      }
+    } else if (k < 0.9) items.push({ t: "stone", x, y, z, s: 0.85 + rnd() * 0.35, yaw: Math.atan2(p.x - x, p.z - z) + (rnd() - 0.5) * 0.4, tilt: (rnd() - 0.5) * 0.16 });
+    else for (let i = 0; i < 3 + Math.floor(rnd() * 3); i++) items.push({ t: "candle", x: x + (rnd() - 0.5) * 0.35, y, z: z + (rnd() - 0.5) * 0.35, s: 0.7 + rnd() * 0.6, yaw: 0 });
+  }
+  if (!items.length) return;
+  vgOps.pgeo || (vgOps.pgeo = vgPumpkinGeo(), vgOps.sgeo = new NB(0.016, 0.06, 2, 6));
+  const M = vgPumpkinMats(), g = new yt(), m4 = new ne(), q = new Oe(), sv = V3(1, 1, 1), pv = V3(0, 0, 0), eu = new ga();
+  vgDeco.stone || (vgDeco.stone = { box: new wi(0.46, 0.52, 0.1), top: new Kn(0.23, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat: new Vt({ color: 7105647, roughness: 0.93 }), wax: new Vt({ color: 15659995, roughness: 0.6 }), wick: new NB(0.024, 0.09, 2, 8), flame: new Kn(0.014, 8, 6), fmat: new ha({ color: 16764508 }) });
+  const D = vgDeco.stone, mk = (geo, mat, list, place, shadow = !0) => {
+    if (!list.length) return;
+    const im = new WB(geo, mat, list.length);
+    list.forEach((it, i) => (place(it), im.setMatrixAt(i, m4))), im.instanceMatrix.needsUpdate = !0, im.castShadow = shadow, im.receiveShadow = !0, im.frustumCulled = !1, g.add(im);
+    return im;
+  }, at = (it, dy, sx = it.s, sy = it.s, sz = it.s, tilt = 0) => (eu.set(tilt, it.yaw, 0, "YXZ"), q.setFromEuler(eu), m4.compose(pv.set(it.x, it.y + dy, it.z), q, sv.set(sx, sy, sz)));
+  const lit = items.filter((i) => i.t === "lit"), gourd = items.filter((i) => i.t === "gourd"), pumpkins = [...lit, ...gourd], stones = items.filter((i) => i.t === "stone"), candles = items.filter((i) => i.t === "candle");
+  const L = mk(vgOps.pgeo, M.lantern, lit, (it) => at(it, 0.105 * it.s));
+  L && (L.onBeforeRender = vgFlicker), mk(vgOps.pgeo, M.gourd, gourd, (it) => at(it, 0.105 * it.s)), mk(vgOps.sgeo, M.stem, pumpkins, (it) => at(it, 0.105 * it.s + 0.135 * it.s));
+  mk(D.box, D.mat, stones, (it) => at(it, 0.26 * it.s - 0.04, it.s, it.s, it.s, it.tilt)), mk(D.top, D.mat, stones, (it) => (at(it, 0.52 * it.s - 0.04, it.s, it.s, it.s * 0.43, it.tilt)));
+  mk(D.wick, D.wax, candles, (it) => at(it, 0.045 * it.s + 0.01, it.s, it.s, it.s), !1), mk(D.flame, D.fmat, candles, (it) => at(it, 0.125 * it.s + 0.02, it.s, it.s * 1.6, it.s), !1);
+  g.name = "halloween_decorations", A.scene.add(g), vgDeco.group = g, vgDeco.map = W.mapId, vgDeco.count = items.length;
+}
+/* ------------------------------------------------------------------ Release 1.0: DLC */
+// Packs sold on Steam as DLC. A player has a pack when the owner granted it in the console (the server sends the
+// list with the sign-in) or when their Steam account owns it (the desktop app asks Steam). The Steam App ID of each
+// pack comes from the server (set in the console), so it can be set after the game ships.
+var VG_DLC = {
+  halloween: { id: "halloween", name: "Halloween Pack", price: "$2.99", desc: "Two Halloween operators and an animated camo.", items: ["Skeleton · operator", "Pumpkin Head · operator", "Halloween · animated camo"], appId: 0 }
+};
+var vgDlc = { granted: [], steam: {}, apps: {}, listeners: [], polling: 0 };
+function vgDlcOwned(id) {
+  return !!id && !!VG_DLC[id] && (vgDlc.granted.includes(id) || !!vgDlc.steam[id]);
+}
+function vgDlcChanged() {
+  for (const f of vgDlc.listeners) try {
+    f();
+  } catch {
+  }
+}
+function vgDlcSet(list, note = !1) {
+  const before = new Set(vgDlc.granted);
+  vgDlc.granted = Array.isArray(list) ? list.filter((id) => VG_DLC[id]) : [];
+  note && vgDlc.granted.filter((id) => !before.has(id)).forEach((id) => vgToast(`${VG_DLC[id].name} unlocked`)), vgDlcChanged();
+}
+function vgDlcApps(m) {
+  if (!m || typeof m != "object") return;
+  let changed = !1;
+  for (const [k, v] of Object.entries(m)) VG_DLC[k] && (vgDlc.apps[k] !== (Math.floor(+v) || 0)) && (vgDlc.apps[k] = Math.floor(+v) || 0, changed = !0);
+  changed && vgDlcCheckSteam();
+}
+function vgDlcApp(id) {
+  return vgDlc.apps[id] || VG_DLC[id]?.appId || 0;
+}
+async function vgDlcCheckSteam() {
+  const desk = typeof window < "u" ? window.vangaurdDesktop : null;
+  if (!desk?.steamDlc) return;
+  let changed = !1;
+  for (const id of Object.keys(VG_DLC)) {
+    const app = vgDlcApp(id);
+    if (!app) continue;
+    try {
+      const r = await desk.steamDlc(app), own = !!r?.owned;
+      own !== !!vgDlc.steam[id] && (vgDlc.steam[id] = own, changed = !0, own && vgToast(`${VG_DLC[id].name} unlocked · thanks for buying it on Steam!`));
+    } catch {
+    }
+  }
+  changed && vgDlcChanged();
+}
+// "Buy on Steam": the Steam overlay (or the store page); then keep checking for a while so it unlocks by itself.
+function vgDlcBuy(id) {
+  const d = VG_DLC[id], app = vgDlcApp(id), desk = typeof window < "u" ? window.vangaurdDesktop : null;
+  if (!d) return;
+  if (!app) return vgToast(`The ${d.name} isn't on sale on Steam yet.`);
+  try {
+    desk?.steamStore ? desk.steamStore(app) : window.open(`https://store.steampowered.com/app/${app}/`, "_blank", "noopener");
+  } catch {
+  }
+  clearInterval(vgDlc.polling);
+  let n = 0;
+  vgDlc.polling = setInterval(() => {
+    (++n > 60 || vgDlcOwned(id)) && clearInterval(vgDlc.polling), vgDlcCheckSteam();
+  }, 5e3);
+}
+typeof window < "u" && (window.addEventListener("focus", () => vgDlcCheckSteam()), setTimeout(() => vgDlcCheckSteam(), 3e3), window.__VGDLC__ = { owned: vgDlcOwned, set: vgDlcSet, state: vgDlc, catalog: VG_DLC });
+
+/* ------------------------------------------------------------------ Release 1.0: unreleased versions */
+// A game build newer than the one the server says is published has not been released yet: only the owner may use
+// it. Everyone else gets "Version unavailable" at start-up (no offline play either). The server enforces it too.
+var VG_PUB_KEY = "vangaurd.pubBuild";
+function vgPubBuild(m) {
+  const b = Math.floor(Number(m?.minClientBuild) || 0);
+  if (b > 0) try {
+    localStorage.setItem(VG_PUB_KEY, String(b));
+  } catch {
+  }
+  return b;
+}
+function vgUnreleased(m) {
+  let b = m ? vgPubBuild(m) : 0;
+  if (!m) try {
+    b = Math.floor(Number(localStorage.getItem(VG_PUB_KEY)) || 0);
+  } catch {
+  }
+  return b > 0 && VGD.build > b;
+}
 /* ------------------------------------------------------------------ Beta 1.3: lobby announcement */
 // Set from the anti-cheat console (Server tab): a banner at the bottom of the lobby, e.g. a downtime warning.
 var vgAnn = { cur: null, el: null, closed: "", timer: 0 };
@@ -56217,7 +57037,7 @@ function cJ(A) {
   NA("div", "od-scrim", n), NA("div", "od-scan", n);
   const o = NA("div", "od-title", n);
   NA("div", "emb", o, R2), NA("div", "op", o).textContent = "Vangaurd", NA("h1", "", o, "<span>VANGAURD</span>"), NA("div", "sub", o).textContent = "Choose your deployment";
-  const r = NA("div", "od-menu od-entry-menu", n), c = [de(r, "Singleplayer", "Play immediately against AI", se), de(r, "Multiplayer", "Open the deployment menu, then queue for a match", Qe)], l = NA("div", "od-foot", n);
+  const r = NA("div", "od-menu od-entry-menu", n), c = [de(r, "Singleplayer", "Play immediately against AI", se), de(r, "Multiplayer", "Open the deployment menu, then queue for a match", Qe), de(r, "Operators", "Choose who you play as · new Halloween operators", () => vgOpsScreen())], l = NA("div", "od-foot", n);
   l.innerHTML = `<span class="hint"><span class="od-key">↑↓</span>Navigate</span><span class="hint"><span class="od-key">ENTER</span>Select</span><span class="sp"></span><span class="vg-who"></span><span class="ver">${VGD.text}</span>`;
   const g = s("loading", "od-loading");
   NA("div", "od-scrim dark", g);
@@ -56285,6 +57105,7 @@ function cJ(A) {
     de(d, "Singleplayer", "Start immediately against AI", () => {
       F.sessionType === "multiplayer" ? ye() : Pi();
     }),
+    de(d, "Operators", "Choose who you play as · new Halloween operators", () => vgOpsScreen()),
     de(d, "Loadouts", "Build, name and equip your five loadouts", () => {
       F.loFrom = "main", loOpen();
     }),
@@ -56295,10 +57116,10 @@ function cJ(A) {
     de(d, "Back", "Return to deployment selection", () => tt("entry"))
   ], vgDroneItem = (() => {
     const b2 = de(d, "Drone mode", "Developers · fly over a multiplayer map", () => vgDronePick());
-    return b2.classList.add("vg-dev-item"), b2.style.display = "none", d.insertBefore(b2, E[E.length - 1]), b2;
+    return b2.classList.add("vg-dev-item"), b2.style.display = "none", d.insertBefore(b2, E[E.length - 1]), E.splice(E.length - 1, 0, b2), b2;
   })(), vgReplaysItem = (() => {
     const b2 = de(d, "Replays", "Developers · watch your recorded replays", () => vgReplayPick());
-    return b2.classList.add("vg-dev-item"), b2.style.display = "none", d.insertBefore(b2, E[E.length - 1]), b2;
+    return b2.classList.add("vg-dev-item"), b2.style.display = "none", d.insertBefore(b2, E[E.length - 1]), E.splice(E.length - 1, 0, b2), b2;
   })(), C = NA("div", "od-card", u), y = NA("div", "od-card-head", C), w = NA("div", "k", y), m = NA("div", "t", C), D = NA("div", "p", C), M = NA("div", "map", C), x = NA("canvas", "", M), S = NA("div", "stats", C), U = NA("div", "od-mp-status", u);
   U.setAttribute("role", "status"), U.setAttribute("aria-live", "polite");
   const G = NA("div", "", U), P = NA("button", "od-btn", U);
@@ -56415,11 +57236,12 @@ function cJ(A) {
     const k = F.loEdit ?? pgActive(), L = pgSlots()[k], D = lwData(), list = role === "secondary" ? D.secondary : D.primary, gun = list.find((w) => w.id === L[role]) || list[0];
     F.camoPick = { role, k, gun: gun.id, gunName: gun.name, sel: pgCamo(role, k) };
     const lv = pgLevel().level, cur = F.camoPick.sel, n = camoDefs.filter((c) => c.id !== "none" && camoUnlocked(c, lv)).length;
-    camoEl.innerHTML = `<div class="od-camo-box"><div class="od-camo-head"><div><span class="k">${role === "secondary" ? "Secondary" : "Primary"} camo</span><h3>${Nn(gun.name)}</h3></div><span class="cnt">${n} / ${camoDefs.length - 1} unlocked · Level ${lv}</span><button type="button" class="od-btn" data-camo-close>Close</button></div><div class="od-camo-body"><div class="od-camo-left"><div class="od-camo-stage"><span class="od-camo-hint">Drag to rotate</span><span class="od-camo-live"></span></div><div class="od-camo-info"></div><div class="od-camo-actions"><button type="button" class="od-btn pri" data-camo-apply>Apply camo</button><button type="button" class="od-btn" data-camo-close>Cancel</button></div></div><div class="od-camo-grid">${camoDefs.map((c) => `<button type="button" class="od-camo-tile${c.id === cur ? " eq sel" : ""}${camoUnlocked(c, lv) ? "" : " locked"}${c.ch ? " ch" : ""}" data-camo="${c.id}"><span class="sw${c.live ? " live" : ""}"></span><span class="nm">${Nn(c.name)}</span>${c.id === cur ? "<em>Equipped</em>" : camoUnlocked(c, lv) ? c.ch ? "<em>Challenge</em>" : "" : c.ch ? `<em>${camoChallenge(c).parts.map((x) => Math.floor(x.have / x.need * 100)).reduce((a, b) => Math.min(a, b), 100)}%</em>` : `<em>LV ${c.lv}</em>`}</button>`).join("")}</div></div></div>`, camoEl.classList.add("on");
+    camoEl.innerHTML = `<div class="od-camo-box"><div class="od-camo-head"><div><span class="k">${role === "secondary" ? "Secondary" : "Primary"} camo</span><h3>${Nn(gun.name)}</h3></div><span class="cnt">${n} / ${camoDefs.length - 1} unlocked · Level ${lv}</span><button type="button" class="od-btn" data-camo-close>Close</button></div><div class="od-camo-body"><div class="od-camo-left"><div class="od-camo-stage"><span class="od-camo-hint">Drag to rotate</span><span class="od-camo-live"></span></div><div class="od-camo-info"></div><div class="od-camo-actions"><button type="button" class="od-btn pri" data-camo-apply>Apply camo</button><button type="button" class="od-btn" data-camo-close>Cancel</button></div></div><div class="od-camo-grid">${camoDefs.map((c) => `<button type="button" class="od-camo-tile${c.id === cur ? " eq sel" : ""}${camoUnlocked(c, lv) ? "" : " locked"}${c.ch ? " ch" : ""}${c.dlc ? " dlc" : ""}" data-camo="${c.id}"><span class="sw${c.live ? " live" : ""}"></span><span class="nm">${Nn(c.name)}</span>${c.id === cur ? "<em>Equipped</em>" : c.dlc ? "<em>DLC</em>" : camoUnlocked(c, lv) ? c.ch ? "<em>Challenge</em>" : "" : c.ch ? `<em>${camoChallenge(c).parts.map((x) => Math.floor(x.have / x.need * 100)).reduce((a, b) => Math.min(a, b), 100)}%</em>` : `<em>LV ${c.lv}</em>`}</button>`).join("")}</div></div></div>`, camoEl.classList.add("on");
     const V = camoViewer(), stage = camoEl.querySelector(".od-camo-stage");
     V.ok ? (V.yaw = 0, stage.prepend(V.canvas), camoViewStart(V)) : stage.insertAdjacentHTML("afterbegin", '<div class="od-camo-noview">3D preview unavailable on this device</div>');
     camoEl.querySelectorAll("[data-camo-close]").forEach((b2) => b2.addEventListener("click", camoClose)), camoEl.querySelector("[data-camo-apply]").addEventListener("click", () => {
-      const P = F.camoPick;
+      const P = F.camoPick, cd = P && camoDef(P.sel);
+      if (cd?.dlc && !camoUnlocked(cd)) return vgDlcBuy(cd.dlc);
       P && pgSetCamo(P.role, P.sel, P.k) && (loEmit(P.k), camoClose(), loRender());
     }), camoEl.querySelectorAll("[data-camo]").forEach((b2) => b2.addEventListener("click", () => camoSelect(b2.dataset.camo))), camoSelect(cur);
     const tiles = [...camoEl.querySelectorAll("[data-camo]")], fill = () => {
@@ -56435,9 +57257,9 @@ function cJ(A) {
     const d = camoDef(id), lv = pgLevel().level, locked = !camoUnlocked(d, lv), applied = pgCamo(P.role, P.k) === d.id, chl = camoChallenge(d);
     P.sel = d.id, camoEl.querySelectorAll("[data-camo]").forEach((b2) => b2.classList.toggle("sel", b2.dataset.camo === d.id));
     const info = camoEl.querySelector(".od-camo-info");
-    info && (info.innerHTML = `<div class="od-camo-tex${d.live ? " live" : ""}"${d.id === "none" ? "" : ` style="background-image:url(${camoSwatch(d.id, 192)})"`}></div><div><b>${Nn(d.name)}</b><span class="lv${locked ? " lock" : ""}">${d.id === "none" ? "Always available" : chl ? locked ? `Challenge · ${chl.text}` : "Challenge complete" : locked ? `Locked · unlocks at level ${d.lv} (you are level ${lv})` : `Unlocked at level ${d.lv}`}</span>${chl ? `<span class="od-camo-ch">${chl.parts.map((x) => `<i><b style="transform:scaleX(${(x.have / x.need).toFixed(3)})"></b></i><small>${x.have} / ${x.need} ${x.k}</small>`).join("")}</span>` : ""}<p>${Nn(d.desc || "")}</p></div>`);
+    info && (info.innerHTML = `<div class="od-camo-tex${d.live ? " live" : ""}"${d.id === "none" ? "" : ` style="background-image:url(${camoSwatch(d.id, 192)})"`}></div><div><b>${Nn(d.name)}</b><span class="lv${locked ? " lock" : ""}">${d.id === "none" ? "Always available" : d.dlc ? `${Nn(VG_DLC[d.dlc]?.name || "DLC")} · DLC${locked ? " · not owned" : ""}` : chl ? locked ? `Challenge · ${chl.text}` : "Challenge complete" : locked ? `Locked · unlocks at level ${d.lv} (you are level ${lv})` : `Unlocked at level ${d.lv}`}</span>${chl ? `<span class="od-camo-ch">${chl.parts.map((x) => `<i><b style="transform:scaleX(${(x.have / x.need).toFixed(3)})"></b></i><small>${x.have} / ${x.need} ${x.k}</small>`).join("")}</span>` : ""}<p>${Nn(d.desc || "")}</p></div>`);
     const ap = camoEl.querySelector("[data-camo-apply]");
-    ap && (ap.disabled = locked || applied, ap.textContent = applied ? "Equipped" : locked ? chl ? "Complete the challenge" : `Reach level ${d.lv}` : "Apply camo");
+    ap && (ap.disabled = locked && !d.dlc || applied, ap.textContent = applied ? "Equipped" : locked ? d.dlc ? `Buy on Steam · ${VG_DLC[d.dlc]?.price || ""}` : chl ? "Complete the challenge" : `Reach level ${d.lv}` : "Apply camo");
     const lv2 = camoEl.querySelector(".od-camo-live");
     lv2 && (lv2.textContent = d.live ? "Animated" : "");
     try {
@@ -56693,7 +57515,7 @@ function cJ(A) {
   function specUI() {
     spec.el?.remove();
     const d = spec.el = document.createElement("div");
-    d.className = "vg-spec", d.innerHTML = spec.drone ? '<div class="top"><span class="k">Drone · following</span><b></b><small></small></div><div class="stats"></div><div class="keys"><span><i>←</i><i>→</i> Switch player</span><span><i>V</i> First person / chase</span><span><i>F10</i> Fly the drone</span><span><i>Esc</i> Leave</span><button type="button" data-x>Leave drone mode</button></div>' : '<div class="top"><span class="k">Spectating · moderator</span><b></b><small></small></div><div class="stats"></div><div class="keys"><span><i>←</i><i>→</i> Switch player</span><span><i>V</i> First person / chase</span><span><i>Esc</i> Stop spectating</span><button type="button" data-x>Stop spectating</button></div>', document.body.appendChild(d), d.querySelector("[data-x]").addEventListener("click", () => specStop(""));
+    d.className = "vg-spec", d.innerHTML = spec.drone ? '<div class="top"><span class="k">Drone · following</span><b></b><small></small></div><div class="stats"></div><div class="keys kk"><span><i>←</i><i>→</i> Switch player</span><span><i>V</i> First person / chase</span><span><i>F10</i> Fly the drone</span><span><i>Esc</i> Leave</span><button type="button" data-x>Leave drone mode</button></div><div class="keys kp"><span><i>LB</i><i>RB</i> Switch player</span><span><i>X</i> First person / chase</span><span><i>Y</i> Fly the drone</span><span><i>B</i> Leave</span></div>' : '<div class="top"><span class="k">Spectating · moderator</span><b></b><small></small></div><div class="stats"></div><div class="keys"><span><i>←</i><i>→</i> Switch player</span><span><i>V</i> First person / chase</span><span><i>Esc</i> Stop spectating</span><button type="button" data-x>Stop spectating</button></div>', document.body.appendChild(d), d.querySelector("[data-x]").addEventListener("click", () => specStop(""));
     if (!document.getElementById("vg-spec-style")) {
       const st = document.createElement("style");
       st.id = "vg-spec-style", st.textContent = vgSpecCss, document.head.appendChild(st);
@@ -56723,7 +57545,7 @@ function cJ(A) {
     }
     cam.layers.isEnabled(e.layers.VIEWMODEL) && (cam.layers.disable(e.layers.VIEWMODEL), F.vmDisabled = !0);
     if (spec.uiT -= dt, spec.uiT > 0 || !spec.el) return;
-    spec.uiT = 0.25;
+    spec.uiT = 0.25, spec.el.classList.toggle("pad", !!e.flags?.padActive);
     const k = String(spec.target ?? ""), x = spec.stats.get(k) || {}, nm = spec.names.get(k) || spec.targetName || "—", acc = x.shots ? Math.round(x.seenKills / x.shots * 100) : null;
     spec.el.querySelector(".top b").textContent = nm, spec.el.querySelector(".top small").textContent = P ? `${P.alive ? spec.third ? "Chase camera" : "First person" : "Dead · respawning"} · ${specIds().length} player${specIds().length === 1 ? "" : "s"}${spec.ended ? " · match over" : ""}` : "Waiting for players…", spec.el.querySelector(".stats").innerHTML = `<div><span>Kills</span><b>${x.kills | 0}</b></div><div><span>Deaths</span><b>${x.deaths | 0}</b></div><div><span>Score</span><b>${x.score | 0}</b></div><div title="Since you started watching"><span>Seen kills</span><b>${x.seenKills | 0}</b></div><div title="Headshot kills since you started watching"><span>Headshots</span><b>${x.hs | 0}${x.seenKills ? ` · ${Math.round(x.hs / x.seenKills * 100)}%` : ""}</b></div><div title="Shots heard since you started watching"><span>Shots</span><b>${x.shots | 0}</b></div>`;
   }
@@ -57068,7 +57890,7 @@ function cJ(A) {
           });
           const ot = it.roster.map((ht) => ht?.name || "Player").join(", ");
           G.textContent = `Match ready · ${it.roster.length} players: ${ot}. Deploying into the match…`, he(`Match found · deploying into ${it.mode === "kc" ? "Kill Confirmed" : "Team Deathmatch"}`, 5), JA();
-        } else it.type === "match_left" ? (F.multiplayerMatch = null, e.events.emit("network:clear"), G.textContent = "Left matchmaking room.", JA()) : it.type === "player_left" ? G.textContent = "A player left the reserved room." : it.type === "error" && (it.code === "login_required" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgAuthShow("Sign in to play online.")), it.code === "outdated" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgCheckBuild(it)), (it.code === "maintenance" || it.code === "steam_required") && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgBootFail(it.code, it.message)), G.textContent = it.message || "Matchmaking service error.", it.code !== "outdated" && he(G.textContent, 8));
+        } else it.type === "match_left" ? (F.multiplayerMatch = null, e.events.emit("network:clear"), G.textContent = "Left matchmaking room.", JA()) : it.type === "player_left" ? G.textContent = "A player left the reserved room." : it.type === "error" && (it.code === "login_required" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgAuthShow("Sign in to play online.")), it.code === "outdated" && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgCheckBuild(it)), (it.code === "maintenance" || it.code === "steam_required" || it.code === "unavailable") && (F.waitingForPlayers = !1, e.events.emit("gamemode:online-queue", { active: !1 }), vgBootFail(it.code, it.message)), G.textContent = it.message || "Matchmaking service error.", it.code !== "outdated" && he(G.textContent, 8));
       }), Se.addEventListener("error", () => {
         clearTimeout(lt);
         const $e = `Could not connect to ${VA}. Check the matchmaking service deployment and Railway domain target port.`;
@@ -57186,12 +58008,12 @@ function cJ(A) {
   function de(yA, VA, le, ge, Se) {
     const Ue = NA("button", "od-item", yA);
     return Ue.innerHTML = `${Nn(VA)}<span class="d">${Nn(le)}</span>${Se ? `<span class="tag">${Se}</span>` : ""}`, Ue.addEventListener("click", ge), Ue.addEventListener("mouseenter", () => {
-      const lt = (yA === d ? E : yA === r ? c : qA).indexOf(Ue);
+      const lt = (yA === d ? Ne("main") : yA === r ? c : qA).indexOf(Ue);
       lt >= 0 && ke(yA === d ? "main" : yA === r ? "entry" : "pause", lt);
     }), Ue;
   }
   function Ne(yA) {
-    return yA === "entry" ? c : yA === "main" ? E : qA;
+    return yA === "entry" ? c : yA === "main" ? E.filter((x) => x.style.display !== "none") : qA;
   }
   function ke(yA, VA) {
     const le = Ne(yA);
@@ -57446,6 +58268,8 @@ function cJ(A) {
   }
   const th = (yA) => {
     if (F.screen === "none" || e.flags.shotMode || vgAuth.open || vgQuitOpen || vgFr?.open || vgUpd.open || vgNewsUI.open || vgRdy.open || vgSpec.offerOpen) return;
+    // a dialog or the Operators screen over the menu has the keys (it may have registered after this handler)
+    if (document.querySelector(".vg-rep, .vg-ops")) return;
     const tgt = yA.target;
     if (tgt && tgt !== document.body && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable) && yA.code !== "Escape") return;
     if (F.screen === "main" && Y.classList.contains("on")) {
@@ -59187,7 +60011,8 @@ function QF({ env: A = !1 } = {}) {
       facadeRadiance: { value: new ue(0.1, 0.1, 0.1) },
       envParams: { value: new We(0.25, 0.6, A ? 0 : 1, 1) },
       envCap: { value: 0 },
-      aureole: { value: new We(0, 0, A ? 0 : 24, 0.03) }
+      aureole: { value: new We(0, 0, A ? 0 : 24, 0.03) },
+      vgSkyTint: { value: new ue(1, 1, 1) }
     },
     side: 1,
     depthWrite: !1,
@@ -59217,6 +60042,7 @@ ${jd}
 uniform sampler2D skyTex;
 uniform vec4 skyMap;      // x: u offset, y: warp A (rad), z: top elevation (rad), w: elevation range (rad)
 uniform vec4 skyParams;   // x: radiance scale, y: sun disc radiance, z: env mode, w: sun angular radius (rad)
+uniform vec3 vgSkyTint;   // Release 1.0: tints the sky (the purple Halloween sky)
 uniform vec3 sunColor;
 uniform vec3 groundRadiance;
 uniform vec3 facadeRadiance;
@@ -59291,6 +60117,7 @@ void main() {
 			}
 		}
 	}
+	col *= vgSkyTint;
 	gl_FragColor = vec4( col, 1.0 );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
@@ -59560,7 +60387,7 @@ void main() {
       },
       smoke: 1
     }
-  }, Fp = Object.keys(Id);
+  }, Fp = Object.keys(Id), Id.halloween = vgHalloweenLight(Id.dusk);
 }));
 function yJ(A) {
   return () => {
@@ -60417,7 +61244,7 @@ function kJ(A) {
     const BA = Math.atan2(y.z, y.x), Z = $.sun.u - BA / (2 * Math.PI), nA = $.sun.elevationDeg * xl, j = Math.abs(Math.sin(2 * K)) > 1e-3 ? (K - nA) / Math.sin(2 * K) : 0;
     for (const WA of [n, o]) {
       const ie = WA.uniforms;
-      ie.skyTex.value = V.tex, ie.skyMap.value.set(Z, gi.clamp(j, -0.3, 0.3), $.elevTop * xl, ($.elevTop - $.elevBottom) * xl), ie.skyParams.value.x = tA * (WA === n ? W.skyBoost ?? 1 : 1), ie.sunColor.value.copy(w), ie.envParams.value.w = WA === n ? W.skySaturation ?? 1 : W.envSaturation ?? 1;
+      ie.skyTex.value = V.tex, ie.skyMap.value.set(Z, gi.clamp(j, -0.3, 0.3), $.elevTop * xl, ($.elevTop - $.elevBottom) * xl), ie.skyParams.value.x = tA * (WA === n ? W.skyBoost ?? 1 : 1), ie.sunColor.value.copy(w), ie.envParams.value.w = WA === n ? W.skySaturation ?? 1 : W.envSaturation ?? 1, ie.vgSkyTint?.value.fromArray(W.skyTint || [1, 1, 1]);
     }
     n.uniforms.skyParams.value.y = W.sunDisc * tA;
     const aA = W.aureole || {
@@ -60596,9 +61423,9 @@ function kJ(A) {
         const $ = A.services.world?.ready || Promise.resolve();
         A.assets.track(Promise.resolve($).then(() => _.rebakeSkyVisibility()), "lighting:skyvis");
       }), P(), t.shadowMap.autoUpdate = !1, t.shadowMap.needsUpdate = !0;
-      const V = A.settings.get("lighting.preset", "golden_hour");
+      const V = vgHalloweenOn() ? "halloween" : A.settings.get("lighting.preset", "golden_hour");
       if (_.ready = G(Id[V] ? V : "golden_hour"), A.services.provide("lighting", _), await _.ready, A.events.on("settings:changed", ({ path: $, value: tA }) => {
-        $ === "lighting.preset" ? G(tA) : $.startsWith("graphics.quality") || $.startsWith("graphics.shadow") ? P() : $ === "lighting.volumetrics" && f ? S(d, f) : $ === "graphics.exposure" && (D.baseExposure = tA * D.exposure, t.toneMappingExposure = D.baseExposure * D.adapt);
+        $ === "lighting.preset" ? G(vgHalloweenOn() ? "halloween" : tA) : $.startsWith("graphics.quality") || $.startsWith("graphics.shadow") ? P() : $ === "lighting.volumetrics" && f ? S(d, f) : $ === "graphics.exposure" && (D.baseExposure = tA * D.exposure, t.toneMappingExposure = D.baseExposure * D.adapt);
       }), A.debug.gui) {
         const $ = A.debug.gui.addFolder("lighting"), tA = {
           preset: Q,
@@ -63269,7 +64096,8 @@ function jJ(A) {
       stance: typeof M.stance == "string" ? M.stance : null,
       sprinting: !!M.sprinting,
       sliding: !!M.sliding,
-      quiet: !!M.quiet
+      quiet: !!M.quiet,
+      op: typeof M.op == "string" ? M.op : void 0
     };
   }
   function c(M) {
@@ -63534,6 +64362,14 @@ function jJ(A) {
       team: M.team ?? M.state?.team
     }));
     const G = U.alive;
+    if (S.op !== void 0 && S.op !== U.op) {
+      U.op = S.op;
+      try {
+        U.soldier && vgOpApply(U.soldier, S.op);
+      } catch (err) {
+        A.reportError?.("network", "operator", err);
+      }
+    }
     U.target.set(S.x, S.y, S.z), S.yaw !== null && (U.targetYaw = S.yaw), S.pitch !== null && (U.targetPitch = S.pitch), S.stance && (U.crouch = S.stance === "crouch" || S.stance === "prone" || S.stance === "slide" ? 1 : 0, U.prone = S.stance === "prone", U.slide = S.stance === "slide" || !!S.sliding), U.sprint = S.sprinting, U.soldier && (U.soldier.quiet = !!S.quiet), U.alive = S.alive, setAlive(U, U.alive), U.lastSeen = performance.now(), o++, r = performance.now(), U.alive && (revive(U), (!G || posOf(U).distanceToSquared(U.target) > 100) && (U.yaw = U.targetYaw, U.pitch = U.targetPitch, snap(U))), U.hasState = !0, U.stance = S.stance || U.stance || "stand", histPush(U.hist ||= [], S.x, S.y, S.z, U.targetYaw, U.targetPitch, U.stance, U.alive);
   }
   // Beta 1.2 killcams: a few seconds of where each player was and where they looked (camera frames use the AI
@@ -63692,6 +64528,7 @@ function jJ(A) {
         sprinting: !!M.sprinting,
         weaponId: A.services.weapons.state?.id,
         variant: A.services.weapons.state?.variant,
+        op: vgOpCurrent(),
         alive: M.alive !== !1,
         quiet: perkHas("deadsilence")
       }
@@ -63748,7 +64585,7 @@ function jJ(A) {
     // a remote player's smoothed pose and body (spectator camera, killcam hiding)
     pose(id) {
       const U = i.get(sid(id));
-      return U ? { id: U.id, name: U.name, team: U.team, x: posOf(U).x, y: posOf(U).y, z: posOf(U).z, yaw: U.yaw, pitch: U.pitch, stance: U.stance || (U.crouch ? "crouch" : "stand"), alive: U.alive && !U.soldier?.dead, group: U.group, hasState: U.hasState } : null;
+      return U ? { id: U.id, name: U.name, team: U.team, x: posOf(U).x, y: posOf(U).y, z: posOf(U).z, yaw: U.yaw, pitch: U.pitch, stance: U.stance || (U.crouch ? "crouch" : "stand"), alive: U.alive && !U.soldier?.dead, group: U.group, hasState: U.hasState, op: U.op || "default" } : null;
     },
     ids() {
       return [...i.values()].map((U) => U.id);
@@ -63767,6 +64604,8 @@ function jJ(A) {
           alive: M.alive,
           visible: M.group.visible,
           soldier: !!M.soldier,
+          op: M.soldier?.op || "default",
+          opExtra: !!M.soldier?.body?.__opExtra,
           position: posOf(M).toArray(),
           hasState: M.hasState
         })),
@@ -88331,7 +89170,7 @@ function _K(A) {
       A.reportError("world", "minimap", y);
     }
     try {
-      const L = A.services.lighting, want = wmMap(E).light || A.settings.get("lighting.preset", "golden_hour");
+      const L = A.services.lighting, want = vgHalloweenOn() ? "halloween" : wmMap(E).light || A.settings.get("lighting.preset", "golden_hour");
       L?.setPreset && L.preset !== want && await L.setPreset(want);
     } catch (y) {
       A.reportError("world", "map-light", y);
