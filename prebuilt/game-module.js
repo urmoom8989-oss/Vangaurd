@@ -51696,6 +51696,17 @@ function padSystem(A, H) {
       return [];
     }
   }
+  // Release 1.0: the controller in use is the one that was last pressed or moved. Some PCs list other devices
+  // as gamepads too (keyboards, headsets, wheels, Steam's virtual pad), so the first one is often not it.
+  function pickPad(list) {
+    st.snap ||= new Map();
+    for (const g of list) {
+      const bits = g.buttons.map((x) => x && (x.pressed || (x.value || 0) > 0.5) ? 1 : 0).join(""), ax = g.axes.slice(0, 4).map((a) => +a || 0), was = st.snap.get(g.index);
+      if (was && (bits !== was.bits && bits.includes("1") || ax.some((a, i) => Math.abs(a - (was.ax[i] || 0)) > 0.25 && Math.abs(a) > 0.3))) st.padIndex = g.index;
+      st.snap.set(g.index, { bits, ax });
+    }
+    return list.find((g) => g.index === st.padIndex) || list.find((g) => g.mapping === "standard") || list[0];
+  }
   function dz(x, z) {
     const a = Math.abs(x || 0);
     return a <= z ? 0 : Math.sign(x) * Math.min(1, (a - z) / (1 - z));
@@ -51795,7 +51806,7 @@ function padSystem(A, H) {
       st.active && deactivate();
       return;
     }
-    const g = pads()[0], ax = [...g.axes], bv = g.buttons.map((x) => x ? x.value ?? (x.pressed ? 1 : 0) : 0), b = g.buttons.map((x, i) => !!x && (x.pressed || (i === 6 || i === 7 ? (x.value || 0) > 0.35 : !1))), zL = Number(S("deadzoneL", 0.12)), zR = Number(S("deadzoneR", 0.1));
+    const g = pickPad(pads()), ax = [...g.axes], bv = g.buttons.map((x) => x ? x.value ?? (x.pressed ? 1 : 0) : 0), b = g.buttons.map((x, i) => !!x && (x.pressed || (i === 6 || i === 7 ? (x.value || 0) > 0.35 : !1))), zL = Number(S("deadzoneL", 0.12)), zR = Number(S("deadzoneR", 0.1));
     if (!st.active) {
       if (!(b.some(Boolean) || Math.abs(ax[0] || 0) > Math.max(0.3, zL) || Math.abs(ax[1] || 0) > Math.max(0.3, zL) || Math.abs(ax[2] || 0) > Math.max(0.3, zR) || Math.abs(ax[3] || 0) > Math.max(0.3, zR))) {
         st.prev = b;
@@ -51876,6 +51887,11 @@ function padSystem(A, H) {
     }, !0), window.addEventListener("mousedown", (ev) => {
       st.active && ev.isTrusted && (deactivate(), H.inPlay() && !document.pointerLockElement && inp.lock?.());
     }, !0), pads().length && start();
+    // Release 1.0: also look for controllers every second. The "connected" event fires only once, and is missed
+    // when a button was pressed while the game was still loading.
+    setInterval(() => {
+      st.on || !pads().length || start();
+    }, 1e3), window.__VGPAD__ = () => ({ pads: pads().map((g) => ({ index: g.index, id: g.id, mapping: g.mapping })), using: st.padIndex ?? null, on: !!st.on, active: !!st.active });
   }
   // Read the controller right after each frame's input is cleared, so a button press counts for the whole next
   // frame, the same as a key press. (Reading it in the middle of a frame lost "just pressed" buttons: jump,
