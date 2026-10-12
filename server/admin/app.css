@@ -197,3 +197,10 @@ form.inline input[type=number] { width: 90px; }
 .ops > .pane > .btn { margin: 0 14px 12px; }
 .tag.hot { background: rgba(242,193,78,.16); color: #f2c14e; border-color: rgba(242,193,78,.4); }
 @media (max-width: 520px) { .ops { grid-template-columns: 1fr; } }
+/* Release 1.0: early access */
+select.input option { background: #14181b; color: #e9ece6; }
+#earlyf { flex-wrap: wrap; }
+#earlyf select { flex: 1 1 260px; width: auto; min-width: 0; }
+#earlyf input { flex: 1 1 160px; width: auto; min-width: 0; }
+.early-dl { padding: 0 14px 10px; margin: 0; }
+.early-dl a { color: var(--accent); }

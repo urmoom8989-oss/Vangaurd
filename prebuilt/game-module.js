@@ -53953,11 +53953,12 @@ function vgNetStart() {
         vgNet.stopped = !0, ws.close();
         return;
       }
-      ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build, device: vgDevice(), steam: vgBoot.steam || void 0 })), vgAnnFrom(m), vgRegionsFrom(m), vgDlcApps(m.dlcApps), vgPubBuild(m);
+      ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build, clientLabel: VGD.label, device: vgDevice(), steam: vgBoot.steam || void 0 })), vgAnnFrom(m), vgRegionsFrom(m), vgDlcApps(m.dlcApps), vgPubBuild(m);
     }
-    else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, vgAuth.dev = !!m.developer, Array.isArray(m.dlc) && vgDlcSet(m.dlc), ws.send(JSON.stringify({ type: "social_state" })), vgSyncBegin();
+    else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, vgAuth.dev = !!m.developer, Array.isArray(m.dlc) && vgDlcSet(m.dlc), m.early && !vgNet.earlyTold && (vgNet.earlyTold = !0, vgToast(`Early access · ${VGD.label} isn't released yet. Thanks for testing it!`)), ws.send(JSON.stringify({ type: "social_state" })), vgSyncBegin();
     else if (m.type === "role") vgAuth.dev = !!m.developer;
     else if (m.type === "dlc") vgDlcSet(m.dlc, !0);
+    else if (m.type === "early_access") m.early ? vgToast(`You have early access to ${m.early.label}.`) : vgToast("Your early access has ended.");
     else if (m.type === "dlc_apps") vgDlcApps(m.dlcApps);
     else if (m.type === "announcement") vgAnnFrom(m);
     else if (m.type === "maintenance") return vgMaintenance(m.message);
@@ -55280,7 +55281,7 @@ function vgBuildProbe() {
         const old = vgCheckBuild(m);
         if (tell({ ok: !0, maintenance: m.maintenance || null, outdated: old, unreleased: vgUnreleased(m) }), old) return done();
         try {
-          ws.send(JSON.stringify({ type: "hello", clientBuild: VGD.build, device: vgDevice() }));
+          ws.send(JSON.stringify({ type: "hello", clientBuild: VGD.build, clientLabel: VGD.label, device: vgDevice() }));
         } catch {
         }
         clearTimeout(to), to = setTimeout(done, 5e3);
@@ -55381,7 +55382,7 @@ function vgAuthCall(msg, ms = 9e3) {
       } catch {
         return;
       }
-      m.type === "connected" ? vgCheckBuild(m) ? fin({ error: "outdated", message: "This version of Vangaurd is out of date." }) : ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build, device: vgDevice(), steam: msg.steam || vgBoot.steam || void 0 })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created, developer: !!m.developer, dlc: Array.isArray(m.dlc) ? m.dlc : null }) : m.type === "auth_code" ? fin({ code: !0, pending: m.pending, purpose: m.purpose, to: m.to, ttl: m.ttl, resendIn: m.resendIn }) : m.type === "auth_need_email" ? fin({ needEmail: !0, pending: m.pending, user: m.username }) : m.type === "banned" ? (vgBanned(m.ban, m.message), fin({ error: "banned", message: m.message || "This account is banned." })) : m.type === "auth_error" ? (m.code === "banned" && vgBanned(m.ban, m.message), fin({ error: m.code || "error", message: m.message || "Sign-in failed." })) : m.type === "logged_out" && fin({ ok: !0 });
+      m.type === "connected" ? vgCheckBuild(m) ? fin({ error: "outdated", message: "This version of Vangaurd is out of date." }) : ws.send(JSON.stringify({ ...msg, clientBuild: VGD.build, clientLabel: VGD.label, device: vgDevice(), steam: msg.steam || vgBoot.steam || void 0 })) : m.type === "auth_ok" ? fin({ ok: !0, user: m.username, token: m.token, created: !!m.created, developer: !!m.developer, dlc: Array.isArray(m.dlc) ? m.dlc : null }) : m.type === "auth_code" ? fin({ code: !0, pending: m.pending, purpose: m.purpose, to: m.to, ttl: m.ttl, resendIn: m.resendIn }) : m.type === "auth_need_email" ? fin({ needEmail: !0, pending: m.pending, user: m.username }) : m.type === "banned" ? (vgBanned(m.ban, m.message), fin({ error: "banned", message: m.message || "This account is banned." })) : m.type === "auth_error" ? (m.code === "banned" && vgBanned(m.ban, m.message), fin({ error: m.code || "error", message: m.message || "Sign-in failed." })) : m.type === "logged_out" && fin({ ok: !0 });
     }), ws.addEventListener("error", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." })), ws.addEventListener("close", () => fin({ error: "offline", message: "Can't reach the Vangaurd server." }));
   });
 }
@@ -55619,7 +55620,7 @@ function vgBootUI() {
   }), d.querySelector("[data-signin]").addEventListener("click", () => {
     // During maintenance the owner, moderators and developers can still sign in.
     const unav = vgBoot.failed === "unavailable";
-    vgBoot.run++, vgBootHide(), vgAuth.staffNote = !0, vgAuthUI().show(unav ? `${VGD.label} isn't released yet. Only the owner can sign in.` : "Only Vangaurd staff can sign in during maintenance.");
+    vgBoot.run++, vgBootHide(), vgAuth.staffNote = !0, vgAuthUI().show(unav ? `${VGD.label} isn't released yet. Only players with early access can sign in.` : "Only Vangaurd staff can sign in during maintenance.");
   }), d.querySelector("[data-quit]").addEventListener("click", () => {
     try {
       window.vangaurdDesktop?.quit ? window.vangaurdDesktop.quit() : window.close();

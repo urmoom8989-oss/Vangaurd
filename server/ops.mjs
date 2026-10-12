@@ -20,7 +20,7 @@ export const DLC = {
 export function createOps(d) {
   // d: { DATA_DIR, now, log, keyOf, nameOf, userOf, roleOf, ownerKey, env }
   const FILE = pathMod.join(d.DATA_DIR, 'ops.json');
-  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null, dlc: {}, dlcApps: {}, weekly: null };
+  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null, dlc: {}, dlcApps: {}, weekly: null, early: {} };
   try {
     const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     if (raw && typeof raw === 'object') for (const k of Object.keys(st)) if (raw[k] !== undefined) st[k] = raw[k];
@@ -31,6 +31,7 @@ export function createOps(d) {
   if (!st.dlc || typeof st.dlc !== 'object') st.dlc = {};
   if (!st.dlcApps || typeof st.dlcApps !== 'object') st.dlcApps = {};
   if (typeof st.weekly !== 'string') st.weekly = null; // Release 1.0: a weekly mode the owner pinned (null = automatic)
+  if (!st.early || typeof st.early !== 'object') st.early = {}; // Release 1.0: early access to unreleased versions, by account
   function save() {
     try {
       fs.mkdirSync(d.DATA_DIR, { recursive: true });
@@ -157,6 +158,32 @@ export function createOps(d) {
     save();
     return { appId: dlcApp(id) };
   }
+  // Release 1.0: early access. A player with early access to a build may play that build (and anything older)
+  // online before it is released.
+  function earlyBuild(key) {
+    const e = key && st.early[key];
+    return e ? e.build | 0 : 0;
+  }
+  function earlyEdit(key, add, v = {}, by = null) {
+    if (!key) return { error: 'There is no player with that name.' };
+    if (!add) {
+      const had = !!st.early[key];
+      delete st.early[key], save();
+      return { changed: had };
+    }
+    const build = Math.floor(Number(v.build));
+    if (!(build > 0 && build < 1e6)) return { error: 'Pick a version.' };
+    st.early[key] = { build, label: String(v.label || `Build ${build}`).slice(0, 40), by: by || null, at: d.now() };
+    save();
+    return { changed: true, early: st.early[key] };
+  }
+  // grants for versions that have since been released are no longer needed
+  function earlyPrune(released) {
+    let n = 0;
+    for (const [k, e] of Object.entries(st.early)) if ((e.build | 0) <= released) delete st.early[k], n++;
+    n && save();
+    return n;
+  }
   const names = (keys) => keys.map((k) => ({ name: d.nameOf(k) || k }));
   function view() {
     return {
@@ -165,6 +192,7 @@ export function createOps(d) {
       steam: { required: !!st.steam.required, verify: steamVerify, allow: names(st.steam.allow) },
       devs: names(st.devs), owner: d.nameOf(d.ownerKey()), release: st.release,
       dlcs: Object.values(DLC).map((x) => ({ ...x, steamAppId: dlcApp(x.id), owners: names(Object.keys(st.dlc).filter((k) => st.dlc[k].includes(x.id))) })),
+      early: Object.entries(st.early).map(([k, e]) => ({ name: d.nameOf(k) || k, build: e.build, label: e.label, by: e.by ? d.nameOf(e.by) || e.by : null, at: e.at })).sort((x, y) => y.at - x.at),
     };
   }
   function listEdit(list, key, add) {
@@ -182,6 +210,7 @@ export function createOps(d) {
     devEdit: (key, add) => listEdit(st.devs, key, add),
     setSteamRequired: (on) => { st.steam.required = !!on; save(); },
     dlcOf, dlcEdit, dlcApps, setDlcApp,
+    earlyBuild, earlyEdit, earlyPrune,
     setWeekly: (mode) => { st.weekly = typeof mode === 'string' && /^[a-z]{2,12}$/.test(mode) ? mode : null; save(); },
     steamVerify,
   };

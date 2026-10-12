@@ -166,7 +166,50 @@ function failed(c) {
 // may sign in or play with it; everyone else is told the version is not available.
 const UNAVAILABLE = 'This version of Vangaurd is not available yet.';
 function unreleasedFor(c, key) {
-  return GATE && (c.build || 0) > latest.build && !ops.isOwner(key);
+  // Release 1.0: the owner and players given early access to this build (or a newer one) may play it
+  return GATE && (c.build || 0) > latest.build && !ops.isOwner(key) && !(ops.earlyBuild(key) >= (c.build || 0));
+}
+// ---------- Release 1.0: recent versions, for the console's early-access list ----------
+// The GitHub releases (with their version.json: build and name), plus any newer build a game has connected with.
+const RELEASES_API = process.env.RELEASES_API_URL || 'https://api.github.com/repos/urmoom8989-oss/Vangaurd/releases?per_page=12';
+const relCache = { list: [], at: 0, busy: null, info: new Map() }, seenBuilds = new Map();
+function noteBuild(c, msg) {
+  const b = c.build | 0;
+  if (!(b > latest.build) || b > 1e6) return;
+  const label = typeof msg.clientLabel === 'string' ? msg.clientLabel.replace(/[^\w .()-]/g, '').slice(0, 40) : '';
+  const was = seenBuilds.get(b);
+  seenBuilds.set(b, { at: now(), label: label || was?.label || '' });
+  if (seenBuilds.size > 20) seenBuilds.delete([...seenBuilds.keys()].sort((x, y) => x - y)[0]);
+}
+async function refreshReleases() {
+  if (!RELEASES_API || RELEASES_API === 'off') return;
+  try {
+    const res = await fetch(RELEASES_API, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'vangaurd-server' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rows = await res.json(), out = [];
+    for (const r of Array.isArray(rows) ? rows.slice(0, 12) : []) {
+      if (!r || r.draft) continue;
+      let info = relCache.info.get(r.tag_name);
+      if (!info) {
+        const asset = (r.assets || []).find((x) => x.name === 'version.json');
+        if (!asset) continue;
+        try {
+          const v = await (await fetch(asset.browser_download_url, { redirect: 'follow', headers: { 'user-agent': 'vangaurd-server' } })).json();
+          info = { build: Math.floor(Number(v.build)) || 0, label: String(v.label || r.name || r.tag_name).slice(0, 40) };
+        } catch { continue; }
+        info.build > 0 && relCache.info.set(r.tag_name, info);
+      }
+      info.build > 0 && out.push({ build: info.build, label: info.label, tag: r.tag_name, prerelease: !!r.prerelease, url: r.html_url || null, at: Date.parse(r.published_at || r.created_at) || 0 });
+    }
+    relCache.list = out, relCache.at = now();
+  } catch (e) { log(`could not read the GitHub releases (${e.message})`); relCache.at = now() - 8 * 60e3; }
+}
+function recentVersions() {
+  if (!relCache.busy && now() - relCache.at > 10 * 60e3) relCache.busy = refreshReleases().finally(() => { relCache.busy = null; });
+  const by = new Map();
+  for (const r of relCache.list) by.has(r.build) || by.set(r.build, r);
+  for (const [b, x] of seenBuilds) by.has(b) || by.set(b, { build: b, label: x.label || `Build ${b}`, tag: null, prerelease: true, url: null, at: x.at, seen: true });
+  return [...by.values()].map((v) => ({ ...v, released: v.build <= latest.build })).sort((x, y) => y.build - x.build).slice(0, 10);
 }
 function authOk(c, u, token, created = false) {
   const key = keyOf(u.name), g = ops.gate(c, key);
@@ -174,7 +217,7 @@ function authOk(c, u, token, created = false) {
   if (unreleasedFor(c, key)) { log(`refused unreleased build ${c.build} for ${u.name}`); return refuseGate(c, { code: 'unavailable', message: UNAVAILABLE }); }
   c.account = u.name;
   c.name = u.name;
-  send(c, { type: 'auth_ok', username: u.name, token, created, developer: ops.isDev(key), moderator: !!mod.roleOf(key), dlc: ops.dlcOf(key) });
+  send(c, { type: 'auth_ok', username: u.name, token, created, developer: ops.isDev(key), moderator: !!mod.roleOf(key), dlc: ops.dlcOf(key), early: (c.build | 0) > latest.build && ops.earlyBuild(key) >= (c.build | 0) ? { build: ops.earlyBuild(key) } : null });
   mod.noteDevice(u, c.device);
   goOnline(c);
 }
@@ -1301,6 +1344,9 @@ function regionMaintenance(message) {
   for (const r of REGIONS) internalPost(r.url, '/internal/maintenance', { message }).catch((e) => log(`region ${r.id} maintenance failed: ${e.message}`));
 }
 // main: who is this token? (asked by a regional server when a player queues there)
+// Release 1.0: early access to a version ends once that version is released
+setTimeout(() => { const n = ops.earlyPrune(latest.build); n && log(`early access ended for ${n} player(s): their version is out`); }, 5000).unref?.();
+setInterval(() => { const n = ops.earlyPrune(latest.build); n && log(`early access ended for ${n} player(s): their version is out`); }, 60e3).unref?.();
 // Release 1.0: tell every game when the weekly mode changes (Monday 00:00 UTC, or the owner pinned one)
 let weeklyLast = null;
 function weeklyTell() { const w = weekly(); weeklyLast = w.mode; broadcastAll({ type: 'weekly', weekly: w }); }
@@ -1369,7 +1415,7 @@ function maintenanceKick() {
   return n;
 }
 mod.attachOps({
-  view: () => ({ ...ops.view(), weekly: weekly(), latest: { build: latest.build, label: latest.label, source: latest.source }, region: REGION, live: Object.fromEntries(Object.keys(MODES).map((m) => { const lm = modeMatch(m); return [m, { inMatch: lm ? lm.players.size : 0, waiting: queues[m].length, max: MAX_PLAYERS }]; })) }),
+  view: () => ({ ...ops.view(), weekly: weekly(), versions: recentVersions(), latest: { build: latest.build, label: latest.label, source: latest.source }, region: REGION, live: Object.fromEntries(Object.keys(MODES).map((m) => { const lm = modeMatch(m); return [m, { inMatch: lm ? lm.players.size : 0, waiting: queues[m].length, max: MAX_PLAYERS }]; })) }),
   announce(by, body) {
     const r = ops.setAnnouncement(by, body);
     if (!r.error) broadcastAll({ type: 'announcement', announcement: r.announcement });
@@ -1395,6 +1441,14 @@ mod.attachOps({
     if (!r.error) for (const c of online.get(key) || []) send(c, { type: 'dlc', dlc: ops.dlcOf(key) });
     return r;
   },
+  early(key, build, add, by) {
+    const v = recentVersions().find((x) => x.build === Math.floor(Number(build)));
+    if (add && !v) return { error: 'Pick one of the versions in the list.' };
+    if (add && v.released) return { error: `${v.label} is already out: everyone can play it.` };
+    const r = ops.earlyEdit(key, add, v ? { build: v.build, label: v.label } : {}, by);
+    if (!r.error) for (const c of online.get(key) || []) send(c, { type: 'early_access', early: add ? { build: v.build, label: v.label } : null });
+    return r;
+  },
   weekly(mode) {
     if (mode && !WEEKLY_POOL.includes(mode)) return { error: 'That mode is not in the weekly rotation.' };
     ops.setWeekly(mode || null), weeklyTell();
@@ -1407,7 +1461,7 @@ mod.attachOps({
   },
   release(by, body) {
     const r = ops.setRelease(by, body);
-    if (!r.error) { const prev = latest.build; latest.build = 0; raiseLatest(Math.max(r.release.build, Math.floor(Number(process.env.MIN_CLIENT_BUILD) || 0)), r.release.label, 'console'); if (latest.build < prev) log(`latest client build lowered ${prev} -> ${latest.build} by the console`); }
+    if (!r.error) { const prev = latest.build; latest.build = 0; raiseLatest(Math.max(r.release.build, Math.floor(Number(process.env.MIN_CLIENT_BUILD) || 0)), r.release.label, 'console'); if (latest.build < prev) log(`latest client build lowered ${prev} -> ${latest.build} by the console`); ops.earlyPrune(latest.build); }
     return r;
   },
 });
@@ -1415,7 +1469,7 @@ function handle(c, raw) {
   let msg;
   try { msg = JSON.parse(raw); } catch { return; }
   if (!msg || typeof msg !== 'object') return;
-  if (typeof msg.clientBuild === 'number' && Number.isFinite(msg.clientBuild)) c.build = Math.floor(msg.clientBuild);
+  if (typeof msg.clientBuild === 'number' && Number.isFinite(msg.clientBuild)) c.build = Math.floor(msg.clientBuild), noteBuild(c, msg);
   switch (msg.type) {
     case 'join_queue': joinQueue(c, msg).catch((e) => log(`join error: ${e.message}`)); break;
     case 'cancel_queue': {

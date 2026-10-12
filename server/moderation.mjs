@@ -618,6 +618,17 @@ export function createModeration(d) {
         send(res, 200, { ok: true, ...ops.view() });
         return true;
       }
+      case 'ops/early': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can give early access.', 403)) return true;
+        const key = findKey(body.name);
+        if (need(key, 'There is no player with that name.', 404)) return true;
+        const add = body.add !== false, r = ops.early(key, body.build, add, by);
+        if (need(!r.error, r.error)) return true;
+        if (r.changed) { addLog(by, add ? 'early_grant' : 'early_revoke', key, add ? `${r.early?.label || ''} (build ${r.early?.build || ''})` : ''); save(false); }
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
       case 'ops/weekly': {
         if (need(post, 'Use POST.', 405)) return true;
         if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;
