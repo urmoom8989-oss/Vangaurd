@@ -5,6 +5,8 @@ import http from 'node:http';
 import { createModeration, cleanDevice } from './moderation.mjs';
 import { createMailer, codeEmail } from './mailer.mjs';
 import { createOps } from './ops.mjs';
+import { loadLos } from './los.mjs';
+import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import pathMod from 'node:path';
@@ -19,16 +21,23 @@ const SPAWN_PROTECT_MS = 2000;
 const LOAD_GRACE_MS = 4000; // extra spawn protection while clients load the voted map
 const VOTE_S = process.env.MAP_VOTE_SECONDS !== undefined && process.env.MAP_VOTE_SECONDS !== '' && Number.isFinite(Number(process.env.MAP_VOTE_SECONDS)) ? Math.max(0, Number(process.env.MAP_VOTE_SECONDS)) : 10;
 const MAPS = ['vardanek', 'kessel', 'foundry', 'freighter', 'airfield', 'lindenhof'];
+// Release 1.0 anti-cheat: the walls of every map, for the server's line-of-sight check (see los.mjs)
+const LOS = loadLos(pathMod.join(pathMod.dirname(decodeURIComponent(new URL(import.meta.url).pathname)), 'los-maps.json'));
+// How far each gun can hit (the game's own ranges, plus a little): a hit from further away is thrown out.
+const GUN_RANGE = { ar7: 450, smg9: 220, br4: 520, lmg60: 600, dmr14: 750, sg12: 60, sr50: 1200, p9: 150, mp20: 90, hc50: 160, p3b: 120 };
+const AC_WALL_MIN = Math.max(3, Number(process.env.AC_WALL_MIN) || 8), AC_WALL_SHARE = Math.min(1, Math.max(0.1, Number(process.env.AC_WALL_SHARE) || 0.4));
 const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
   kc: { name: 'Kill Confirmed (free-for-all)', scoreLimit: Math.max(1, Number(process.env.KC_SCORE_LIMIT) || 20), ffa: true },
   // Release 1.0: Gun Game online (free-for-all): every kill moves you to the next of the game's 11 guns
   gg: { name: 'Gun Game (free-for-all)', scoreLimit: Math.max(1, Number(process.env.GG_SCORE_LIMIT) || 11), ffa: true },
+  // Release 1.0: Blackout is Team Deathmatch with the lights out (only pumpkins and cauldrons give light)
+  blackout: { name: 'Blackout', scoreLimit: Math.max(1, Number(process.env.BLACKOUT_SCORE_LIMIT) || 50), ffa: false },
 };
 // Release 1.0: the weekly mode. Online play always has Team Deathmatch plus one more mode that changes every Monday
 // at 00:00 UTC; Team Deathmatch is never in the rotation. The owner can pin this week's mode in the console.
-const WEEKLY_POOL = ['kc', 'gg'];
-const WEEK_MS = 7 * 864e5, WEEK0 = Date.UTC(2026, 9, 12); // Monday 12 October 2026: Kill Confirmed
+const WEEKLY_POOL = ['kc', 'gg', 'blackout'];
+const WEEK_MS = 7 * 864e5, WEEK0 = Date.UTC(2026, 9, 12); // Monday 12 October 2026: Kill Confirmed, then Gun Game, then Blackout
 const VERSION = '4.0.0';
 // Where this server runs (shown in the game and on /health). The main server is NA East from Beta 1.3.
 const REGION = String(process.env.REGION || 'na-east').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 16) || 'na-east';
@@ -987,7 +996,7 @@ function leaveMatch(c, notify = true) {
     clearTimeout(match.vote?.timer);
     for (const id of [...match.spectators || []]) { const sc = clients.get(id); if (sc && !sc.drone) { sc.spectating = null; match.spectators.delete(id); send(sc, { type: 'spectate_end', reason: 'Everyone left the match.' }); } }
     broadcast(match, { type: 'match_update', matchId: match.id, roster: [] });
-  } else { clearTimeout(match.vote?.timer); spectatorsOut(match, 'Everyone left the match.'); matches.delete(match.id); log(`match ${match.id} closed`); }
+  } else { clearTimeout(match.vote?.timer); spectatorsOut(match, 'Everyone left the match.'); recKeep(match); matches.delete(match.id); log(`match ${match.id} closed`); }
   if (queues[match.mode]?.length) setTimeout(() => checkQueue(match.mode), 0); // a spot opened (or the match closed)
 }
 function endMatch(match, winner) {
@@ -1025,10 +1034,15 @@ function onHit(c, msg) {
   if (now() - target.spawnedAt < SPAWN_PROTECT_MS) return; // fresh spawn
   const amount = Math.max(0, Math.min(250, num(msg.amount)));
   if (!amount) return;
+  // Release 1.0 anti-cheat: the server checks the shot's distance and line of sight (killstreaks are not shots)
+  const chk = streak ? { ok: true } : shotCheck(match, attacker, target, msg);
+  if (chk.reject) return;
   target.health = Math.max(0, target.health - amount);
   const zone = typeof msg.zone === 'string' ? msg.zone.slice(0, 16) : 'torso';
   broadcast(match, { type: 'player_damaged', matchId: match.id, attackerId: attacker.id, targetId: target.id, amount, health: target.health, zone });
+  recEvent(match, ['d', attacker.id, target.id, amount, zone, chk.wall ? 1 : 0, Math.round(chk.d || 0)]);
   if (target.health > 0) return;
+  recEvent(match, ['k', attacker.id, target.id]);
   target.alive = false;
   target.diedAt = now();
   target.deaths++;
@@ -1044,6 +1058,87 @@ function onHit(c, msg) {
   } else {
     addScore(match, attacker.team, 1);
   }
+}
+// ---------- Release 1.0 anti-cheat: shot checks ----------
+// Every hit is checked against where the server last saw both players: too far for the gun, or claimed from somewhere
+// the shooter wasn't, and it doesn't count. Hits without a line of sight still count (bullets go through thin walls),
+// but a player who lands many of them in a match is reported to the moderators with a replay.
+function shotCheck(match, a, t, msg) {
+  const A = a.pos, T = t.pos;
+  if (!A || !T) return { ok: true };
+  const ac = a.ac ||= { hits: 0, wall: 0, bad: 0, reported: false }, d = Math.hypot(A.x - T.x, A.y - T.y, A.z - T.z);
+  const boom = msg.k === 'x', gun = a.state?.variant || '', max = boom ? 120 : (GUN_RANGE[gun] || 1200) + 25; // grenades: thrown, then a blast
+  const o = msg.o && typeof msg.o === 'object' ? msg.o : null, od = o && [o.x, o.y, o.z].every(Number.isFinite) ? Math.hypot(o.x - A.x, o.z - A.z) : 0;
+  if (d > max || od > 9) {
+    ac.bad++, recEvent(match, ['x', a.id, t.id, d > max ? 'range' : 'origin', Math.round(d > max ? d : od)]);
+    log(`anti-cheat: ${a.name} hit ${t.name} ${d > max ? `from ${Math.round(d)} m (${gun || 'gun'} reaches ${max - 25} m)` : `from ${Math.round(od)} m away from where they were`} · not counted`);
+    acMaybeReport(match, a);
+    return { reject: true, d };
+  }
+  if (boom) return { ok: true, d }; // a blast reaches round corners
+  ac.hits++;
+  const see = LOS.canSee(match.mapId, A, a.state?.stance, a.state?.yaw, T, t.state?.stance);
+  see === false && (ac.wall++, acMaybeReport(match, a));
+  return { ok: true, wall: see === false, d };
+}
+function acMaybeReport(match, a) {
+  const ac = a.ac;
+  if (!ac || ac.reported || !a.key) return;
+  const wallBad = ac.wall >= AC_WALL_MIN && ac.wall / Math.max(1, ac.hits) >= AC_WALL_SHARE, farBad = ac.bad >= 5;
+  if (!wallBad && !farBad) return;
+  ac.reported = true;
+  const note = wallBad ? `Anti-cheat: ${ac.wall} of ${ac.hits} hits in this match had no line of sight (through walls).` : `Anti-cheat: ${ac.bad} hits were thrown out (too far for the gun, or from a place the player wasn't).`;
+  log(`anti-cheat: reporting ${a.name} (${note})`);
+  try { mod.autoReport(a.key, match, note); } catch (e) { log(`anti-cheat report error: ${e.message}`); }
+}
+// ---------- Release 1.0: match recordings ----------
+// Five times a second, where every player is and looks, plus shots, hits and kills, for the last five minutes of
+// each match (kept a few hours after it ends). A report saves a copy, so moderators can watch it in the console.
+const REC_STEP_MS = 200, REC_KEEP_MS = 5 * 60e3, recentRecs = new Map(), STANCE = { stand: 0, crouch: 1, prone: 2, slide: 3 };
+const r2 = (v) => Math.round(num(v) * 100) / 100;
+function recOf(match) {
+  return match.rec ||= { t0: now(), map: match.mapId || null, mode: match.mode, matchId: match.id, frames: [], ev: [], names: {}, last: {} };
+}
+function recTrim(R, t) {
+  const cut = t - REC_KEEP_MS;
+  if (R.frames.length > 4000 && R.frames[1500][0] < cut) { let i = 0; while (i < R.frames.length && R.frames[i][0] < cut) i++; R.frames.splice(0, i); }
+  if (R.ev.length > 3000 && R.ev[1000][0] < cut) { let i = 0; while (i < R.ev.length && R.ev[i][0] < cut) i++; R.ev.splice(0, i); }
+}
+function recFrame(match, p) {
+  const R = recOf(match), t = now() - R.t0, s = p.state;
+  if (!s || t - (R.last[p.id] ?? -1e9) < REC_STEP_MS) return;
+  R.last[p.id] = t, R.map = match.mapId || R.map, R.names[p.id] = { name: p.name, team: p.team, key: p.key || keyOf(p.name) };
+  R.frames.push([t, p.id, r2(s.x), r2(s.y), r2(s.z), r2(s.yaw), r2(s.pitch), STANCE[s.stance] ?? 0, s.alive ? 1 : 0]), recTrim(R, t);
+}
+function recEvent(match, e) {
+  const R = recOf(match), t = now() - R.t0;
+  R.ev.push([t, ...e]), recTrim(R, t);
+}
+function recKeep(match) {
+  if (!match?.rec) return;
+  recentRecs.set(match.id, { ...match.rec, closed: now() });
+  for (const [id, r] of recentRecs) if (recentRecs.size > 12 || now() - r.closed > 3 * 3600e3) recentRecs.delete(id);
+}
+const REPLAY_DIR = pathMod.join(DATA_DIR, 'replays');
+function replaySave(reportId, matchId, targetKey) {
+  const R = matches.get(matchId)?.rec || recentRecs.get(matchId);
+  if (!R || !R.frames.length || !/^[a-f0-9]{6,32}$/.test(String(reportId))) return false;
+  const target = Object.entries(R.names).find(([, n]) => n.key === targetKey)?.[0] || null;
+  const rep = { v: 1, at: now(), map: R.map, mode: R.mode, matchId: R.matchId, target, players: R.names, frames: R.frames, ev: R.ev, plan: LOS.plan(R.map) };
+  try {
+    fs.mkdirSync(REPLAY_DIR, { recursive: true });
+    fs.writeFileSync(pathMod.join(REPLAY_DIR, `${reportId}.json.gz`), zlib.gzipSync(JSON.stringify(rep)));
+    const files = fs.readdirSync(REPLAY_DIR).filter((f) => f.endsWith('.json.gz')).map((f) => ({ f, t: fs.statSync(pathMod.join(REPLAY_DIR, f)).mtimeMs })).sort((x, y) => y.t - x.t);
+    for (const { f } of files.slice(120)) fs.rmSync(pathMod.join(REPLAY_DIR, f), { force: true });
+    return true;
+  } catch (e) {
+    log(`replay save error: ${e.message}`);
+    return false;
+  }
+}
+function replayLoad(reportId) {
+  if (!/^[a-f0-9]{6,32}$/.test(String(reportId))) return null;
+  try { return JSON.parse(zlib.gunzipSync(fs.readFileSync(pathMod.join(REPLAY_DIR, `${reportId}.json.gz`))).toString('utf8')); } catch { return null; }
 }
 // Kill Confirmed is free-for-all: any tag except your own confirms a kill for you.
 function tagConfirms(match, tag, p) {
@@ -1104,8 +1199,10 @@ function onState(c, msg) {
     weaponId: typeof s.weaponId === 'string' ? s.weaponId.slice(0, 24) : null,
     variant: typeof s.variant === 'string' ? s.variant.slice(0, 24) : null,
     op: typeof s.op === 'string' && /^[a-z0-9_-]{1,24}$/.test(s.op) ? s.op : null, // Release 1.0: the player's operator
+    inspect: !!s.inspect, // Release 1.0: looking at their gun
     alive: s.alive !== false && p.alive,
   };
+  recFrame(match, p);
   broadcast(match, { type: 'player_state', matchId: match.id, playerId: p.id, state: p.state }, c.id);
 }
 function onRespawn(c, msg) {
@@ -1222,7 +1319,7 @@ function spectateLeave(c, notify) {
   if (c.spectating && notify) send(c, { type: 'spectate_end', reason: 'left' });
   if (match && !match.players.size && !match.spectators?.size && !match.droneWait && matches.get(match.id) === match) {
     // a developer's drone was the last one there
-    clearTimeout(match.vote?.timer); matches.delete(match.id); log(`match ${match.id} closed`);
+    clearTimeout(match.vote?.timer); recKeep(match); matches.delete(match.id); log(`match ${match.id} closed`);
   }
   c.spectating = null;
   c.drone = false;
@@ -1308,7 +1405,7 @@ function kickClient(c, msg) {
 }
 const mod = createModeration({
   DATA_DIR, accounts, saveAccounts, online, clients, statusOf, keyOf, userOf, nameOf, scrypt, now, log, send,
-  kick: kickClient, kickKey: (key, msg) => (REGIONS.length ? regionKick(key, msg) : Promise.resolve(0)), saveOf: (key) => saves[key]?.blob || null, spectateOffer,
+  kick: kickClient, kickKey: (key, msg) => (REGIONS.length ? regionKick(key, msg) : Promise.resolve(0)), saveOf: (key) => saves[key]?.blob || null, spectateOffer, replaySave, replayLoad,
   putSave(key, blob) {
     const cur = saves[key] || { rev: 0 };
     saves[key] = { rev: cur.rev + 1, at: now(), blob };
@@ -1487,7 +1584,7 @@ function handle(c, raw) {
     case 'vote_map': onVote(c, msg); break;
     case 'weapon_fired': {
       const match = matches.get(c.matchId);
-      if (match) broadcast(match, { type: 'weapon_fired', matchId: match.id, playerId: c.id, weaponId: typeof msg.weaponId === 'string' ? msg.weaponId.slice(0, 24) : null }, c.id);
+      if (match) broadcast(match, { type: 'weapon_fired', matchId: match.id, playerId: c.id, weaponId: typeof msg.weaponId === 'string' ? msg.weaponId.slice(0, 24) : null }, c.id), match.players.has(c.id) && recEvent(match, ['f', c.id]);
       break;
     }
     case 'player_ready': {

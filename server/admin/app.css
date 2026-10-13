@@ -144,6 +144,27 @@ tbody tr.click:hover { background: rgba(255, 255, 255, 0.025); }
 .check { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0 4px; font-size: 13px; color: var(--fg-2); cursor: pointer; }
 .check input { margin-top: 3px; accent-color: var(--accent); }
 .modal .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+/* Release 1.0: replay of a reported player */
+.modal.replay .card.wide { width: min(1240px, 100%); max-height: calc(100vh - 32px); overflow: auto; border-top-color: var(--accent); }
+.rp-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.rp-body { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 12px; }
+.rp-body canvas { width: 100%; height: auto; aspect-ratio: 900 / 620; background: #0b0f12; border: 1px solid var(--line); border-radius: var(--radius); }
+.rp-side { display: flex; flex-direction: column; gap: 8px; min-height: 0; max-height: 620px; }
+.rp-list { display: grid; gap: 4px; }
+.rp-list div { padding: 6px 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); font-size: 12px; }
+.rp-list div.on { border-color: var(--accent); }
+.rp-list b { display: block; font-size: 13px; }
+.rp-list span, .rp-log { color: var(--fg-2); }
+.rp-log { flex: 1; min-height: 120px; overflow: auto; font-size: 12px; display: grid; align-content: start; gap: 4px; }
+.rp-log .mono { color: var(--muted); margin-right: 4px; }
+.rp-side b.bad, .rp-log b.bad { color: var(--danger); }
+.rp-bar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.rp-bar input[type=range] { flex: 1; accent-color: var(--accent); }
+.rp-key { margin: 8px 0 0; color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.rp-key i { display: inline-block; width: 12px; height: 4px; margin-right: 4px; border-radius: 2px; vertical-align: middle; }
+.rp-key i.y { background: #f2c14e; height: 10px; width: 10px; border-radius: 50%; } .rp-key i.b { background: #5fa8ff; height: 10px; width: 10px; border-radius: 50%; } .rp-key i.r { background: #ff6b5e; height: 10px; width: 10px; border-radius: 50%; }
+.rp-key i.s { background: #ffeca0; } .rp-key i.h { background: #fff; } .rp-key i.w { background: #ff463c; } .rp-key i.kk { background: none; border: 2px solid #ff463c; width: 8px; height: 8px; transform: rotate(45deg); }
+@media (max-width: 900px) { .rp-body { grid-template-columns: 1fr; } }
 #toasts { position: fixed; right: 18px; bottom: 18px; z-index: 60; display: flex; flex-direction: column; gap: 8px; }
 .toast { max-width: 360px; padding: 11px 14px; background: #161c21; border: 1px solid var(--line-2); border-left: 3px solid var(--accent); border-radius: var(--radius); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); }
 .toast.bad { border-left-color: var(--danger); }

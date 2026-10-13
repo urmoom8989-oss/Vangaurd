@@ -201,15 +201,36 @@ export function createModeration(d) {
     const reason = Object.hasOwn(REPORT_REASONS, msg.reason) ? msg.reason : 'other';
     const note = String(msg.note || '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 300);
     const st = m.players.get(target);
+    const rid = crypto.randomBytes(6).toString('hex');
     mod.reports.unshift({
-      id: crypto.randomBytes(6).toString('hex'), at: now(), reporter: me, target, reason, note, status: 'open',
+      id: rid, at: now(), reporter: me, target, reason, note, status: 'open',
       match: { id: m.id, mode: m.mode, map: m.map, at: m.start, players: m.players.size },
       stats: st ? { team: st.team, kills: st.kills, deaths: st.deaths, score: st.score } : null, build: c.build || null,
+      // Release 1.0: the last minutes of that match, to watch in the console
+      replay: !!d.replaySave?.(rid, m.id, target),
     });
     if (mod.reports.length > MAX_REPORTS) mod.reports.length = MAX_REPORTS;
     save(false);
     d.log(`report: ${d.nameOf(me)} reported ${d.nameOf(target)} (${reason}) in match ${m.id}`);
     d.send(c, { type: 'report_ok', target: d.nameOf(target) });
+  }
+
+  // Release 1.0: the server's own anti-cheat files a report too (with the replay), once per player per match.
+  function autoReport(target, match, note) {
+    if (!target || !userOf(target)) return null;
+    matchSeen(match);
+    const m = recent.get(match.id);
+    if (mod.reports.some((x) => x.reporter === 'system' && x.target === target && x.match?.id === match.id)) return null;
+    const st = m?.players.get(target), rid = crypto.randomBytes(6).toString('hex');
+    mod.reports.unshift({
+      id: rid, at: now(), reporter: 'system', target, reason: 'cheating', note: String(note || '').slice(0, 300), status: 'open', auto: true,
+      match: { id: match.id, mode: match.mode, map: match.mapId || m?.map || null, at: m?.start || match.createdAt || now(), players: match.players.size },
+      stats: st ? { team: st.team, kills: st.kills, deaths: st.deaths, score: st.score } : null, build: null,
+      replay: !!d.replaySave?.(rid, match.id, target),
+    });
+    if (mod.reports.length > MAX_REPORTS) mod.reports.length = MAX_REPORTS;
+    save(false);
+    return rid;
   }
 
   // Players someone was recently in a match with (newest first), for the friends panel's "Recently played".
@@ -275,7 +296,7 @@ export function createModeration(d) {
   }
 
   // ---------- views ----------
-  const reportView = (r) => ({ id: r.id, at: r.at, reporter: d.nameOf(r.reporter), target: d.nameOf(r.target), reason: r.reason, reasonText: REPORT_REASONS[r.reason] || r.reason, note: r.note, status: r.status, match: r.match, stats: r.stats, handledBy: r.handledBy ? d.nameOf(r.handledBy) : null, handledAt: r.handledAt || null });
+  const reportView = (r) => ({ id: r.id, at: r.at, replay: !!r.replay, auto: !!r.auto, reporter: r.reporter === 'system' ? 'Anti-cheat' : d.nameOf(r.reporter), target: d.nameOf(r.target), reason: r.reason, reasonText: REPORT_REASONS[r.reason] || r.reason, note: r.note, status: r.status, match: r.match, stats: r.stats, handledBy: r.handledBy ? d.nameOf(r.handledBy) : null, handledAt: r.handledAt || null });
   function xpOf(key) {
     try { return Math.max(0, Number(JSON.parse(d.saveOf(key) || 'null')?.progression?.xp) || 0); } catch { return 0; }
   }
@@ -377,6 +398,15 @@ export function createModeration(d) {
           me: d.nameOf(by), role: s.role, owner: d.nameOf(mod.owner),
           counts: { openBugs: mod.bugs.filter((b) => b.status === 'open').length, news: mod.news.length, openReports: open.length, reportedPlayers: new Set(open.map((r) => r.target)).size, bans: Object.keys(mod.bans).filter((k) => activeBan(k)).length, online: d.online.size, accounts: Object.keys(d.accounts.users).length, reports: mod.reports.length },
         });
+        return true;
+      }
+      // Release 1.0: the recording saved with a report (the console's replay viewer)
+      case 'replay': {
+        const r = mod.reports.find((x) => x.id === q.get('id'));
+        if (need(r, 'There is no such report.', 404)) return true;
+        const rep = r.replay ? d.replayLoad?.(r.id) : null;
+        if (need(rep, 'There is no recording for this report.', 404)) return true;
+        send(res, 200, { report: reportView(r), replay: rep });
         return true;
       }
       case 'reports': {
@@ -661,5 +691,5 @@ export function createModeration(d) {
   }
 
   let ops = null;
-  return { attachOps: (o) => { ops = o; }, ownerKey: () => mod.owner, checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, onBug, recentWith, newsPublic, roleOf, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
+  return { attachOps: (o) => { ops = o; }, ownerKey: () => mod.owner, checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, autoReport, onBug, recentWith, newsPublic, roleOf, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
 }

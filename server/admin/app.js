@@ -6,7 +6,7 @@
   const app = $('#app');
   const TOKEN_KEY = 'vg-anticheat-token';
   const MAPS = { vardanek: 'Vardanek', kessel: 'Kessel Yard', lindenhof: 'Lindenhof', foundry: 'Foundry', freighter: 'Freighter', airfield: 'Airfield' };
-  const MODES = { tdm: 'Team Deathmatch', kc: 'Kill Confirmed' };
+  const MODES = { tdm: 'Team Deathmatch', kc: 'Kill Confirmed', gg: 'Gun Game', blackout: 'Blackout' };
   const REASONS = { cheating: 'Cheating', exploit: 'Exploiting a bug', name: 'Offensive name', abuse: 'Abusive behaviour', other: 'Other' };
   const STATUS = { online: 'Online', searching: 'Searching for a match', match: 'In a match', offline: 'Offline' };
   const LENGTHS = [['1 hour', 1], ['1 day', 24], ['3 days', 72], ['7 days', 168], ['30 days', 720], ['Permanent', null]];
@@ -165,7 +165,124 @@
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ''}
       <div class="meta"><span>${esc(MODES[m.mode] || m.mode || 'Match')} · ${esc(MAPS[m.map] || m.map || 'map not picked')}</span>${m.players ? `<span>${plural(m.players, 'player')}</span>` : ''}
         ${st && by ? `<span>${esc(r.target)} in that match: <b>${st.kills} kills · ${st.deaths} deaths · ${st.score} score</b></span>` : ''}
+        ${r.replay ? `<button class="btn sm pri" data-replay="${esc(r.id)}">Watch replay</button>` : ''}
         ${r.status !== 'open' ? `<button class="btn sm" data-reopen="${esc(r.id)}">Reopen</button>` : by ? `<button class="btn sm" data-dismiss="${esc(r.id)}">Dismiss</button>` : ''}</div></article>`;
+  }
+
+  // ---------- Release 1.0: replay of a reported player ----------
+  // The server records every match (where each player is and looks, five times a second, and every shot, hit and
+  // kill) and keeps the last minutes with each report. Shown from above: the walls, every player (the reported one
+  // in yellow, with their view cone), shots as lines, hits and kills. Red lines are hits the server found had no
+  // line of sight.
+  async function replayDialog(id) {
+    let data;
+    try { data = await api('replay', { query: { id } }); } catch (e) { return fail(e); }
+    const R = data.replay, rep = data.report, names = R.players || {}, tid = R.target;
+    const m = document.createElement('div');
+    m.className = 'modal replay';
+    m.innerHTML = `<div class="card wide" role="dialog" aria-modal="true" aria-labelledby="rp-h">
+      <div class="rp-top"><div><h3 id="rp-h">Replay · ${esc(rep.target)}</h3><p class="sub">${esc(MODES[R.mode] || R.mode || 'Match')} · ${esc(MAPS[R.map] || R.map || 'unknown map')} · the last ${(() => { const ms = (R.frames.at(-1)?.[0] || 0) - (R.frames[0]?.[0] || 0); return ms < 90e3 ? `${Math.max(1, Math.round(ms / 1000))} seconds` : `${Math.round(ms / 6e4 * 10) / 10} minutes`; })()} before the report · ${esc(rep.reasonText)}${rep.note ? ` · “${esc(rep.note)}”` : ''}</p></div><button class="btn" data-close>Close</button></div>
+      <div class="rp-body"><canvas width="900" height="620"></canvas><aside class="rp-side"><span class="k">Players</span><div class="rp-list"></div><span class="k">What happens</span><div class="rp-log"></div></aside></div>
+      <div class="rp-bar"><button class="btn sm" data-play>Pause</button><button class="btn sm" data-speed>1×</button><button class="btn sm" data-follow>Following ${esc(rep.target)}</button><input type="range" min="0" max="1000" value="0" aria-label="Time"><span class="rp-t mono">0:00</span></div>
+      <p class="rp-key"><i class="y"></i>${esc(rep.target)} <i class="b"></i>their team <i class="r"></i>the other team <i class="s"></i>shot <i class="h"></i>hit <i class="w"></i>hit with no line of sight <i class="kk"></i>kill</p></div>`;
+    document.body.appendChild(m);
+    const cv = $('canvas', m), g = cv.getContext('2d'), range = $('input[type=range]', m), tEl = $('.rp-t', m), list = $('.rp-list', m), logEl = $('.rp-log', m);
+    const frames = R.frames || [], ev = R.ev || [], t0 = frames[0]?.[0] ?? 0, t1 = Math.max(t0 + 1, frames.at(-1)?.[0] ?? 0);
+    const byId = {};
+    for (const f of frames) (byId[f[1]] ||= []).push(f);
+    const tTeam = names[tid]?.team;
+    // the walls, drawn once
+    let wall = null, W = 160, Hh = 160, minX = 0, minZ = 0, res = 1;
+    if (R.plan) {
+      const P = R.plan, raw = atob(P.cells);
+      W = P.w * P.res, Hh = P.h * P.res, minX = P.min[0], minZ = P.min[2], res = P.res;
+      wall = document.createElement('canvas'), wall.width = P.w, wall.height = P.h;
+      const wg = wall.getContext('2d'), img = wg.createImageData(P.w, P.h);
+      for (let i = 0; i < raw.length; i++) { const c = raw.charCodeAt(i); if (!c) continue; img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = 90 + c * 45; img.data[i * 4 + 3] = 255; }
+      wg.putImageData(img, 0, 0);
+    } else {
+      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+      for (const f of frames) x0 = Math.min(x0, f[2]), x1 = Math.max(x1, f[2]), z0 = Math.min(z0, f[4]), z1 = Math.max(z1, f[4]);
+      minX = x0 - 10, minZ = z0 - 10, W = Math.max(40, x1 - x0 + 20), Hh = Math.max(40, z1 - z0 + 20);
+    }
+    let t = t0, play = true, speed = 1, follow = !!tid, zoom = 1, last = performance.now(), raf = 0, logI = 0;
+    const pose = (id, at) => {
+      const L = byId[id];
+      if (!L) return null;
+      let lo = 0, hi = L.length - 1;
+      if (at < L[0][0] || at > L[hi][0] + 1500) return null;
+      while (lo < hi) { const mid = (lo + hi + 1) >> 1; L[mid][0] <= at ? lo = mid : hi = mid - 1; }
+      const a = L[lo], b = L[Math.min(L.length - 1, lo + 1)], k = b[0] > a[0] ? Math.min(1, Math.max(0, (at - a[0]) / (b[0] - a[0]))) : 0;
+      return { x: a[2] + (b[2] - a[2]) * k, z: a[4] + (b[4] - a[4]) * k, yaw: a[5], alive: a[8] === 1, st: a[7] };
+    };
+    const fmtT = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+    const nm = (id) => names[id]?.name || 'Player';
+    const draw = () => {
+      const cw = cv.width, ch = cv.height, me = tid ? pose(tid, t) : null;
+      let sc = Math.min(cw / W, ch / Hh) * zoom, cx = minX + W / 2, cz = minZ + Hh / 2;
+      if (follow && me && zoom > 1) cx = me.x, cz = me.z;
+      const X = (x) => cw / 2 + (x - cx) * sc, Z = (z) => ch / 2 + (z - cz) * sc;
+      g.fillStyle = '#0b0f12', g.fillRect(0, 0, cw, ch);
+      if (wall) { g.imageSmoothingEnabled = false; g.drawImage(wall, X(minX), Z(minZ), wall.width * res * sc, wall.height * res * sc); }
+      // shots and hits in the last 0.6 s
+      for (const e of ev) {
+        if (e[0] > t || e[0] < t - 600) continue;
+        const age = (t - e[0]) / 600;
+        if (e[1] === 'f') {
+          const p = pose(e[2], e[0]);
+          if (!p) continue;
+          g.strokeStyle = `rgba(255,236,160,${0.75 * (1 - age)})`, g.lineWidth = e[2] === tid ? 2 : 1, g.beginPath(), g.moveTo(X(p.x), Z(p.z)), g.lineTo(X(p.x - Math.sin(p.yaw) * 60), Z(p.z - Math.cos(p.yaw) * 60)), g.stroke();
+        } else if (e[1] === 'd' || e[1] === 'k') {
+          const a = pose(e[2], e[0]), b = pose(e[3], e[0]);
+          if (!a || !b) continue;
+          const bad = e[1] === 'd' && e[6] === 1;
+          g.strokeStyle = bad ? `rgba(255,70,60,${1 - age})` : `rgba(255,255,255,${0.9 * (1 - age)})`, g.lineWidth = bad ? 3 : 2, g.beginPath(), g.moveTo(X(a.x), Z(a.z)), g.lineTo(X(b.x), Z(b.z)), g.stroke();
+          if (e[1] === 'k') g.strokeStyle = `rgba(255,70,60,${1 - age})`, g.lineWidth = 3, g.beginPath(), g.moveTo(X(b.x) - 7, Z(b.z) - 7), g.lineTo(X(b.x) + 7, Z(b.z) + 7), g.moveTo(X(b.x) + 7, Z(b.z) - 7), g.lineTo(X(b.x) - 7, Z(b.z) + 7), g.stroke();
+        }
+      }
+      for (const id of Object.keys(byId)) {
+        const p = pose(id, t);
+        if (!p) continue;
+        const isT = id === tid, col = isT ? '#f2c14e' : names[id]?.team === tTeam && R.mode !== 'kc' && R.mode !== 'gg' ? '#5fa8ff' : '#ff6b5e';
+        if (isT && p.alive) {
+          g.fillStyle = 'rgba(242,193,78,.16)', g.beginPath(), g.moveTo(X(p.x), Z(p.z));
+          for (let i = -1; i <= 1; i += 0.1) g.lineTo(X(p.x - Math.sin(p.yaw + i * 0.55) * 30), Z(p.z - Math.cos(p.yaw + i * 0.55) * 30));
+          g.closePath(), g.fill();
+        }
+        g.globalAlpha = p.alive ? 1 : 0.35, g.fillStyle = col, g.beginPath(), g.arc(X(p.x), Z(p.z), isT ? 7 : 5, 0, 7), g.fill();
+        g.strokeStyle = col, g.lineWidth = 2, g.beginPath(), g.moveTo(X(p.x), Z(p.z)), g.lineTo(X(p.x - Math.sin(p.yaw) * 2.6), Z(p.z - Math.cos(p.yaw) * 2.6)), g.stroke();
+        g.fillStyle = '#e9ece6', g.font = `${isT ? 700 : 500} 11px system-ui`, g.fillText(nm(id), X(p.x) + 9, Z(p.z) - 8), g.globalAlpha = 1;
+      }
+      tEl.textContent = `${fmtT(t - t0)} / ${fmtT(t1 - t0)}`, range.value = String(Math.round((t - t0) / (t1 - t0) * 1000));
+    };
+    const evText = (e) => e[1] === 'k' ? `${nm(e[2])} killed ${nm(e[3])}` : e[1] === 'd' ? `${nm(e[2])} hit ${nm(e[3])} · ${e[4]} damage · ${e[7]} m${e[6] === 1 ? ' · <b class="bad">no line of sight</b>' : ''}` : e[1] === 'x' ? `<b class="bad">Thrown out:</b> ${nm(e[2])} hit ${nm(e[3])} ${e[4] === 'range' ? `from ${e[5]} m (too far for the gun)` : `from ${e[5]} m away from where they were`}` : '';
+    const logTo = () => {
+      const items = ev.filter((e) => e[0] <= t && e[1] !== 'f' && (e[2] === tid || e[3] === tid)).slice(-60).reverse();
+      logEl.innerHTML = items.length ? items.map((e) => `<div><span class="mono">${fmtT(e[0] - t0)}</span> ${evText(e)}</div>`).join('') : '<div class="muted">Nothing yet.</div>';
+    };
+    const ids = Object.keys(byId);
+    list.innerHTML = ids.map((id) => { const kills = ev.filter((e) => e[1] === 'k' && e[2] === id).length, walls = ev.filter((e) => e[1] === 'd' && e[2] === id && e[6] === 1).length, hits = ev.filter((e) => e[1] === 'd' && e[2] === id).length; return `<div class="${id === tid ? 'on' : ''}"><b>${esc(nm(id))}</b><span>${kills} kills · ${hits} hits${walls ? ` · <b class="bad">${walls} without line of sight</b>` : ''}</span></div>`; }).join('');
+    const tick = (now) => {
+      const dt = Math.min(100, now - last); last = now;
+      if (play) { t = Math.min(t1, t + dt * speed); t >= t1 && (play = false, $('[data-play]', m).textContent = 'Play'); }
+      draw();
+      if (now - logI > 250) logI = now, logTo();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const close = () => { cancelAnimationFrame(raf); m.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (ev2) => { if (ev2.key === 'Escape') close(); if (ev2.key === ' ') { ev2.preventDefault(); $('[data-play]', m).click(); } };
+    document.addEventListener('keydown', onKey);
+    $('[data-close]', m).onclick = close, m.onclick = (ev2) => { if (ev2.target === m) close(); };
+    $('[data-play]', m).onclick = (ev2) => { if (t >= t1) t = t0; play = !play; ev2.currentTarget.textContent = play ? 'Pause' : 'Play'; };
+    $('[data-speed]', m).onclick = (ev2) => { speed = speed === 1 ? 2 : speed === 2 ? 4 : speed === 4 ? 0.5 : 1; ev2.currentTarget.textContent = `${speed}×`; };
+    $('[data-follow]', m).onclick = (ev2) => { follow = !follow; zoom = follow ? 2.4 : 1; ev2.currentTarget.textContent = follow ? `Following ${rep.target}` : 'Whole map'; };
+    range.oninput = () => { t = t0 + (t1 - t0) * Number(range.value) / 1000; };
+    cv.onwheel = (ev2) => { ev2.preventDefault(); zoom = Math.max(1, Math.min(6, zoom * (ev2.deltaY < 0 ? 1.15 : 1 / 1.15))); };
+    if (follow) zoom = 2.4;
+    // start a few seconds before the reported player's first hit or kill, when there is one
+    const first = ev.find((e) => (e[1] === 'd' || e[1] === 'k') && e[2] === tid);
+    first && (t = Math.max(t0, first[0] - 4000));
   }
 
   // ---------- player detail (used by Reports and Players) ----------
@@ -218,6 +335,7 @@
         } catch (e) { fail(e); }
       };
     });
+    $$('[data-replay]', box).forEach((b) => { b.onclick = () => replayDialog(b.dataset.replay); });
     $$('[data-dismiss],[data-reopen]', box).forEach((b) => {
       b.onclick = async () => {
         try { await api(b.dataset.dismiss ? 'reports/dismiss' : 'reports/reopen', { body: { ids: [b.dataset.dismiss || b.dataset.reopen] } }); again(); } catch (e) { fail(e); }
