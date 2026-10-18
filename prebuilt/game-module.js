@@ -27994,46 +27994,13 @@ function tY(A) {
     };
   }
 }
-var fpQ = [], fpCh = null, fpLastRaf = 0, fpRafOn = !1, fpRafDt = 16.7, fpRafRef = 0, fpRafBuf = [], fpRafK = 0;
-// The screen's refresh interval: the 20th percentile of the last 90 times between two screen refreshes (robust
-// to the odd late or early one, and it follows the window to another screen within a couple of seconds).
-function fpRafSample(d) {
-  if (!(d > 1)) return;
-  fpRafBuf.length < 90 ? fpRafBuf.push(d) : fpRafBuf[fpRafK % 90] = d, fpRafK++;
-  if (fpRafK % 30 === 0 && fpRafBuf.length >= 30) {
-    const a = fpRafBuf.slice().sort((x, y) => x - y);
-    fpRafRef = a[Math.floor(a.length * 0.2)];
-  }
-}
-// Unlimited frame rate pacing (see _schedule): u = time between frames while running flat out, r = while drawing
-// once per screen refresh. Switches with some slack both ways so it doesn't flip back and forth.
-var vgPace = { raf: !1, u: 0, miss: 0, n: 0, hold: 0, swaps: 0, ref: 0 };
-typeof window < "u" && (window.__VGPACE__ = vgPace);
-function vgPaceNote(dt, now, cap) {
-  const P = vgPace;
-  if (cap !== 0 || typeof document < "u" && document.hidden || typeof window < "u" && !window.__APP_STARTUP_READY__) {
-    P.raf && (P.raf = !1), P.n = 0;
-    return;
-  }
-  if (!(dt > 0) || dt > 250) return;
-  const D = P.ref = fpRafRef;
-  if (!(D > 2)) return;
-  if (P.raf) {
-    P.n++, P.miss += ((dt > D * 1.6 ? 1 : 0) - P.miss) * 0.03;
-    // missing screen refreshes again and again (not just a hitch): the PC can't draw a frame per refresh, so
-    // run flat out again for a while
-    P.n > 120 && P.miss > 0.3 && (P.raf = !1, P.n = 0, P.u = 0, P.hold = now + (P.swaps++ < 3 ? 15e3 : 6e4));
-  } else {
-    P.u = P.n ? P.u + (dt - P.u) * 0.04 : dt, P.n++;
-    P.n > 150 && now > P.hold && fpRafAlive() && P.u < D * 0.92 && (P.raf = !0, P.n = 0, P.miss = 0);
-  }
-}
+var fpQ = [], fpCh = null, fpLastRaf = 0, fpRafOn = !1, fpRafDt = 16.7;
 function fpRafStart() {
   if (fpRafOn || typeof requestAnimationFrame != "function") return;
   fpRafOn = !0;
   const A = () => {
     const e = performance.now();
-    fpLastRaf > 0 && e - fpLastRaf < 200 && (fpRafDt += (e - fpLastRaf - fpRafDt) * 0.1, fpRafSample(e - fpLastRaf)), fpLastRaf = e, requestAnimationFrame(A);
+    fpLastRaf > 0 && e - fpLastRaf < 200 && (fpRafDt += (e - fpLastRaf - fpRafDt) * 0.1), fpLastRaf = e, requestAnimationFrame(A);
   };
   requestAnimationFrame(A);
 }
@@ -28107,14 +28074,6 @@ var iY = class {
       tok.raf = requestAnimationFrame(go), tok.to = setTimeout(go, 1e3);
       return;
     }
-    // Release 1.0: Unlimited no longer draws more frames than the screen can show. When the game runs faster than
-    // the monitor refreshes (189 fps on a 144 Hz screen, say), the extra frames were never shown and the ones that
-    // were shown came at uneven times, which looked and felt laggy. Then it draws one frame per screen refresh,
-    // straight after the last one was shown. If the PC can't keep up with the screen it goes back to running flat out.
-    if (A === 0 && !this.paused && vgPace.raf && fpRafAlive()) {
-      tok.raf = requestAnimationFrame(go), tok.to = setTimeout(go, 250);
-      return;
-    }
     const e = A > 0 ? 1e3 / A : 0, t = this._lastTickStart < 0 ? e : performance.now() - this._lastTickStart, i = Math.max(0, e - t);
     // Uncapped: frames run back to back, not tied to the screen refresh. Only if the browser is late putting a
     // frame on screen does the next tick wait for it, so the picture never freezes (a 1 s safety net keeps the
@@ -28134,7 +28093,7 @@ var iY = class {
         this._last = -1, this._resolveWaiters();
         return;
       }
-      this._lastTickStart >= 0 && !this.paused && vgPaceNote(A - this._lastTickStart, A, Number(this.ctx.settings.get("graphics.fpsCap", 0)) || 0), this._lastTickStart = A, this._budget > 0 && this._budget--, this.frame(A), this._schedule();
+      this._lastTickStart = A, this._budget > 0 && this._budget--, this.frame(A), this._schedule();
     }
   }
   _resolveWaiters() {
@@ -55635,7 +55594,7 @@ typeof window < "u" && vgNet.listeners.push((m) => vgReadyMsg(m));
 /* ------------------------------------------------------------------ Beta 1.2: news & patch notes */
 // Only the current version's notes are shown (Beta 1.21: older versions are no longer listed).
 var VG_PATCH_NOTES = [
-  { v: "Release 1.0", items: ["New: the Halloween Pack DLC ($2.99 on Steam) with two new operators, Skeleton and Pumpkin Head, and the animated Halloween camo.", "New: an Operators screen on the main menu to choose who you play as. You see your operator's arms in first person, and other players see your operator in matches.", "New: a weekly game mode online next to Team Deathmatch. This week it's Kill Confirmed; it changes every Monday (Gun Game is next).", "New: North American and European servers. Pick yours in Settings > Account (or leave it on Automatic).", "Enemies only show on your minimap while your team has a UAV up. Ghost now keeps you off enemy UAVs.", "Halloween on every map until 10 November: pumpkin patches, graveyards, witches' cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky. Listen out in the main menu...", "A new level-up sound.", "Daily challenges are easier.", "Drone mode now works with a controller.", "New: Blackout, team deathmatch in the dark. Only pumpkins, cauldrons and (on Vardanek, Lindenhof and Kessel) dim streetlights light the map. It joins the weekly rotation.", "New: Loadouts, the Season Pass page, weapon charms and stickers, inspecting your gun (I), switching fire mode (B), and tracers and hitmarkers in the killcam.", "New: remap your controller buttons, with Xbox, PlayStation and Switch layouts. Settings > Account shows your ping to each server region and lets you copy your user ID.", "New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing. Changing one on its own sets the preset to Custom. 3D resolution now goes down to 25%.", "Smoother at high frame rates: Unlimited no longer draws more frames than your monitor can show.", "Progression is now called Challenges. When a player you reported gets banned, you see an Action taken screen.", "The FPS counter and network stats are now off by default, and the news shows every time you sign in.", "Fixed: the rifle went through operators on the Operators screen. The Skeleton now carries its rifle too."] },
+  { v: "Release 1.0", items: ["New: the Halloween Pack DLC ($2.99 on Steam) with two new operators, Skeleton and Pumpkin Head, and the animated Halloween camo.", "New: an Operators screen on the main menu to choose who you play as. You see your operator's arms in first person, and other players see your operator in matches.", "New: a weekly game mode online next to Team Deathmatch. This week it's Kill Confirmed; it changes every Monday (Gun Game is next).", "New: North American and European servers. Pick yours in Settings > Account (or leave it on Automatic).", "Enemies only show on your minimap while your team has a UAV up. Ghost now keeps you off enemy UAVs.", "Halloween on every map until 10 November: pumpkin patches, graveyards, witches' cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky. Listen out in the main menu...", "A new level-up sound.", "Daily challenges are easier.", "Drone mode now works with a controller.", "New: Blackout, team deathmatch in the dark. Only pumpkins, cauldrons and (on Vardanek, Lindenhof and Kessel) dim streetlights light the map. It joins the weekly rotation.", "New: Loadouts, the Season Pass page, weapon charms and stickers, inspecting your gun (I), switching fire mode (B), and tracers and hitmarkers in the killcam.", "New: remap your controller buttons, with Xbox, PlayStation and Switch layouts. Settings > Account shows your ping to each server region and lets you copy your user ID.", "New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing. Changing one on its own sets the preset to Custom. 3D resolution now goes down to 25%.", "Progression is now called Challenges. When a player you reported gets banned, you see an Action taken screen.", "The FPS counter and network stats are now off by default, and the news shows every time you sign in.", "Fixed: the rifle went through operators on the Operators screen. The Skeleton now carries its rifle too."] },
   { v: "Beta 1.32", items: ["Small fixes and improvements."] },
   { v: "Beta 1.31", items: ["The game now shows when the servers are offline or under maintenance, even if you are not signed in.", "The sign-in page now tells you on its own when the servers go down."] },
   { v: "Beta 1.3", items: ["Fixed Matchmaking", "Many QoL Fixes", "You can now see on the report page who the last player who killed you was.", "Switched from NA West Servers to NA East Servers", "Fixed a Bug where if you would Slide or go Prone it would not show it on another players screen", "Weapon Leveling", "Weapon Mounting", "Kill Streaks", "Daily and Weekly Challenges and more!"] },
@@ -58037,7 +57996,7 @@ function rJ(A) {
           [240, "240"],
           [360, "360"]
         ],
-        desc: "Unlimited (default) runs as fast as your PC can, but never draws more frames than your monitor can show, so motion stays smooth instead of stuttering. VSync always locks the frame rate to your monitor's refresh rate. A number caps the frame rate."
+        desc: "Unlimited (default) renders as fast as your PC can, not tied to your monitor. VSync locks the frame rate to your monitor's refresh rate. A number caps the frame rate."
       },
       { sec: "Post processing" },
       {

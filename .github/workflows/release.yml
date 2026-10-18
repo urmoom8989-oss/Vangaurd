@@ -162,7 +162,6 @@ jobs:
           - Stronger anti-cheat: the server checks the distance and line of sight of every hit, and moderators can watch a replay of a reported player.
           - When a player you reported gets banned, an Action taken screen tells you.
           - New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing; changing one on its own sets the preset to Custom. 3D resolution goes down to 25%.
-          - Smoother at high frame rates: Unlimited no longer draws more frames than your monitor can show.
           - Copy your user ID in Settings > Account.
           - Progression is now Challenges; the game mode list scrolls, one row per category.
           - The FPS counter and network stats are off by default, and the news shows every time you sign in.
