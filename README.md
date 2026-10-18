@@ -7,8 +7,9 @@ and keyboard.
 ## Release 1.0 downloads
 
 The current game (Release 1.0: the Halloween Pack DLC with the Skeleton and Pumpkin Head operators and the animated
-Halloween camo, an Operators screen on the main menu, Blackout (a pitch-dark Team Deathmatch lit only by pumpkins and
-cauldrons), a new Loadouts screen with a Gunsmith and gun charms and stickers, weapon inspect, killcam tracers and
+Halloween camo, an Operators screen on the main menu, Blackout (a pitch-dark Team Deathmatch lit only by pumpkins,
+cauldrons and a few dim streetlights), detailed graphics settings with a Custom preset, smoother frame pacing, a copyable
+user ID, an Action taken screen for reports, a new Loadouts screen with a Gunsmith and gun charms and stickers, weapon inspect, killcam tracers and
 hitmarkers, controller remapping, the Season Pass page (opens later), server-side shot checks and
 replays of reported players, a weekly online mode next to Team Deathmatch, North American and
 European servers, enemies on the minimap only with a UAV, Halloween decorations and a purple sky on the maps, easier

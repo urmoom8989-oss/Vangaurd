@@ -294,7 +294,7 @@
     const p = d.player, open = d.reportsAgainst.filter((r) => r.status === 'open').length;
     box.innerHTML = `<div class="detail">
       <div class="head"><div><h2>${dot(p.status)}${esc(p.name)}${playerTags(p)}</h2>
-        <div class="facts"><span>${esc(STATUS[p.status] || p.status)}</span><span>Level ${p.level} · ${Number(p.xp).toLocaleString()} XP</span><span>Joined ${esc(fmt(p.created))}</span><span>Last sign-in ${esc(ago(p.lastLogin))}</span><span>${plural(p.devices, 'device')}</span><span>${p.email ? `Email ${esc(p.email)}${p.emailVerified ? ' (confirmed)' : ' (not confirmed)'}` : 'No email yet'}</span></div></div>
+        <div class="facts"><span>${esc(STATUS[p.status] || p.status)}</span>${p.uid ? `<span>User ID ${esc(p.uid)}</span>` : ''}<span>Level ${p.level} · ${Number(p.xp).toLocaleString()} XP</span><span>Joined ${esc(fmt(p.created))}</span><span>Last sign-in ${esc(ago(p.lastLogin))}</span><span>${plural(p.devices, 'device')}</span><span>${p.email ? `Email ${esc(p.email)}${p.emailVerified ? ' (confirmed)' : ' (not confirmed)'}` : 'No email yet'}</span></div></div>
         <div class="acts">${p.ban ? '<button class="btn" data-act="unban">Unban</button>' : p.role ? '' : '<button class="btn danger" data-act="ban">Ban</button>'}
           ${p.inMatch ? '<button class="btn pri" data-act="spectate" title="Watch their match from inside your game">Spectate</button>' : ''}
           ${p.status !== 'offline' ? '<button class="btn" data-act="kick">Disconnect</button>' : ''}
@@ -384,7 +384,7 @@
   // ---------- players ----------
   function viewPlayers() {
     $('#view').innerHTML = `<div class="split">
-      <section class="pane"><header class="wrap"><input id="pq" placeholder="Search by username" value="${esc(ui.q)}" autocomplete="off" spellcheck="false" class="input grow">
+      <section class="pane"><header class="wrap"><input id="pq" placeholder="Search by username or user ID" value="${esc(ui.q)}" autocomplete="off" spellcheck="false" class="input grow">
         <div class="seg" role="group" aria-label="Filter">${[['', 'All'], ['online', 'Online'], ['reported', 'Reported'], ['banned', 'Banned']].map(([k, t]) => `<button data-f="${k}" class="${ui.filter === k ? 'on' : ''}">${t}</button>`).join('')}</div></header>
         <div class="list" id="players"></div></section>
       <section class="pane" id="detail"><div class="empty"><b>Select a player</b>Search above, then pick a player to see their reports and ban or unban them.</div></section></div>`;

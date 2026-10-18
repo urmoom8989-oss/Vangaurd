@@ -56,7 +56,7 @@ export const cleanDevice = (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,64
 export function createModeration(d) {
   // d: { DATA_DIR, accounts, saveAccounts, online, clients, statusOf, keyOf, userOf, nameOf, scrypt, now, log, send, kick, saveOf }
   const FILE = pathMod.join(d.DATA_DIR, 'moderation.json');
-  const mod = { owner: null, admins: [], setup: null, sessions: {}, bans: {}, deviceBans: {}, reports: [], log: [], bugs: [], news: [] };
+  const mod = { owner: null, admins: [], setup: null, sessions: {}, bans: {}, deviceBans: {}, reports: [], log: [], bugs: [], news: [], notices: {} };
   try {
     const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     if (raw && typeof raw === 'object') for (const k of Object.keys(mod)) if (raw[k] !== undefined) mod[k] = raw[k];
@@ -151,7 +151,16 @@ export function createModeration(d) {
     const until = hours ? now() + Math.round(hours * 3600e3) : null;
     mod.bans[key] = { by, at: now(), reason, until, devices: !!devices };
     if (devices) for (const dev of userOf(key)?.devices || []) mod.deviceBans[dev] = { account: key, at: now() };
-    for (const r of mod.reports) if (r.target === key && r.status === 'open') Object.assign(r, { status: 'banned', handledBy: by, handledAt: now() });
+    // Release 1.0: everyone who reported this player is told that action was taken ("Action taken" in the game),
+    // straight away if they are online, otherwise the next time they sign in. They are not told who it was.
+    const told = new Set();
+    for (const r of mod.reports) if (r.target === key && r.status === 'open') {
+      Object.assign(r, { status: 'banned', handledBy: by, handledAt: now() });
+      if (r.reporter && r.reporter !== 'system' && r.reporter !== key) told.add(r.reporter);
+    }
+    for (const k of told) {
+      d.sendTo?.(k, { type: 'report_action', at: now() }) || (mod.notices[k] = Math.min(9, (mod.notices[k] || 0) + 1));
+    }
     addLog(by, 'ban', key, `${reason}${until ? ` · ${hours} h` : ' · permanent'}${devices ? ' · devices blocked' : ''}`);
     save();
     const kicked = enforce(key);
@@ -233,6 +242,13 @@ export function createModeration(d) {
     return rid;
   }
 
+  // "Action taken" notices waiting for a player who was offline when a player they reported was banned
+  function takeNotices(key) {
+    const n = mod.notices[key] | 0;
+    if (n) delete mod.notices[key], save(false);
+    return n;
+  }
+
   // Players someone was recently in a match with (newest first), for the friends panel's "Recently played".
   function recentWith(key, limit = 12) {
     const out = new Map();
@@ -305,7 +321,7 @@ export function createModeration(d) {
     if (!u) return null;
     const b = activeBan(key), against = mod.reports.filter((r) => r.target === key);
     return {
-      name: u.name, created: u.created || null, lastLogin: u.lastLogin || null, status: d.statusOf(key), role: roleOf(key),
+      name: u.name, uid: u.uid || null, created: u.created || null, lastLogin: u.lastLogin || null, status: d.statusOf(key), role: roleOf(key),
       ban: b ? { ...banView(key, b), by: d.nameOf(b.by), devices: !!b.devices } : null,
       reportsOpen: against.filter((r) => r.status === 'open').length, reportsTotal: against.length,
       reportsMade: mod.reports.filter((r) => r.reporter === key).length, inMatch: d.statusOf(key) === 'match', devices: (u.devices || []).length, xp: xpOf(key), level: levelOf(xpOf(key)), friends: (u.friends || []).length,
@@ -433,7 +449,8 @@ export function createModeration(d) {
       case 'players': {
         const term = String(q.get('q') || '').trim().toLowerCase(), filter = q.get('filter') || '';
         let keys = Object.keys(d.accounts.users);
-        if (term) keys = keys.filter((k) => k.includes(term));
+        // a name, part of a name, or a user ID (VG-XXXXX-XXXXX, with or without the dashes)
+        if (term) { const t2 = term.replace(/[^a-z0-9]/g, ''); keys = keys.filter((k) => k.includes(term) || (t2.length >= 6 && String(d.accounts.users[k]?.uid || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(t2))); }
         if (filter === 'online') keys = keys.filter((k) => d.statusOf(k) !== 'offline');
         if (filter === 'banned') keys = keys.filter((k) => activeBan(k));
         if (filter === 'reported') keys = keys.filter((k) => mod.reports.some((r) => r.target === k && r.status === 'open'));
@@ -691,5 +708,5 @@ export function createModeration(d) {
   }
 
   let ops = null;
-  return { attachOps: (o) => { ops = o; }, ownerKey: () => mod.owner, checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, autoReport, onBug, recentWith, newsPublic, roleOf, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
+  return { attachOps: (o) => { ops = o; }, ownerKey: () => mod.owner, checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, autoReport, takeNotices, onBug, recentWith, newsPublic, roleOf, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
 }

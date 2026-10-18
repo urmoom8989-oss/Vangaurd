@@ -151,7 +151,7 @@ jobs:
           - Enemies only show on the minimap while your team has a UAV up.
           - Halloween on every map until 10 November: pumpkin patches, graveyards, cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky.
           - A new level-up sound, easier daily challenges, and Drone mode on a controller.
-          - Blackout: Team Deathmatch on a pitch-dark map where only jack-o'-lanterns and cauldrons give light (singleplayer, and online in the weekly rotation).
+          - Blackout: Team Deathmatch on a pitch-dark map where only jack-o'-lanterns, cauldrons and (on Vardanek, Lindenhof and Kessel) dim streetlights give light (singleplayer, and online in the weekly rotation).
           - New Loadouts screen: loadout cards, a weapon page, the Gunsmith with a 3D view of your gun, and Cosmetics.
           - Gun charms and stickers to show off on your guns.
           - Inspect your gun with I (fire mode moved to B).
@@ -160,6 +160,13 @@ jobs:
           - Your ping to North America and Europe in Settings > Account.
           - The Season Pass page (Season 1, a free track of 100 levels; it opens later).
           - Stronger anti-cheat: the server checks the distance and line of sight of every hit, and moderators can watch a replay of a reported player.
+          - When a player you reported gets banned, an Action taken screen tells you.
+          - New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing; changing one on its own sets the preset to Custom. 3D resolution goes down to 25%.
+          - Smoother at high frame rates: Unlimited no longer draws more frames than your monitor can show.
+          - Copy your user ID in Settings > Account.
+          - Progression is now Challenges; the game mode list scrolls, one row per category.
+          - The FPS counter and network stats are off by default, and the news shows every time you sign in.
+          - The Operators screen no longer shows on the first (Singleplayer / Multiplayer) screen; operators hold their rifle properly in the preview, and the Skeleton now carries one.
 
           Online play requires this version once it is released. Installed games ask to update when they start.
           NOTES

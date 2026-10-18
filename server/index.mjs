@@ -220,15 +220,35 @@ function recentVersions() {
   for (const [b, x] of seenBuilds) by.has(b) || by.set(b, { build: b, label: x.label || `Build ${b}`, tag: null, prerelease: true, url: null, at: x.at, seen: true });
   return [...by.values()].map((v) => ({ ...v, released: v.build <= latest.build })).sort((x, y) => y.build - x.build).slice(0, 10);
 }
+// Release 1.0: every account has a permanent user ID (shown in Settings > Account, used by support).
+// It is given out the first time the account signs in, so older accounts get one too.
+const UID_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+function newUid() {
+  const taken = new Set(Object.values(accounts.users).map((x) => x?.uid).filter(Boolean));
+  for (;;) {
+    const b = crypto.randomBytes(10);
+    let id = '';
+    for (let i = 0; i < 10; i++) id += UID_CHARS[b[i] % UID_CHARS.length];
+    id = `VG-${id.slice(0, 5)}-${id.slice(5)}`;
+    if (!taken.has(id)) return id;
+  }
+}
+function uidOf(u) {
+  if (!u.uid) { u.uid = newUid(); saveAccounts(); }
+  return u.uid;
+}
 function authOk(c, u, token, created = false) {
   const key = keyOf(u.name), g = ops.gate(c, key);
   if (g) return refuseGate(c, g);
   if (unreleasedFor(c, key)) { log(`refused unreleased build ${c.build} for ${u.name}`); return refuseGate(c, { code: 'unavailable', message: UNAVAILABLE }); }
   c.account = u.name;
   c.name = u.name;
-  send(c, { type: 'auth_ok', username: u.name, token, created, developer: ops.isDev(key), moderator: !!mod.roleOf(key), dlc: ops.dlcOf(key), early: (c.build | 0) > latest.build && ops.earlyBuild(key) >= (c.build | 0) ? { build: ops.earlyBuild(key) } : null });
+  send(c, { type: 'auth_ok', username: u.name, userId: uidOf(u), token, created, developer: ops.isDev(key), moderator: !!mod.roleOf(key), dlc: ops.dlcOf(key), early: (c.build | 0) > latest.build && ops.earlyBuild(key) >= (c.build | 0) ? { build: ops.earlyBuild(key) } : null });
   mod.noteDevice(u, c.device);
   goOnline(c);
+  // Release 1.0: a player they reported was banned while they were away
+  const told = mod.takeNotices(key);
+  told && setTimeout(() => send(c, { type: 'report_action', count: told }), 1500);
 }
 function authError(c, code, message) { send(c, { type: 'auth_error', code, message }); }
 // Maintenance or a missing Steam: the game shows its "Login failed" screen with a Retry button.
@@ -475,6 +495,7 @@ function statusOf(key) {
 function sendTo(key, msg) {
   const set = online.get(key);
   if (set) for (const c of set) send(c, msg);
+  return !!set?.size;
 }
 function note(key, text, extra = {}) { sendTo(key, { type: 'social_note', text, ...extra }); }
 function partyView(pid) {
@@ -1405,7 +1426,7 @@ function kickClient(c, msg) {
 }
 const mod = createModeration({
   DATA_DIR, accounts, saveAccounts, online, clients, statusOf, keyOf, userOf, nameOf, scrypt, now, log, send,
-  kick: kickClient, kickKey: (key, msg) => (REGIONS.length ? regionKick(key, msg) : Promise.resolve(0)), saveOf: (key) => saves[key]?.blob || null, spectateOffer, replaySave, replayLoad,
+  kick: kickClient, kickKey: (key, msg) => (REGIONS.length ? regionKick(key, msg) : Promise.resolve(0)), saveOf: (key) => saves[key]?.blob || null, spectateOffer, replaySave, replayLoad, sendTo: (key, msg) => sendTo(key, msg),
   putSave(key, blob) {
     const cur = saves[key] || { rev: 0 };
     saves[key] = { rev: cur.rev + 1, at: now(), blob };

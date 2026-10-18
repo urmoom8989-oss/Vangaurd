@@ -23278,7 +23278,12 @@ var QP = {
     showFps: !1,
     fpsCap: 0,
     displayMode: "windowed",
-    resolution: "native"
+    resolution: "native",
+    shadowQuality: "low",
+    aa: "off",
+    textureQuality: "low",
+    effectsQuality: "low",
+    postQuality: "low"
   },
   controls: {
     sensitivity: 3,
@@ -23325,6 +23330,54 @@ function rp(A, e) {
   }
   return A;
 }
+function vgGfxLv() {
+  return ["low", "medium", "high", "ultra"];
+}
+function vgGfxKeys() {
+  return ["graphics.shadowQuality", "graphics.aa", "graphics.textureQuality", "graphics.effectsQuality", "graphics.postQuality"];
+}
+function vgGfxAaOf(q) {
+  return { low: "off", medium: "fxaa", high: "taa", ultra: "tsr_high" }[q] || "taa";
+}
+function vgTexQ(q) {
+  return { low: { an: 4, skip: 1 }, medium: { an: 8, skip: 1 }, high: { an: 8, skip: 0 }, ultra: { an: 16, skip: 0 } }[q] || { an: 8, skip: 0 };
+}
+function vgAaMode(m) {
+  return {
+    off: { aa: "none", al: 0.1, alv: 0.14, ga: 1, sh: null },
+    fxaa: { aa: "smaa", al: 0.1, alv: 0.14, ga: 1, sh: null },
+    taa: { aa: "taa", al: 0.1, alv: 0.14, ga: 1, sh: null },
+    tsr_low: { aa: "taa", al: 0.12, alv: 0.16, ga: 1, sh: 0.2 },
+    tsr_medium: { aa: "taa", al: 0.1, alv: 0.14, ga: 1.05, sh: 0.3 },
+    tsr_high: { aa: "taa", al: 0.085, alv: 0.12, ga: 1.1, sh: 0.38 },
+    tsr_epic: { aa: "taa", al: 0.07, alv: 0.1, ga: 1.15, sh: 0.45 }
+  }[m] || null;
+}
+function vgGfxMigrate(d) {
+  const g = d.graphics || (d.graphics = {});
+  if (g.gfxV) return;
+  const q = vgGfxLv().includes(g.quality) ? g.quality : "low";
+  g.textureQuality = q, g.effectsQuality = q, g.postQuality = q, g.aa = vgGfxAaOf(q);
+  g.shadowQuality = g.shadows === !0 ? q === "low" ? "medium" : q : "low";
+  g.shadows = g.shadowQuality !== "low", g.quality = g.shadowQuality === q ? q : "custom";
+  g.showFps = !1, (d.hud || (d.hud = {})).netStats = !1, g.gfxV = 1;
+}
+function vgGfxLink(s, p, v) {
+  if (s._gfxLock) return;
+  const K = vgGfxKeys();
+  if (p !== "graphics.quality" && !K.includes(p)) return;
+  s._gfxLock = !0;
+  try {
+    if (p === "graphics.quality") {
+      if (!vgGfxLv().includes(v)) return;
+      for (const k of K) s.get(k) !== (k === "graphics.aa" ? vgGfxAaOf(v) : v) && s.set(k, k === "graphics.aa" ? vgGfxAaOf(v) : v);
+      s.set("graphics.shadows", v !== "low");
+    } else
+      p === "graphics.shadowQuality" && s.set("graphics.shadows", v !== "low"), s.get("graphics.quality") !== "custom" && s.set("graphics.quality", "custom");
+  } finally {
+    s._gfxLock = !1;
+  }
+}
 var Rv = "opus-of-duty.settings.v1", EP = class {
   constructor(A, { persist: e = !0, overrides: t = null } = {}) {
     if (this.events = A, this.persist = e, this.data = Fv(QP), e) try {
@@ -23333,6 +23386,10 @@ var Rv = "opus-of-duty.settings.v1", EP = class {
     } catch {
     }
     t && rp(this.data, t);
+    try {
+      vgGfxMigrate(this.data);
+    } catch {
+    }
   }
   get(A, e) {
     let t = this.data;
@@ -23349,7 +23406,7 @@ var Rv = "opus-of-duty.settings.v1", EP = class {
     i[t[t.length - 1]] = e, this.save(), this.events?.emit("settings:changed", {
       path: A,
       value: e
-    });
+    }), vgGfxLink(this, A, e);
   }
   registerDefaults(A, e) {
     const t = this.data[A] || {};
@@ -27716,7 +27773,7 @@ var xn, vg, gS, Ow, Kw, BS, zw, Ww, Zw, hS, Xw, dS, ZP, ZQ, Hi, ic, Ch, mh, qw, 
 Ee();
 var $P = class {
   constructor(A) {
-    if (this.renderer = A, this.cache = /* @__PURE__ */ new Map(), this.pending = /* @__PURE__ */ new Set(), this.failed = [], this._idleWaiters = [], this.maxAnisotropy = A ? A.capabilities.getMaxAnisotropy() : 1, this._texLoader = new Yl(), !Yl.prototype.__opusStandaloneMapped) {
+    if (this.renderer = A, this.cache = /* @__PURE__ */ new Map(), this.pending = /* @__PURE__ */ new Set(), this.failed = [], this._idleWaiters = [], this.maxAnisotropy = A ? A.capabilities.getMaxAnisotropy() : 1, this.hwAniso = this.maxAnisotropy, this._texLoader = new Yl(), !Yl.prototype.__opusStandaloneMapped) {
       const e = Yl.prototype.load;
       Yl.prototype.load = function(t, ...i) {
         const a = globalThis.__resolveStandaloneAsset?.(t);
@@ -27937,13 +27994,46 @@ function tY(A) {
     };
   }
 }
-var fpQ = [], fpCh = null, fpLastRaf = 0, fpRafOn = !1, fpRafDt = 16.7;
+var fpQ = [], fpCh = null, fpLastRaf = 0, fpRafOn = !1, fpRafDt = 16.7, fpRafRef = 0, fpRafBuf = [], fpRafK = 0;
+// The screen's refresh interval: the 20th percentile of the last 90 times between two screen refreshes (robust
+// to the odd late or early one, and it follows the window to another screen within a couple of seconds).
+function fpRafSample(d) {
+  if (!(d > 1)) return;
+  fpRafBuf.length < 90 ? fpRafBuf.push(d) : fpRafBuf[fpRafK % 90] = d, fpRafK++;
+  if (fpRafK % 30 === 0 && fpRafBuf.length >= 30) {
+    const a = fpRafBuf.slice().sort((x, y) => x - y);
+    fpRafRef = a[Math.floor(a.length * 0.2)];
+  }
+}
+// Unlimited frame rate pacing (see _schedule): u = time between frames while running flat out, r = while drawing
+// once per screen refresh. Switches with some slack both ways so it doesn't flip back and forth.
+var vgPace = { raf: !1, u: 0, miss: 0, n: 0, hold: 0, swaps: 0, ref: 0 };
+typeof window < "u" && (window.__VGPACE__ = vgPace);
+function vgPaceNote(dt, now, cap) {
+  const P = vgPace;
+  if (cap !== 0 || typeof document < "u" && document.hidden || typeof window < "u" && !window.__APP_STARTUP_READY__) {
+    P.raf && (P.raf = !1), P.n = 0;
+    return;
+  }
+  if (!(dt > 0) || dt > 250) return;
+  const D = P.ref = fpRafRef;
+  if (!(D > 2)) return;
+  if (P.raf) {
+    P.n++, P.miss += ((dt > D * 1.6 ? 1 : 0) - P.miss) * 0.03;
+    // missing screen refreshes again and again (not just a hitch): the PC can't draw a frame per refresh, so
+    // run flat out again for a while
+    P.n > 120 && P.miss > 0.3 && (P.raf = !1, P.n = 0, P.u = 0, P.hold = now + (P.swaps++ < 3 ? 15e3 : 6e4));
+  } else {
+    P.u = P.n ? P.u + (dt - P.u) * 0.04 : dt, P.n++;
+    P.n > 150 && now > P.hold && fpRafAlive() && P.u < D * 0.92 && (P.raf = !0, P.n = 0, P.miss = 0);
+  }
+}
 function fpRafStart() {
   if (fpRafOn || typeof requestAnimationFrame != "function") return;
   fpRafOn = !0;
   const A = () => {
     const e = performance.now();
-    fpLastRaf > 0 && e - fpLastRaf < 200 && (fpRafDt += (e - fpLastRaf - fpRafDt) * 0.1), fpLastRaf = e, requestAnimationFrame(A);
+    fpLastRaf > 0 && e - fpLastRaf < 200 && (fpRafDt += (e - fpLastRaf - fpRafDt) * 0.1, fpRafSample(e - fpLastRaf)), fpLastRaf = e, requestAnimationFrame(A);
   };
   requestAnimationFrame(A);
 }
@@ -28017,6 +28107,14 @@ var iY = class {
       tok.raf = requestAnimationFrame(go), tok.to = setTimeout(go, 1e3);
       return;
     }
+    // Release 1.0: Unlimited no longer draws more frames than the screen can show. When the game runs faster than
+    // the monitor refreshes (189 fps on a 144 Hz screen, say), the extra frames were never shown and the ones that
+    // were shown came at uneven times, which looked and felt laggy. Then it draws one frame per screen refresh,
+    // straight after the last one was shown. If the PC can't keep up with the screen it goes back to running flat out.
+    if (A === 0 && !this.paused && vgPace.raf && fpRafAlive()) {
+      tok.raf = requestAnimationFrame(go), tok.to = setTimeout(go, 250);
+      return;
+    }
     const e = A > 0 ? 1e3 / A : 0, t = this._lastTickStart < 0 ? e : performance.now() - this._lastTickStart, i = Math.max(0, e - t);
     // Uncapped: frames run back to back, not tied to the screen refresh. Only if the browser is late putting a
     // frame on screen does the next tick wait for it, so the picture never freezes (a 1 s safety net keeps the
@@ -28036,7 +28134,7 @@ var iY = class {
         this._last = -1, this._resolveWaiters();
         return;
       }
-      this._lastTickStart = A, this._budget > 0 && this._budget--, this.frame(A), this._schedule();
+      this._lastTickStart >= 0 && !this.paused && vgPaceNote(A - this._lastTickStart, A, Number(this.ctx.settings.get("graphics.fpsCap", 0)) || 0), this._lastTickStart = A, this._budget > 0 && this._budget--, this.frame(A), this._schedule();
     }
   }
   _resolveWaiters() {
@@ -45244,7 +45342,8 @@ var I3, b2, u3, Q3, E3, JB, go, dc, wI, p3, D2, G9 = YA((() => {
         "medium",
         "high",
         "ultra"
-      ]
+      ],
+      labels: ["Low", "Medium", "High", "Epic"]
     },
     {
       path: "graphics.motionBlur",
@@ -46843,7 +46942,7 @@ function T9(A) {
   function Tt(O, fA) {
     A.settings.set(O, fA);
     try {
-      O.startsWith("audio.") && Z().audio.setVolume(O.slice(6), fA), O === "graphics.quality" && Z().postfx.setQuality(fA);
+      O.startsWith("audio.") && Z().audio.setVolume(O.slice(6), fA), O === "graphics.quality" && Z().postfx.setQuality(A.settings.get("graphics.postQuality", fA));
     } catch {
     }
   }
@@ -47789,13 +47888,18 @@ var Jo, x2, C3, jh, m3, w3, bp, y3, b3, D3, v2, M3, Y9 = YA((() => {
 .od-mode-close { width: calc(var(--u) * 38); height: calc(var(--u) * 38); border: 1px solid rgba(236,240,234,.2); background: rgba(236,240,234,.05); color: var(--fg); font: inherit; font-size: calc(var(--u) * 27); line-height: 1; cursor: pointer; }
 .od-mode-close:hover, .od-mode-close:focus-visible { color: #111; background: var(--accent); outline: none; }
 .od-mode-dialog-sub { margin-top: calc(var(--u) * 5); color: var(--fg2); font-size: calc(var(--u) * 13); letter-spacing: .16em; text-transform: uppercase; }
-.od-mode-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(var(--u) * 14); margin-top: calc(var(--u) * 24); }
-.od-mode-group { grid-column: 1 / -1; display: flex; align-items: center; gap: calc(var(--u) * 12); margin: calc(var(--u) * 6) 0 calc(var(--u) * -2); color: var(--accent, #f0c048); font-size: calc(var(--u) * 12); font-weight: 700; letter-spacing: .3em; text-transform: uppercase; }
+.od-mode-grid { display: flex; flex-direction: column; gap: calc(var(--u) * 18); margin-top: calc(var(--u) * 24); max-height: calc(100vh - var(--u) * 210); overflow-y: auto; overflow-x: hidden; padding: calc(var(--u) * 4) calc(var(--u) * 10) calc(var(--u) * 4) calc(var(--u) * 4); scrollbar-width: thin; scrollbar-color: rgba(240,192,72,.7) rgba(236,240,234,.08); }
+.od-mode-section[hidden] { display: none; }
+.od-mode-section .od-mode-group { margin: 0 0 calc(var(--u) * 10); }
+.od-mode-row { display: flex; flex-wrap: nowrap; gap: calc(var(--u) * 14); overflow-x: auto; overflow-y: hidden; padding: calc(var(--u) * 6) calc(var(--u) * 2) calc(var(--u) * 12); scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: rgba(240,192,72,.7) rgba(236,240,234,.08); }
+.od-mode-row > .od-mode-option { flex: 0 0 calc(var(--u) * 300); scroll-snap-align: start; }
+.od-mode-row > .od-mode-option[data-mode="tdm"], .od-mode-row > .od-mode-option[data-mode="kc"] { flex-basis: calc(var(--u) * 440); }
+.od-mode-grid::-webkit-scrollbar, .od-mode-row::-webkit-scrollbar { width: calc(var(--u) * 8); height: calc(var(--u) * 8); }
+.od-mode-grid::-webkit-scrollbar-track, .od-mode-row::-webkit-scrollbar-track { background: rgba(236,240,234,.06); }
+.od-mode-grid::-webkit-scrollbar-thumb, .od-mode-row::-webkit-scrollbar-thumb { background: rgba(240,192,72,.65); border-radius: calc(var(--u) * 4); }
+.od-mode-group { display: flex; align-items: center; gap: calc(var(--u) * 12); margin: calc(var(--u) * 6) 0 calc(var(--u) * -2); color: var(--accent, #f0c048); font-size: calc(var(--u) * 12); font-weight: 700; letter-spacing: .3em; text-transform: uppercase; }
 .od-mode-group::after { content: ""; flex: 1; height: 1px; background: rgba(236,240,234,.16); }
 .od-mode-group[hidden] { display: none; }
-/* One row per group: the two featured modes share the width, the other three sit side by side. */
-.od-mode-grid > .od-mode-option { grid-column: span 2; }
-.od-mode-grid > .od-mode-option[data-mode="tdm"], .od-mode-grid > .od-mode-option[data-mode="kc"] { grid-column: span 3; }
 .od-mode-option { min-width: 0; padding: 0; overflow: hidden; text-align: left; border: 1px solid rgba(236,240,234,.16); background: rgba(236,240,234,.045); color: var(--fg); font: inherit; cursor: pointer; transition: border-color .15s, background .15s, transform .15s, box-shadow .15s; }
 .od-mode-option:hover, .od-mode-option:focus-visible { transform: translateY(calc(var(--u) * -3)); border-color: rgba(240,192,72,.72); outline: none; }
 .od-mode-option.sel { border-color: var(--accent); background: rgba(240,192,72,.09); box-shadow: 0 0 0 1px rgba(240,192,72,.25), 0 calc(var(--u) * 8) calc(var(--u) * 24) rgba(0,0,0,.25); }
@@ -47862,6 +47966,10 @@ var Jo, x2, C3, jh, m3, w3, bp, y3, b3, D3, v2, M3, Y9 = YA((() => {
 .od-desc { flex: 1; max-width: calc(var(--u) * 520); padding: calc(var(--u) * 26) calc(var(--u) * 28); background: rgba(10,13,15,.55); border-left: calc(var(--u) * 3) solid var(--accent); align-self: flex-start; }
 .od-account-panel { display: none; flex: 1; min-height: calc(var(--u) * 300); padding: calc(var(--u) * 38); background: linear-gradient(135deg, rgba(20,25,26,.92), rgba(8,11,12,.86)); border-left: calc(var(--u) * 3) solid var(--accent); color: var(--fg2); }
 .od-account-kicker { color: var(--accent); font-size: calc(var(--u) * 12); font-weight: 700; letter-spacing: .28em; text-transform: uppercase; }
+.od-account-panel { box-sizing: border-box; max-height: 100%; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(242,193,78,.55) transparent; }
+.od-account-panel::-webkit-scrollbar { width: calc(var(--u) * 6); }
+.od-account-panel::-webkit-scrollbar-thumb { background: rgba(242,193,78,.5); }
+.od-account-field[hidden] { display: none; }
 .od-account-panel h3 { margin: calc(var(--u) * 10) 0; color: var(--fg); font-size: calc(var(--u) * 32); letter-spacing: .08em; text-transform: uppercase; }
 .od-account-copy { max-width: calc(var(--u) * 600); font-size: calc(var(--u) * 15); line-height: 1.6; }
 .od-account-field { display: flex; flex-direction: column; gap: calc(var(--u) * 8); max-width: calc(var(--u) * 500); margin: calc(var(--u) * 30) 0 calc(var(--u) * 18); color: var(--fg); font-size: calc(var(--u) * 12); font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
@@ -52356,7 +52464,7 @@ function netStatsSystem(A) {
     else if (m.type === "players_state" || m.type === "snapshot" || m.type === "match_snapshot") states++, senders.add("*");
   }
   function update(online, send) {
-    const on = online && A.settings.get("hud.netStats", !0) !== !1;
+    const on = online && A.settings.get("hud.netStats", !1) === !0;
     if (!on) {
       root && (root.style.display = "none"), sent.clear();
       return;
@@ -53662,6 +53770,8 @@ var loCss = `
 .od-row.dis .od-cyc .a { visibility: hidden; }
 .od-lo-content { position: absolute; left: calc(var(--u) * 120); top: calc(var(--u) * 205); right: calc(var(--u) * 120); bottom: calc(var(--u) * 100); overflow: auto; color: var(--fg2); font-size: calc(var(--u) * 14); line-height: 1.45; padding-right: calc(var(--u) * 8); }
 .od-main > .od-armory-content { top: calc(var(--u) * 252); }
+.od-tabs[hidden] { display: none; }
+.od-main > .od-tabs[hidden] + .od-armory-content { top: calc(var(--u) * 205); }
 .od-pg-h { margin: calc(var(--u) * 18) 0 calc(var(--u) * 10); color: var(--fg); font-size: calc(var(--u) * 16); letter-spacing: .2em; text-transform: uppercase; }
 .od-pg-level { font-size: calc(var(--u) * 44); }
 .od-lo { display: grid; grid-template-columns: calc(var(--u) * 310) minmax(0, 1fr); gap: calc(var(--u) * 22); align-items: start; }
@@ -54416,7 +54526,7 @@ function vgNetStart() {
       }
       ws.send(JSON.stringify({ type: "resume", token: vgAuth.token, clientBuild: VGD.build, clientLabel: VGD.label, device: vgDevice(), steam: vgBoot.steam || void 0 })), vgAnnFrom(m), vgRegionsFrom(m), vgDlcApps(m.dlcApps), vgPubBuild(m);
     }
-    else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, vgAuth.dev = !!m.developer, Array.isArray(m.dlc) && vgDlcSet(m.dlc), m.early && !vgNet.earlyTold && (vgNet.earlyTold = !0, vgToast(`Early access · ${VGD.label} isn't released yet. Thanks for testing it!`)), ws.send(JSON.stringify({ type: "social_state" })), vgSyncBegin();
+    else if (m.type === "auth_ok") vgNet.open = !0, vgNet.retry = 0, vgAuth.dev = !!m.developer, typeof m.userId == "string" && m.userId && (vgAuth.uid = m.userId.slice(0, 32)), Array.isArray(m.dlc) && vgDlcSet(m.dlc), m.early && !vgNet.earlyTold && (vgNet.earlyTold = !0, vgToast(`Early access · ${VGD.label} isn't released yet. Thanks for testing it!`)), ws.send(JSON.stringify({ type: "social_state" })), vgSyncBegin();
     else if (m.type === "role") vgAuth.dev = !!m.developer;
     else if (m.type === "dlc") vgDlcSet(m.dlc, !0);
     else if (m.type === "early_access") m.early ? vgToast(`You have early access to ${m.early.label}.`) : vgToast("Your early access has ended.");
@@ -55310,6 +55420,61 @@ var vgRep2Css = `
 .vg-rep .pick button:disabled { opacity: .45; cursor: default; }
 .vg-rep .meta { margin: 8px 0 0; color: #858d86; font-size: 11.5px; line-height: 1.4; }
 `;
+/* ------------------------------------------------------------------ Release 1.0: "Action taken" */
+// When a player you reported is banned, the server tells you (at once, or the next time you sign in). The screen
+// waits until you are in the menus, so it never covers a match. It never says who it was.
+var vgAction = { n: 0, el: null };
+var vgActionCss = `
+.vg-action { position: fixed; inset: 0; z-index: 420; display: grid; place-items: center; padding: 16px; background: radial-gradient(ellipse at 50% 40%, rgba(40,36,22,.55), rgba(4,5,7,.92) 70%); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); font-family: inherit; color: #e9ece6; animation: vgActIn .28s ease-out; }
+@keyframes vgActIn { from { opacity: 0; } to { opacity: 1; } }
+.vg-action .card { position: relative; width: min(640px, 100%); padding: 34px 38px 30px; background: linear-gradient(160deg, rgba(24,28,30,.98), rgba(10,12,14,.98)); border: 1px solid rgba(236,240,234,.12); box-shadow: 0 40px 120px rgba(0,0,0,.65); text-align: center; animation: vgActCard .42s cubic-bezier(.2,.9,.3,1.15); }
+@keyframes vgActCard { from { transform: translateY(18px) scale(.97); opacity: 0; } to { transform: none; opacity: 1; } }
+.vg-action .card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, transparent, #f2c14e 20%, #f2c14e 80%, transparent); }
+.vg-action .badge { width: 92px; height: 92px; margin: -2px auto 14px; display: grid; place-items: center; }
+.vg-action .badge svg { width: 92px; height: 92px; filter: drop-shadow(0 0 18px rgba(242,193,78,.35)); }
+.vg-action .kk { color: #f2c14e; font-size: 11px; font-weight: 800; letter-spacing: .34em; text-transform: uppercase; }
+.vg-action h2 { margin: 8px 0 14px; font-size: clamp(34px, 6vw, 52px); line-height: 1; letter-spacing: .14em; text-transform: uppercase; }
+.vg-action .sub { margin: 0 0 6px; font-size: 13px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: #cfd5cc; }
+.vg-action p { margin: 0 auto; max-width: 470px; color: #b4bbb3; font-size: 15px; line-height: 1.55; }
+.vg-action .go { margin-top: 26px; min-width: 240px; padding: 14px 28px; background: #f2c14e; border: 0; color: #121212; font: inherit; font-size: 14px; font-weight: 800; letter-spacing: .26em; text-transform: uppercase; cursor: pointer; }
+.vg-action .go:hover, .vg-action .go:focus-visible { background: #ffd56b; outline: 2px solid rgba(242,193,78,.5); outline-offset: 3px; }
+.vg-action .hint { margin-top: 12px; color: #7f8880; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; }
+`;
+function vgActionShow() {
+  if (vgAction.el || !vgAction.n || typeof document > "u") return;
+  if (!document.getElementById("vg-action-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-action-style", st.textContent = vgActionCss, document.head.appendChild(st);
+  }
+  const n = vgAction.n;
+  vgAction.n = 0;
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  const d = vgAction.el = document.createElement("div");
+  d.className = "vg-action", d.setAttribute("role", "dialog"), d.setAttribute("aria-modal", "true"), d.setAttribute("aria-label", "Action taken");
+  d.innerHTML = `<div class="card"><div class="badge"><svg viewBox="0 0 120 120" aria-hidden="true"><path fill="rgba(242,193,78,.12)" stroke="#f2c14e" stroke-width="6" d="M60 8 L104 23 V57 C104 84 85 101 60 111 C35 101 16 84 16 57 V23 Z"/><path fill="none" stroke="#f2c14e" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" d="M38 60 L54 76 L84 44"/></svg></div><div class="kk">Report update</div><h2>Action taken</h2><div class="sub">Thank you for your report</div><p>${n > 1 ? `${n} players you reported have` : "A player you reported has"} had action taken against them. Thanks for helping keep Vangaurd fair for everyone.</p><button type="button" class="go">Continue</button><div class="hint">Enter · Continue</div></div>`;
+  const close = () => {
+    d.remove(), vgAction.el = null;
+    for (const t of ["keydown", "keyup"]) window.removeEventListener(t, key, !0);
+  }, key = (ev) => {
+    ev.stopImmediatePropagation(), ev.type === "keydown" && (ev.key === "Enter" || ev.key === "Escape" || ev.key === " ") && (ev.preventDefault(), close());
+  };
+  for (const t of ["keydown", "keyup"]) window.addEventListener(t, key, !0);
+  d.addEventListener("mousedown", (ev) => ev.stopPropagation()), d.querySelector(".go").addEventListener("click", close), document.body.appendChild(d), setTimeout(() => d.querySelector(".go")?.focus(), 40);
+  try {
+    pgCtx?.services?.audio?.ui?.("notify");
+  } catch {
+  }
+}
+typeof window < "u" && (vgNet.listeners.push((m) => {
+  m?.type === "report_action" && (vgAction.n += Math.max(1, Math.min(9, m.count | 0 || 1)));
+}), setInterval(() => {
+  if (!vgAction.n || vgAction.el) return;
+  const menu = pgCtx?.services?.hud?.menu, stage = pgCtx?.services?.gamemode?.state?.stage;
+  ["main", "entry"].includes(menu) && (!stage || stage === "menu") && !(typeof vgBoot < "u" && vgBoot.on) && !document.querySelector(".vg-rep, .vg-ops, .vg-pass, .vg-auth") && vgActionShow();
+}, 700), window.__VGACTION__ = { show: (n = 1) => (vgAction.n += n, vgActionShow()), state: vgAction });
 function vgRepDialog(html) {
   for (const [id, css] of [["vg-rep-style", vgRepCss], ["vg-rep2-style", vgRep2Css]]) if (!document.getElementById(id)) {
     const st = document.createElement("style");
@@ -55470,7 +55635,7 @@ typeof window < "u" && vgNet.listeners.push((m) => vgReadyMsg(m));
 /* ------------------------------------------------------------------ Beta 1.2: news & patch notes */
 // Only the current version's notes are shown (Beta 1.21: older versions are no longer listed).
 var VG_PATCH_NOTES = [
-  { v: "Release 1.0", items: ["New: the Halloween Pack DLC ($2.99 on Steam) with two new operators, Skeleton and Pumpkin Head, and the animated Halloween camo.", "New: an Operators screen on the main menu to choose who you play as. You see your operator's arms in first person, and other players see your operator in matches.", "New: a weekly game mode online next to Team Deathmatch. This week it's Kill Confirmed; it changes every Monday (Gun Game is next).", "New: North American and European servers. Pick yours in Settings > Account (or leave it on Automatic).", "Enemies only show on your minimap while your team has a UAV up. Ghost now keeps you off enemy UAVs.", "Halloween on every map until 10 November: pumpkin patches, graveyards, witches' cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky. Listen out in the main menu...", "A new level-up sound.", "Daily challenges are easier.", "Drone mode now works with a controller."] },
+  { v: "Release 1.0", items: ["New: the Halloween Pack DLC ($2.99 on Steam) with two new operators, Skeleton and Pumpkin Head, and the animated Halloween camo.", "New: an Operators screen on the main menu to choose who you play as. You see your operator's arms in first person, and other players see your operator in matches.", "New: a weekly game mode online next to Team Deathmatch. This week it's Kill Confirmed; it changes every Monday (Gun Game is next).", "New: North American and European servers. Pick yours in Settings > Account (or leave it on Automatic).", "Enemies only show on your minimap while your team has a UAV up. Ghost now keeps you off enemy UAVs.", "Halloween on every map until 10 November: pumpkin patches, graveyards, witches' cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky. Listen out in the main menu...", "A new level-up sound.", "Daily challenges are easier.", "Drone mode now works with a controller.", "New: Blackout, team deathmatch in the dark. Only pumpkins, cauldrons and (on Vardanek, Lindenhof and Kessel) dim streetlights light the map. It joins the weekly rotation.", "New: Loadouts, the Season Pass page, weapon charms and stickers, inspecting your gun (I), switching fire mode (B), and tracers and hitmarkers in the killcam.", "New: remap your controller buttons, with Xbox, PlayStation and Switch layouts. Settings > Account shows your ping to each server region and lets you copy your user ID.", "New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing. Changing one on its own sets the preset to Custom. 3D resolution now goes down to 25%.", "Smoother at high frame rates: Unlimited no longer draws more frames than your monitor can show.", "Progression is now called Challenges. When a player you reported gets banned, you see an Action taken screen.", "The FPS counter and network stats are now off by default, and the news shows every time you sign in.", "Fixed: the rifle went through operators on the Operators screen. The Skeleton now carries its rifle too."] },
   { v: "Beta 1.32", items: ["Small fixes and improvements."] },
   { v: "Beta 1.31", items: ["The game now shows when the servers are offline or under maintenance, even if you are not signed in.", "The sign-in page now tells you on its own when the servers go down."] },
   { v: "Beta 1.3", items: ["Fixed Matchmaking", "Many QoL Fixes", "You can now see on the report page who the last player who killed you was.", "Switched from NA West Servers to NA East Servers", "Fixed a Bug where if you would Slide or go Prone it would not show it on another players screen", "Weapon Leveling", "Weapon Mounting", "Kill Streaks", "Daily and Weekly Challenges and more!"] },
@@ -55496,7 +55661,7 @@ var vgNewsCss = `
 .vg-news summary { cursor: pointer; font-weight: 700; font-size: 14px; letter-spacing: .06em; padding: 4px 0; }
 .vg-news ul { margin: 6px 0 0; padding-left: 18px; }
 .vg-news li { margin: 0 0 6px; color: #c9cec8; font-size: 13.5px; line-height: 1.45; }
-.vg-news footer { display: flex; align-items: center; gap: 14px; padding: 14px 26px 18px; border-top: 1px solid rgba(236,240,234,.1); }
+.vg-news footer { display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 14px 26px 18px; border-top: 1px solid rgba(236,240,234,.1); }
 .vg-news footer label { flex: 1; display: flex; align-items: center; gap: 9px; color: #b9bfb8; font-size: 13px; cursor: pointer; }
 .vg-news footer input { accent-color: #f2c14e; width: 15px; height: 15px; }
 .vg-news footer button { min-width: 180px; padding: 13px 18px; background: #f2c14e; border: 0; color: #121212; font: 800 13px/1 inherit; font-family: inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
@@ -55520,17 +55685,18 @@ function vgNewsSkip() {
     return null;
   }
 }
-// After sign-in (auto): shown unless "don't show again" was ticked for this version and nothing new was posted since.
+typeof window < "u" && (window.__VGNEWS__ = { show: (auto) => vgNewsShow(!!auto), ui: vgNewsUI });
+// After sign-in (auto): always shown (Release 1.0: the "don't show again" option was removed).
 async function vgNewsShow(auto) {
   if (typeof document > "u" || vgNewsUI.open) return;
   try {
     if (auto && localStorage.getItem("vangaurd.news.off") === "1") return;
   } catch {
   }
-  const posts = vgNewsFetch(), sk = vgNewsSkip();
-  if (auto && sk && sk.v === VGD.label) {
-    const list = await posts;
-    if (!list || !list.some((p) => (p.at || 0) > (sk.at || 0))) return;
+  const posts = vgNewsFetch();
+  try {
+    localStorage.removeItem("vangaurd.news.skip");
+  } catch {
   }
   if (vgNewsUI.open || vgUpd.open || document.querySelector(".vg-upd") || vgAuth.open) return;
   if (!document.getElementById("vg-news-style")) {
@@ -55544,13 +55710,9 @@ async function vgNewsShow(auto) {
   const d = vgNewsUI.el = document.createElement("div");
   vgNewsUI.open = !0, d.className = "vg-news";
   const date = (t) => new Date(t).toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
-  d.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-news-h"><header><div class="kk">Vangaurd · ${vgEsc(VGD.label)}</div><h3 id="vg-news-h">News &amp; patch notes</h3></header><div class="body"><section class="nw"><h4>News</h4><div class="empty">Loading news…</div></section><section><h4>Patch notes</h4>${VG_PATCH_NOTES.slice(0, 1).map((n, i) => `<details${i === 0 ? " open" : ""}><summary>${vgEsc(n.v)}</summary><ul>${n.items.map((x) => `<li>${vgEsc(x)}</li>`).join("")}</ul></details>`).join("")}</section></div><footer><label><input type="checkbox" data-skip${sk && sk.v === VGD.label ? " checked" : ""}> Don't show this after sign-in until there's an update or news</label><button type="button" data-ok>Continue</button></footer></div>`;
+  d.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-news-h"><header><div class="kk">Vangaurd · ${vgEsc(VGD.label)}</div><h3 id="vg-news-h">News &amp; patch notes</h3></header><div class="body"><section class="nw"><h4>News</h4><div class="empty">Loading news…</div></section><section><h4>Patch notes</h4>${VG_PATCH_NOTES.slice(0, 1).map((n, i) => `<details${i === 0 ? " open" : ""}><summary>${vgEsc(n.v)}</summary><ul>${n.items.map((x) => `<li>${vgEsc(x)}</li>`).join("")}</ul></details>`).join("")}</section></div><footer><button type="button" data-ok>Continue</button></footer></div>`;
   document.body.appendChild(d);
   const close = () => {
-    try {
-      d.querySelector("[data-skip]").checked ? localStorage.setItem("vangaurd.news.skip", JSON.stringify({ v: VGD.label, at: Date.now() })) : localStorage.removeItem("vangaurd.news.skip");
-    } catch {
-    }
     d.remove(), vgNewsUI.open = !1, vgNewsUI.el = null;
     for (const t of ["keydown", "keyup"]) window.removeEventListener(t, key, !0);
   }, key = (ev) => {
@@ -55789,6 +55951,7 @@ typeof window < "u" && vgAuth.listeners.push(() => {
   vgAuth.user && !vgNewsUI.shown && (vgNewsUI.shown = !0, setTimeout(go, 900));
 });
 function vgAuthSet(user, token, remember) {
+  String(user || "").toLowerCase() !== String(vgAuth.user || "").toLowerCase() && (vgAuth.uid = null);
   vgAuth.user = user || null, vgAuth.token = token || null, vgAuth.offline = !user;
   try {
     user && token && remember ? localStorage.setItem(VG_AUTH_KEY, JSON.stringify({ user, token })) : !user && localStorage.removeItem(VG_AUTH_KEY);
@@ -56361,6 +56524,14 @@ function vgSkeletonGeo(q) {
     vgBall(t, P(`foot${S}`), 0.022, 0.022, 0.03, `foot${S}`, q), vgBall(t, P(`foot${S}`).add(V(0, -0.04, -0.03)), 0.02, 0.022, 0.024, `foot${S}`, q);
     for (let f = 0; f < 3; f++) vgShaft(t, P(`foot${S}`).add(V((f - 1) * 0.018, -0.04, 0.01)), P(`toe${S}`).add(V((f - 1) * 0.022, 0, 0.03)), 6e-3, `foot${S}`, q);
   }
+  // Release 1.0: the skeleton carries the same rifle as everyone else (it was missing, so its hands held nothing)
+  wn = q < 0.4, Zl = q < 0.8, DS(wn ? 0 : Zl ? 1 : 99);
+  try {
+    UY(t, q);
+  } catch {
+  } finally {
+    DS(99);
+  }
   return t.toGeometry();
 }
 // A long coat skirt (waist to below the knees) with a torn hem, for the Pumpkin Head.
@@ -56683,7 +56854,7 @@ typeof window < "u" && setInterval(() => {
     console.error("[operators] first-person arms", err);
   }
 }, 500);
-typeof window < "u" && (window.__VG10__ = { ops: VG_OPS, current: () => vgOpCurrent(), set: (id) => vgOpSet(id), get deco() { return vgDeco; }, get blackout() { return vgBlackout; }, halloween: () => vgHalloweenOn(), camo: (id, role = "primary") => pgSetCamo(role, id), screen: () => vgOpsScreen() });
+typeof window < "u" && (window.__VG10__ = { ops: VG_OPS, current: () => vgOpCurrent(), set: (id) => vgOpSet(id), get deco() { return vgDeco; }, get blackout() { return vgBlackout; }, get lamps() { return vgLamps; }, halloween: () => vgHalloweenOn(), camo: (id, role = "primary") => pgSetCamo(role, id), screen: () => vgOpsScreen(), geos: (id) => id === "default" ? vgPreviewBase()?.geos : vgOpGeos(id), get state() { return vgOps; }, bones: () => ({ names: Wb, weapon: ZA.weapon, hand: ZA.handR ?? ZA.hand_r ?? null, ZA }) });
 /* ------------------------------------------------------------------ Release 1.0: Operators screen */
 // Main menu -> Operators: pick who you play as. A turning 3D preview of each operator; DLC operators show what pack
 // they come in, with "Buy on Steam" (or "Equip" once you own it).
@@ -56922,7 +57093,23 @@ function vgOpPreview(canvas) {
     const base = vgPreviewBase();
     if (!base) return null;
     const body = new vH({ geometries: base.geos, material: base.mat, name: `op_preview_${id}` });
-    return body.mesh.frustumCulled = !1, vgOpApply(body, id), body.group.visible = !1, turn.add(body.group), body.applyPose(), bodies[id] = body;
+    body.mesh.frustumCulled = !1, vgOpApply(body, id), body.group.visible = !1, turn.add(body.group);
+    // Release 1.0: the operator holds the rifle at the ready, like in a match. (The bind pose has the arms down with
+    // the rifle floating at the chest, so its stock went into the body.) Without the animator, the rifle is hidden.
+    try {
+      const an = new kH(body, 1.618 + Object.keys(bodies).length);
+      an.groundY = () => 0, an.in.pos.set(0, 0, 0), an.in.vel.set(0, 0, 0), an.in.bodyYaw = an.in.aimYaw = 0, an.in.aimPitch = -0.08, an.in.weapon = vgOps.pvW || "patrol", an.initialized = !1;
+      for (let k = 0; k < 120; k++) an.update(1 / 60, k / 60);
+      body.__an = an, body.__anT = 2;
+    } catch {
+      for (const k of [ZA.weapon, ZA.mag]) k != null && body.bones[k].scale.setScalar(1e-4);
+    }
+    return poseIn(body), bodies[id] = body;
+  };
+  // applyPose works in world space (it undoes the parent's rotation), so pose with the turntable straight
+  const poseIn = (bd) => {
+    const r = turn.rotation.y;
+    turn.rotation.y = 0, turn.updateMatrixWorld(!0), bd.applyPose(), turn.rotation.y = r, turn.updateMatrixWorld(!0);
   };
   let sw = 0, sh = 0;
   const size = () => {
@@ -56935,6 +57122,14 @@ function vgOpPreview(canvas) {
     raf = requestAnimationFrame(frame);
     const now = performance.now(), dt = Math.min(0.1, (now - last) / 1e3);
     last = now, ang += dt * 0.45, turn.rotation.y = ang, size();
+    try {
+      if (cur?.__an) {
+        // small fixed steps: the animator's springs are tuned for frame rates of 60 and up
+        for (let k = dt; k > 1e-4; k -= 1 / 60) cur.__an.update(Math.min(1 / 60, k), cur.__anT += Math.min(1 / 60, k));
+        poseIn(cur);
+      }
+    } catch {
+    }
     try {
       vgFlicker(), R.render(sc, cam);
     } catch {
@@ -57251,7 +57446,10 @@ function vgBats(W, g, rnd) {
 // pumpkins, the scarecrows' pumpkin heads and the witches' cauldrons (and muzzle flashes and explosions). There are
 // more lanterns and cauldrons than usual, and a small pool of point lights follows the ones nearest to you.
 // Bots can't see far in the dark either: they spot you within vgBlackout.sight metres, or when you fire.
-var vgBlackout = { on: !1, sight: 22, pool: null, raf: 0, last: 0, n: 8 };
+var vgBlackout = { on: !1, sight: 22, pool: null, raf: 0, last: 0, n: 10 };
+// The streetlights of the map being built (the lamp heads), filled in as the map is made. In Blackout a few maps
+// keep their streetlights on, dimly: the city, the village and the rail yard. The others stay pitch dark.
+var vgLamps = { map: null, list: [] }, VG_BO_LAMP_MAPS = /* @__PURE__ */ new Set(["vardanek", "lindenhof", "kessel"]);
 function vgBlackoutLight(base) {
   const L = JSON.parse(JSON.stringify(base || {}));
   return Object.assign(L, { intensity: 1e-3, sunDisc: 0, skyBoost: 0, envScale: 0, envCap: 0, minSunRatio: 0, exposure: 1, skyTint: [0.6, 0.6, 0.8] }), L.aureole = { inner: 0, outer: 0, blur: 24, width: 0.03 }, L.haze = { ...L.haze || {}, density: 1.8e-3, air: 2e-4, sunScatter: 0, ambientScale: 0, skyHaze: 0 }, L.dust = { ...L.dust || {}, density: 0, shaftGain: 0, indoorShaftGain: 0, indoorBoost: 0 }, L.bounceFill = [0, 0, 0], L.groundAlbedo = [0, 0, 0], L.facadeAlbedo = [0, 0, 0], L;
@@ -57303,6 +57501,18 @@ function vgBlackoutPool(A) {
   };
   vgBlackout.raf = requestAnimationFrame(loop);
 }
+// the lit glass under each streetlight head
+function vgBlackoutBulbs(P, list) {
+  const key = list.length ? `${vgLamps.map}:${list.length}` : "";
+  if (P.bulbKey === key) return;
+  P.bulbKey = key, P.bulbs && (P.bulbs.removeFromParent(), P.bulbs.dispose?.(), P.bulbs = null);
+  if (!list.length) return;
+  vgBlackout.bulbGeo || (vgBlackout.bulbGeo = new zs(0.24, 0.46), vgBlackout.bulbMat = new ha({ color: new ue(1, 0.78, 0.52).multiplyScalar(1.5) }));
+  const im = new WB(vgBlackout.bulbGeo, vgBlackout.bulbMat, list.length), m4 = new ne(), q = new Oe(), eu = new ga(), pv = new b(), one = new b(1, 1, 1);
+  list.forEach((l, i) => {
+    eu.set(Math.PI / 2, l.a, 0, "YXZ"), q.setFromEuler(eu), m4.compose(pv.set(l.x, l.y + 0.08, l.z), q, one), im.setMatrixAt(i, m4);
+  }), im.instanceMatrix.needsUpdate = !0, im.castShadow = im.receiveShadow = !1, im.frustumCulled = !1, im.name = "blackout_bulbs", P.g.add(im), P.bulbs = im;
+}
 function vgBlackoutClear() {
   vgBlackout.raf && cancelAnimationFrame(vgBlackout.raf), vgBlackout.raf = 0;
   const P = vgBlackout.pool;
@@ -57318,7 +57528,8 @@ function vgBlackoutTick() {
     vgBlackout.last = now, vgBoV || (vgBoV = { p: new b(), f: new b() });
     const { p: cp, f } = vgBoV;
     cam.getWorldPosition(cp), cam.getWorldDirection(f);
-    const src = vgDeco.lights || [], best = [];
+    const lampsOn = VG_BO_LAMP_MAPS.has(P.A.services?.world?.mapId) && vgLamps.map === P.A.services?.world?.mapId, src = lampsOn ? (vgDeco.lights || []).concat(vgLamps.list) : vgDeco.lights || [], best = [];
+    vgBlackoutBulbs(P, lampsOn ? vgLamps.list : []);
     for (const s of src) {
       const dx = s.x - cp.x, dy = s.y - cp.y, dz = s.z - cp.z, d = Math.hypot(dx, dy, dz) || 1e-3;
       if (d > 70) continue;
@@ -57333,7 +57544,7 @@ function vgBlackoutTick() {
     for (const p of free) {
       const s = pick.shift();
       if (!s) break;
-      p.src = s, p.L.position.set(s.x, s.y, s.z), p.L.color.setHex(s.k ? 7208778 : 16747056), p.L.distance = s.k ? 8.5 : 8.5 + 1.5 * Math.min(1.6, s.s);
+      p.src = s, p.L.position.set(s.x, s.y - (s.k === 2 ? 0.25 : 0), s.z), p.L.color.setHex(s.k === 2 ? 16756848 : s.k ? 7208778 : 16747056), p.L.distance = s.k === 2 ? 17 : s.k ? 8.5 : 8.5 + 1.5 * Math.min(1.6, s.s);
     }
   }
   for (const p of P.pool) {
@@ -57342,7 +57553,11 @@ function vgBlackoutTick() {
       p.L.intensity = 0;
       continue;
     }
-    // a candle's flicker for the pumpkins, a slow bubbling pulse for the cauldrons
+    // a candle's flicker for the pumpkins, a slow bubbling pulse for the cauldrons, a steady (dim) streetlight
+    if (s.k === 2) {
+      p.L.intensity = 10 * (0.97 + 0.03 * Math.sin(t * 50 + p.ph));
+      continue;
+    }
     const f = s.k ? 0.9 + 0.1 * Math.sin(t * 2.1 + p.ph) * Math.sin(t * 3.3 + p.ph * 2) : 0.84 + 0.12 * Math.sin(t * 9.1 + p.ph) * Math.sin(t * 5.3 + 1.2 + p.ph) + 0.04 * Math.sin(t * 23.7 + p.ph);
     p.L.intensity = (s.k ? 3.4 : 3.2 * Math.min(1.6, s.s)) * f;
   }
@@ -57744,8 +57959,43 @@ function rJ(A) {
         path: "graphics.quality",
         label: "Quality preset",
         type: "cycle",
-        options: t5.map((t) => [t, t.toUpperCase()]),
-        desc: "Overall graphics quality. Adjusts shadows, ambient occlusion, post-processing and effects density together."
+        options: [["low", "LOW"], ["medium", "MEDIUM"], ["high", "HIGH"], ["ultra", "EPIC"]],
+        desc: "Sets Shadows, Anti-aliasing, Textures, Effects and Post-processing below to the same level. Changing one of them on its own switches the preset to Custom."
+      },
+      {
+        path: "graphics.shadowQuality",
+        label: "Shadows",
+        type: "cycle",
+        options: [["low", "LOW"], ["medium", "MEDIUM"], ["high", "HIGH"], ["ultra", "EPIC"]],
+        desc: "Sun shadows. Low turns them off (most frames per second); higher levels give sharper shadows that reach further, at a cost."
+      },
+      {
+        path: "graphics.aa",
+        label: "Anti-aliasing",
+        type: "cycle",
+        options: [["off", "OFF"], ["fxaa", "FXAA"], ["taa", "TAA"], ["tsr_low", "TSR LOW"], ["tsr_medium", "TSR MEDIUM"], ["tsr_high", "TSR HIGH"], ["tsr_epic", "TSR EPIC"]],
+        desc: "How smooth jagged, pixelated edges look. Off is the sharpest and fastest. FXAA is a quick edge filter. TAA blends frames for very smooth edges. TSR adds sharpening and more stable detail on top (Epic is the cleanest), which also helps at low render resolution."
+      },
+      {
+        path: "graphics.textureQuality",
+        label: "Textures",
+        type: "cycle",
+        options: [["low", "LOW"], ["medium", "MEDIUM"], ["high", "HIGH"], ["ultra", "EPIC"]],
+        desc: "Texture resolution and how sharp surfaces stay at an angle. Lower levels use less video memory."
+      },
+      {
+        path: "graphics.effectsQuality",
+        label: "Effects",
+        type: "cycle",
+        options: [["low", "LOW"], ["medium", "MEDIUM"], ["high", "HIGH"], ["ultra", "EPIC"]],
+        desc: "How many particles explosions, smoke, sparks and muzzle flashes spawn. Lower levels help in busy fights."
+      },
+      {
+        path: "graphics.postQuality",
+        label: "Post-processing",
+        type: "cycle",
+        options: [["low", "LOW"], ["medium", "MEDIUM"], ["high", "HIGH"], ["ultra", "EPIC"]],
+        desc: "Ambient occlusion, bloom, light shafts, lens flare and depth of field. Low turns them off."
       },
       {
         path: "graphics.showFps",
@@ -57765,9 +58015,9 @@ function rJ(A) {
       },
       {
         path: "graphics.renderScale",
-        label: "Render resolution",
+        label: "3D resolution",
         type: "slider",
-        min: 0.35,
+        min: 0.25,
         max: 1,
         step: 0.05,
         fmt: (t) => Math.round(t * 100) + "%",
@@ -57787,15 +58037,9 @@ function rJ(A) {
           [240, "240"],
           [360, "360"]
         ],
-        desc: "Unlimited (default) renders as fast as your PC can, not tied to your monitor. VSync locks the frame rate to your monitor's refresh rate. A number caps the frame rate."
+        desc: "Unlimited (default) runs as fast as your PC can, but never draws more frames than your monitor can show, so motion stays smooth instead of stuttering. VSync always locks the frame rate to your monitor's refresh rate. A number caps the frame rate."
       },
       { sec: "Post processing" },
-      {
-        path: "graphics.shadows",
-        label: "Shadows",
-        type: "toggle",
-        desc: "Dynamic sun shadows. Disabling them makes enemies harder to spot in cover."
-      },
       {
         path: "graphics.motionBlur",
         label: "Motion blur",
@@ -58202,7 +58446,7 @@ function cJ(A) {
   NA("div", "od-scrim", n), NA("div", "od-scan", n);
   const o = NA("div", "od-title", n);
   NA("div", "emb", o, R2), NA("div", "op", o).textContent = "Vangaurd", NA("h1", "", o, "<span>VANGAURD</span>"), NA("div", "sub", o).textContent = "Choose your deployment";
-  const r = NA("div", "od-menu od-entry-menu", n), c = [de(r, "Singleplayer", "Play immediately against AI", se), de(r, "Multiplayer", "Open the deployment menu, then queue for a match", Qe), de(r, "Operators", "Choose who you play as · new Halloween operators", () => vgOpsScreen())], l = NA("div", "od-foot", n);
+  const r = NA("div", "od-menu od-entry-menu", n), c = [de(r, "Singleplayer", "Play immediately against AI", se), de(r, "Multiplayer", "Open the deployment menu, then queue for a match", Qe)], l = NA("div", "od-foot", n);
   l.innerHTML = `<span class="hint"><span class="od-key">↑↓</span>Navigate</span><span class="hint"><span class="od-key">ENTER</span>Select</span><span class="sp"></span><span class="vg-who"></span><span class="ver">${VGD.text}</span>`;
   const g = s("loading", "od-loading");
   NA("div", "od-scrim dark", g);
@@ -58280,8 +58524,8 @@ function cJ(A) {
     de(d, "Loadouts", "Build, name and equip your five loadouts", () => {
       F.loFrom = "main", loOpen();
     }),
-    de(d, "Progression & armory", "Your level, upcoming unlocks and every weapon and attachment", () => {
-      F.armoryPage !== "armory" && (F.armoryPage = "level"), F.armoryFrom = "main", z(), tt("armory");
+    de(d, "Challenges", "Daily and weekly challenges · finish them for XP", () => {
+      F.armoryPage = "challenges", F.armoryFrom = "main", z(), tt("armory");
     }),
     de(d, "Settings", "Graphics, mouse, audio and interface", () => Ct("graphics")),
     de(d, "Back", "Return to deployment selection", () => tt("entry"))
@@ -58313,10 +58557,15 @@ function cJ(A) {
   tA.id = "od-mode-title", tA.textContent = "Choose operation";
   const K = NA("button", "od-mode-close", $);
   K.type = "button", K.textContent = "×", K.setAttribute("aria-label", "Close game mode selector"), NA("div", "od-mode-dialog-sub", V).textContent = "Select a game mode to deploy";
-  let mgF = null, mgO = null, mgP = null;
-  const eA = NA("div", "od-mode-grid", V), X = f.map(([yA, VA, le], mgI) => {
-    mgI === 0 && (mgF = NA("div", "od-mode-group", eA), mgF.textContent = "Featured"), mgI === 2 && (mgO = NA("div", "od-mode-group", eA), mgO.textContent = "Other"), yA === "range" && (mgP = NA("div", "od-mode-group", eA), mgP.textContent = "Practice");
-    const ge = NA("button", "od-mode-option", eA);
+  // Release 1.0: each category is one row of modes that scrolls sideways when it doesn't fit, and the list scrolls
+  // up and down
+  let mgF = null, mgO = null, mgP = null, mgRow = null;
+  const eA = NA("div", "od-mode-grid", V), mgSec = (t) => {
+    const sec = NA("div", "od-mode-section", eA);
+    return NA("div", "od-mode-group", sec).textContent = t, mgRow = NA("div", "od-mode-row", sec), sec;
+  }, X = f.map(([yA, VA, le], mgI) => {
+    mgI === 0 && (mgF = mgSec("Featured")), mgI === 2 && (mgO = mgSec("Other")), yA === "range" && (mgP = mgSec("Practice"));
+    const ge = NA("button", "od-mode-option", mgRow);
     ge.type = "button", ge.dataset.mode = yA, ge.setAttribute("aria-pressed", "false");
     const Se = NA("span", "od-mode-thumb", ge), Ue = NA("canvas", "", Se), lt = NA("span", "od-mode-mark", Se);
     lt.textContent = yA === "tdm" ? "05 / 05" : yA === "domination" ? "A · B · C" : yA === "kc" ? "FFA · 20 TAGS" : yA === "gg" ? "FFA · 11 GUNS" : yA === "range" ? "10 – 100 M" : "HOLD THE LINE";
@@ -58337,9 +58586,11 @@ function cJ(A) {
   NA("div", "od-scrim dark", pA);
   const BA = NA("div", "od-hdr", pA);
   const pgK = NA("div", "k", BA);
-  pgK.textContent = "Profile", NA("h2", "", BA).textContent = "Progression & armory";
+  pgK.textContent = "Profile", NA("h2", "", BA).textContent = "Challenges";
+  // Release 1.0: this page is just the challenges now (no Level or Armory tabs)
   const Z = NA("div", "od-tabs", pA), nA = {};
-  for (const [yA, VA] of [["level", "Level"], ["challenges", "Challenges"], ["armory", "Armory"]]) {
+  Z.hidden = !0;
+  for (const [yA, VA] of [["challenges", "Challenges"]]) {
     const le = NA("button", "od-tab", Z);
     le.textContent = VA, le.addEventListener("click", () => {
       F.armoryPage = yA, z();
@@ -58349,8 +58600,8 @@ function cJ(A) {
   aA.innerHTML = '<span class="hint"><span class="od-key">ESC</span>Back</span><span class="sp"></span><span class="ver">Saved to your account when signed in</span>';
   function z() {
     const yA = Z3(), lv = pgLevel(), D = lwData();
-    ["level", "challenges", "armory"].includes(F.armoryPage) || (F.armoryPage = "level");
-    for (const VA of ["level", "challenges", "armory"]) Ka(nA[VA], "sel", F.armoryPage === VA);
+    F.armoryPage = "challenges";
+    for (const VA of ["challenges"]) Ka(nA[VA], "sel", F.armoryPage === VA);
     pgK.textContent = `Level ${lv.level} · ${lv.total.toLocaleString()} XP earned`;
     const bars = ["Damage", "Fire rate", "Range", "Control", "Mobility"], barH = (w) => `<div class="od-lw-bars">${bars.map((n, i) => `<span>${n}</span><i><b style="transform:scaleX(${(w.bars[i] / 10).toFixed(2)})"></b></i>`).join("")}</div>`;
     if (F.armoryPage === "level") {
@@ -58944,6 +59195,42 @@ function cJ(A) {
       vgSyncFlush(), vgAuthSet(null, null, !1), tk && vgAuthCall({ type: "logout", token: tk }, 4e3), vgAuthShow("You have signed out.");
     } else vgAuthShow();
   }, !0), vgAcct();
+  // Release 1.0: your account's user ID, with a button to copy it (for support and reports)
+  {
+    const ub = NA("div", "od-account-uid", wA);
+    ub.innerHTML = '<div class="od-account-kicker">User ID</div><p class="od-account-copy">Your account\'s unique ID. It never changes, even if you rename. Give it to the Vangaurd team when you contact support.</p><div class="od-uid-row"><code class="od-uid">—</code><button type="button" class="od-btn" data-copy>Copy user ID</button><span class="od-account-status" data-st></span></div>';
+    if (!document.getElementById("vg-uid-style")) {
+      const st = document.createElement("style");
+      st.id = "vg-uid-style", st.textContent = `.od-account-uid { margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(236,240,234,.1); }
+.od-uid-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.od-uid { flex: 0 1 auto; min-width: 0; padding: 10px 14px; background: rgba(236,240,234,.05); border: 1px solid rgba(236,240,234,.16); color: #f2c14e; font: 700 14px/1.2 ui-monospace, Consolas, monospace; letter-spacing: .12em; user-select: all; overflow-wrap: anywhere; }
+.od-uid-row .od-btn[disabled] { opacity: .45; cursor: default; }
+.od-uid.empty { color: #9aa29b; font: 600 13px/1.2 inherit; font-family: inherit; letter-spacing: .02em; user-select: none; }`, document.head.appendChild(st);
+    }
+    const code = ub.querySelector(".od-uid"), btn = ub.querySelector("[data-copy]"), stEl = ub.querySelector("[data-st]");
+    let stT = 0;
+    const paintU = () => {
+      const id = vgAuth.user ? vgAuth.uid || "" : "";
+      code.textContent = id || (vgAuth.user ? "Connecting…" : "Sign in to see your user ID"), code.classList.toggle("empty", !id), btn.disabled = !id;
+    };
+    btn.addEventListener("click", async (ev) => {
+      ev.stopImmediatePropagation();
+      const id = vgAuth.user && vgAuth.uid;
+      if (!id) return;
+      let ok = !1;
+      try {
+        await navigator.clipboard.writeText(id), ok = !0;
+      } catch {
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = id, ta.setAttribute("readonly", ""), ta.style.cssText = "position:fixed;left:-9999px;opacity:0", document.body.appendChild(ta), ta.select(), ok = document.execCommand("copy"), ta.remove();
+        } catch {
+        }
+      }
+      stEl.textContent = ok ? "Copied to clipboard." : "Couldn't copy. Select the ID and press Ctrl+C.", stEl.classList.toggle("error", !ok), clearTimeout(stT), stT = setTimeout(() => stEl.textContent = "", 3e3);
+    }, !0), vgAuth.listeners.push(paintU), vgNet.listeners.push((m) => m?.type === "auth_ok" && setTimeout(paintU, 0)), paintU();
+    window.__VGUID__ = { paint: paintU, el: ub };
+  }
   // Release 1.0: which servers online matches are played on (North America or Europe)
   {
     const rg = NA("div", "od-account-region", wA);
@@ -59161,11 +59448,14 @@ function cJ(A) {
   function JA() {
     const yA = F.sessionType === "multiplayer", VA = !!v.value.trim(), le = f[p]?.[0];
     yA && le !== "tdm" && le !== vgWeekly.mode && (p = 0, e.services.gamemode.setMode?.("tdm")), E[1].firstChild.nodeValue = F.waitingForPlayers ? "Cancel Queue" : F.multiplayerMatch ? "Online Match" : yA ? "Queue for Match" : "Start Game", E[1].querySelector(".d").textContent = F.waitingForPlayers ? `${gmName()} · matchmaking in progress` : F.multiplayerMatch ? "You are already deployed in the online match" : yA ? `${gmName()} · Up to 12 players · First to ${gmLimit()}` : "Start immediately against AI", X.forEach(({ key: ge, button: Se }) => {
-      Se.hidden = yA && ge !== "tdm" && ge !== vgWeekly.mode, mgO && (mgO.hidden = yA), mgP && (mgP.hidden = yA);
+      Se.hidden = yA && ge !== "tdm" && ge !== vgWeekly.mode;
       // Release 1.0: online, the weekly mode is marked as such
       const wk = yA && ge === vgWeekly.mode;
       Se.classList.toggle("vg-weekly", wk), wk ? Se.setAttribute("data-weekly", `Weekly · ${vgWeeklyLeft()}`) : Se.removeAttribute("data-weekly");
-    }), U.hidden = !yA || !F.serverConfigurationOpen, P.hidden = !yA || VA, N.hidden = !F.multiplayerMatch, yA && !G.textContent && (G.textContent = `${gmName()} · Up to 12 players · First to ${gmLimit()}.`), lA(f[p][0]);
+    });
+    // a category with nothing left to show (online) is hidden
+    for (const sec of eA.querySelectorAll(".od-mode-section")) sec.hidden = ![...sec.querySelectorAll(".od-mode-option")].some((b2) => !b2.hidden);
+    U.hidden = !yA || !F.serverConfigurationOpen, P.hidden = !yA || VA, N.hidden = !F.multiplayerMatch, yA && !G.textContent && (G.textContent = `${gmName()} · Up to 12 players · First to ${gmLimit()}.`), lA(f[p][0]);
   }
   const Ae = "vangaurd.multiplayer.url.v2";
   try {
@@ -59470,7 +59760,7 @@ function cJ(A) {
   function xe(yA, VA) {
     yA.type === "slider" && (VA = Fc(Math.round(VA / yA.step) * yA.step, yA.min, yA.max), VA = Number(VA.toFixed(4))), e.settings.set(yA.path, VA);
     try {
-      yA.path === "graphics.quality" && e.services.postfx.setQuality?.(VA), yA.bus && e.services.audio.setVolume?.(yA.bus, VA), yA.path === "hud.scale" && A.onResize();
+      yA.path === "graphics.quality" && e.services.postfx.setQuality?.(e.settings.get("graphics.postQuality", VA)), yA.bus && e.services.audio.setVolume?.(yA.bus, VA), yA.path === "hud.scale" && A.onResize();
     } catch (le) {
       e.reportError("hud", "settings", le);
     }
@@ -59478,7 +59768,7 @@ function cJ(A) {
       e.settings.set("pad.map", null), Mt();
       return;
     }
-    yA.path === "graphics.displayMode" ? F.rows.forEach(hi) : hi(F.rows.find((le) => le.def === yA));
+    yA.path === "graphics.displayMode" || yA.path === "graphics.quality" || vgGfxKeys().includes(yA.path) ? F.rows.forEach(hi) : hi(F.rows.find((le) => le.def === yA));
   }
   function Mt() {
     ie.innerHTML = "", F.rows = [];
@@ -60887,7 +61177,7 @@ function hJ(A) {
         minimapRotate: !0,
         compass: !0,
         soundViz: !0,
-        netStats: !0
+        netStats: !1
       }), g = document.createElement("style"), g.textContent = x3, g.textContent += `
 .od-fps-counter{position:fixed;right:28px;top:26px;z-index:80;padding:7px 10px;background:rgba(8,12,11,.62);border:1px solid rgba(255,255,255,.18);color:#f0eee6;font:700 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;pointer-events:none}.od-match-score{position:fixed;left:50%;top:calc(82px + 4.8*var(--u,1px));transform:translateX(-50%);z-index:70;padding:8px 13px;background:rgba(8,12,11,.58);border:1px solid rgba(255,255,255,.14);color:#f0eee6;font:700 10px/1.2 system-ui,sans-serif;letter-spacing:.12em;white-space:nowrap;pointer-events:none}.od-net-overlay{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:65}.od-net-player{position:absolute;display:flex;align-items:center;gap:6px;white-space:nowrap;font:800 12px/1 system-ui,sans-serif;letter-spacing:.1em;color:#ff7068;text-shadow:0 2px 4px #000,0 0 10px #000;pointer-events:none}.od-net-player .arrow{font-size:16px}.od-net-player.friend{color:#8bd8ff}.od-net-player.edge{padding:5px 7px;background:rgba(4,8,11,.58);border-radius:2px}.od-net-player.edge .arrow{transform:rotate(var(--bearing))}@media(max-width:600px){.od-fps-counter{right:12px;top:12px}.od-match-score{top:94px;font-size:8px;letter-spacing:.06em}.od-net-player{font-size:10px}}`, A.ui.hudRoot.appendChild(g), a.layer = NA("div", "od-layer od-hud", A.ui.hudRoot), I = NA("div", "od-net-overlay", a.layer), a.uiLayer = NA("div", "od-layer od-ui", A.ui.uiRoot), B = NA("div", "od-fps-counter", A.ui.hudRoot), B.setAttribute("aria-live", "off"), B.style.display = "none", h = NA("div", "od-match-score", A.ui.hudRoot), h.style.display = "none", J.root = a.layer, IA(), n = z9(a), a.minimap = n, s = O9(a), c = $9(a), o = Z9(a), r = q9(a), l = cJ(a), IA(), i("resize", IA), window.addEventListener("resize", IA), i("settings:changed", ({ path: QA }) => {
         QA === "hud.scale" && IA();
@@ -62792,10 +63082,10 @@ function kJ(A) {
     return A.assets.track(tA, `lighting:preset:${W}`);
   }
   function P() {
-    const W = A.settings.get("graphics.quality", "high"), V = J2[W] || J2.high;
+    const W = A.settings.get("graphics.shadowQuality", A.settings.get("graphics.quality", "high")), V = J2[W] || J2.high;
     D.quality = W;
     const $ = A.settings.get("graphics.shadowMapSize", 4096), tA = Math.min(V.cascadeSize, Math.max(512, Math.floor($ / 2) * (W === "ultra" ? 1.5 : 1)));
-    a && a.shadow.mapSize.x !== tA && (a.shadow.mapSize.set(tA, tA), a.shadow.map?.dispose(), a.shadow.map = null), D.steps = V.steps, Si[24] = D.steps, t.shadowMap.enabled = A.settings.get("graphics.shadows", !0), a && (a.castShadow = t.shadowMap.enabled);
+    a && a.shadow.mapSize.x !== tA && (a.shadow.mapSize.set(tA, tA), a.shadow.map?.dispose(), a.shadow.map = null), D.steps = V.steps, Si[24] = D.steps, t.shadowMap.enabled = W !== "low" && A.settings.get("graphics.shadows", !0) !== !1, a && (a.castShadow = t.shadowMap.enabled);
   }
   const _ = {
     get sun() {
@@ -65402,10 +65692,45 @@ function ZJ(A) {
     }
     Ko.omGlobal.value.y = gi.clamp(_.wetness ?? 0, 0, 1), Ko.omGlobal.value.z = _.dust ?? 1, Ko.omGlobal.value.w = _.grime ?? 1, Ko.omGlobal.value.x = _.groundLevel ?? 0;
   }
+  let vgTexTok = 0;
+  async function vgTexRe() {
+    const q = vgTexQ(A.settings.get("graphics.textureQuality", "low")), tok = ++vgTexTok;
+    A.assets.maxAnisotropy = Math.max(1, Math.min(A.assets.hwAniso ?? A.assets.maxAnisotropy ?? 16, q.an));
+    const an = Math.min(16, A.assets.maxAnisotropy || 8), seen = /* @__PURE__ */ new Set(), touch = (tx) => {
+      !tx || !tx.isTexture || seen.has(tx) || (seen.add(tx), tx.minFilter !== 1003 && tx.minFilter !== 1006 && !tx.isRenderTargetTexture && !tx.isCanvasTexture && !tx.isVideoTexture && tx.anisotropy !== an && (tx.anisotropy = an, tx.needsUpdate = !0));
+    };
+    for (const R of t.values()) for (const k of Object.values(R.textures)) touch(k);
+    if (o) for (const k of Object.values(o.textures)) touch(k);
+    try {
+      A.scene?.traverse?.((R) => {
+        for (const k of Array.isArray(R.material) ? R.material : R.material ? [R.material] : []) for (const N of ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap", "alphaMap", "bumpMap"]) touch(k[N]);
+      });
+    } catch {
+    }
+    if (q.skip === g) return;
+    g = q.skip;
+    for (const [R, k] of [...t]) {
+      let N;
+      try {
+        N = await D(R);
+      } catch (Y) {
+        A.reportError("materials", `reload ${R}`, Y);
+        continue;
+      }
+      if (tok !== vgTexTok) {
+        for (const Y of Object.values(N.textures)) Y.dispose();
+        return;
+      }
+      t.set(R, N), B += N.gpuBytes - (k.gpuBytes || 0);
+      for (const Y of i.get(R) || []) E(Y);
+      for (const Y of Object.values(k.textures)) Y.dispose();
+    }
+  }
   const G = ({ path: _ }) => {
-    _ && _.startsWith("materials") && U();
+    _ && _.startsWith("materials") && U(), _ === "graphics.textureQuality" && vgTexRe().catch((v) => A.reportError("materials", "texture quality", v));
   }, P = {
     ready: I,
+    reloadTextures: () => vgTexRe(),
     get(_) {
       let v = e.get(_);
       if (v) return v;
@@ -65504,7 +65829,7 @@ function ZJ(A) {
         grime: 1,
         groundLevel: 0,
         lite: !1
-      }), U(), A.events.on("settings:changed", G), s = KJ(), Ko.omNoise.value = s.noise, g = A.settings.data.graphics?.quality === "low" ? 1 : 0, n = !0;
+      }), U(), A.events.on("settings:changed", G), s = KJ(), Ko.omNoise.value = s.noise, g = vgTexQ(A.settings.get("graphics.textureQuality", "low")).skip, n = !0;
       for (const v of C5) P.get(v);
       A.services.provide("materials", P);
       const _ = A.assets.track(M(), "materials:textures");
@@ -70761,17 +71086,18 @@ function TV(A) {
   }
   function U() {
     const V = t.data.graphics || {};
-    S(V.quality || "high");
+    S(V.postQuality || V.quality || "high");
     const $ = V.toneMapping;
     ($ === "agx" || $ === "aces" || $ === "neutral" || $ === "none") && (r.toneMapper = $);
-    const tA = t.data.postfx || {};
-    tA.aa && (r.aa = tA.aa), typeof tA.sharpen == "number" && (r.sharpen = tA.sharpen), tA.chromaticAberration === !1 && (c.ca = !1), tA.weaponDof === !1 && (c.dof = !1), x();
+    const tA = t.data.postfx || {}, aM = vgAaMode(V.aa), aPrev = r.aa;
+    aM && (r.aa = aM.aa, r.taaAlpha = aM.al, r.taaAlphaVM = aM.alv, r.taaGamma = aM.ga, r.sharpen = aM.sh);
+    tA.aa && tA.aa !== "auto" && (r.aa = tA.aa), typeof tA.sharpen == "number" && (r.sharpen = tA.sharpen), r.aa !== aPrev && a?.resetHistory?.(), tA.chromaticAberration === !1 && (c.ca = !1), tA.weaponDof === !1 && (c.dof = !1), x();
   }
   function G(V) {
     s = !!V, s ? (e.toneMapping = 0, a?.resetHistory()) : e.toneMapping = o;
   }
   function P() {
-    if (!s || !a || n !== "low" || Math.abs(vgBright - 1) > 0.01 || Object.keys(c).length > 0 || a.captureAfterimage) return !1;
+    if (!s || !a || n !== "low" || r.aa && r.aa !== "auto" && r.aa !== "none" || Math.abs(vgBright - 1) > 0.01 || Object.keys(c).length > 0 || a.captureAfterimage) return !1;
     const V = a.state;
     return !(V.damage > 1e-3 || V.lowHealth > 1e-3 || V.flash > 1e-3 || V.after > 1e-3 || V.radial > 1e-3 || V.double > 1e-3 || V.desat > 1e-3 || V.darken > 1e-3 || V.caExtra > 1e-3 || Math.abs((V.exposureMul ?? 1) - 1) > 1e-3);
   }
@@ -73362,7 +73688,7 @@ function t6(A) {
   }
   function FA() {
     if (!h) return;
-    const SA = A.settings.get?.("graphics.quality") || "high";
+    const SA = A.settings.get?.("graphics.effectsQuality") || A.settings.get?.("graphics.quality") || "high";
     h.quality = q2[SA] ?? 1, l.enabled = C("decals", !0) !== !1;
     const T = C("wind", [
       0.8,
@@ -87596,6 +87922,7 @@ function E1(A, e, t, i, a) {
 function Lf(A, e, t, i, a, s = {}) {
   A.push(va(e, t, i, a));
   const n = s.h || 7.5;
+  typeof vgLamps < "u" && vgLamps.list && !s.broken && vgLamps.list.push({ x: e + 1.65 * Math.sin(a), y: t + n + 0.1, z: i + 1.65 * Math.cos(a), a, k: 2, s: 1 });
   A.cylinder("concrete_wall", [
     0,
     0,
@@ -90552,6 +90879,7 @@ function _K(A) {
   }
   async function wmBuild(E) {
     const C = wmMap(E);
+    vgLamps.list = [], vgLamps.map = C.id;
     await A.services.materials.ready, n || (n = new c4(A));
     const y = new fM(C.seed || C.id), w = new n4({
       chunkSize: 60,
@@ -98303,7 +98631,7 @@ async function Pz() {
     events: r,
     settings: c,
     deterministic: i
-  }), u = new $P(g.renderer), Q = new aY(g.renderer, g.rendererString, {
+  }), u = new $P(g.renderer), vgTexBoot = (u.maxAnisotropy = Math.max(1, Math.min(u.hwAniso, vgTexQ(c.get("graphics.textureQuality", "low")).an))), Q = new aY(g.renderer, g.rendererString, {
     capacity: a ? 6e4 : 600,
     autoPublish: !a,
     measureGpu: a || s
