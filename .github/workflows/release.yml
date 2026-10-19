@@ -144,31 +144,20 @@ jobs:
           - **Mac**: \`Vangaurd-${FILE_LABEL}-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-${FILE_LABEL}-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
 
           What's new:
-          - The Halloween Pack DLC (\$2.99 on Steam): the Skeleton and Pumpkin Head operators (you see their arms in first person too) and the animated Halloween camo.
-          - An Operators screen on the main menu.
-          - A weekly game mode online next to Team Deathmatch (Kill Confirmed this week, then Gun Game, changing every Monday).
+          - Melee weapons for your secondary: knife, machete, axe and bat.
+          - Prestige levels past 100, and a Career page with your lifetime stats.
+          - Lobby chat, party voice chat, and mute or block any player.
+          - Gyro aiming, and Edit Controls to remap every controller button.
+          - The Halloween Pack DLC (\$2.99) with the Skeleton and Pumpkin Head operators and an animated camo.
+          - The Operators screen and the free Season 1 Pass, with three more operators.
+          - Blackout mode, and a weekly online mode (Kill Confirmed this week).
+          - The Loadouts screen with the Gunsmith, gun charms and stickers. Inspect your gun with I (fire mode is now B).
           - North American and European servers (Settings > Account).
+          - Halloween on every map until 10 November.
           - Enemies only show on the minimap while your team has a UAV up.
-          - Halloween on every map until 10 November: pumpkin patches, graveyards, cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky.
-          - A new level-up sound, easier daily challenges, and Drone mode on a controller.
-          - Blackout: Team Deathmatch on a pitch-dark map where only jack-o'-lanterns, cauldrons and (on Vardanek, Lindenhof and Kessel) dim streetlights give light (singleplayer, and online in the weekly rotation).
-          - New Loadouts screen: loadout cards, a weapon page, the Gunsmith with a 3D view of your gun, and Cosmetics.
-          - Gun charms and stickers to show off on your guns.
-          - Inspect your gun with I (fire mode moved to B).
-          - The killcam shows your killer's bullets and hitmarkers.
-          - Controller buttons can be changed, with Xbox, PlayStation and Switch layouts (Settings > Keybinds).
-          - Your ping to North America and Europe in Settings > Account.
-          - The Season 1 Pass is open: unlock it for free and it follows your level (everything up to your level unlocks straight away), with three new operators (Frostline, Nightshade and Ember), camos, charms, stickers, XP and double XP.
-          - Stronger anti-cheat: the server checks the distance and line of sight of every hit, and moderators can watch a replay of a reported player.
-          - When a player you reported gets banned, an Action taken screen tells you.
-          - Fixed: the gun got smaller every time you picked a camo (with a barrel or suppressor on).
-          - New graphics setting: View distance (Near, Medium, Far, Epic).
-          - Fixed: shooting the ground could kill enemies (a glitch in a soldier's animation broke its hitboxes).
-          - New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing; changing one on its own sets the preset to Custom. 3D resolution goes down to 25%.
-          - Copy your user ID in Settings > Account.
-          - Progression is now Challenges; the game mode list scrolls, one row per category.
-          - The FPS counter and network stats are off by default, and the news shows every time you sign in.
-          - The Operators screen no longer shows on the first (Singleplayer / Multiplayer) screen; operators hold their rifle properly in the preview, and the Skeleton now carries one.
+          - Smarter anti-cheat, with replay review for moderators.
+          - More graphics settings, including View distance.
+          - Fixed: shooting the ground could kill enemies, and the gun shrank when you picked a camo.
 
           Online play requires this version once it is released. Installed games ask to update when they start.
           NOTES
