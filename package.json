@@ -72,7 +72,10 @@
         "zip"
       ],
       "identity": null,
-      "hardenedRuntime": false
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Vangaurd uses the microphone for party voice chat."
+      }
     },
     "win": {
       "icon": "build/icons/vangaurd.ico",

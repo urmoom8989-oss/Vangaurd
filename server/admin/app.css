@@ -225,3 +225,33 @@ select.input option { background: #14181b; color: #e9ece6; }
 #earlyf input { flex: 1 1 160px; width: auto; min-width: 0; }
 .early-dl { padding: 0 14px 10px; margin: 0; }
 .early-dl a { color: var(--accent); }
+
+/* ---------- Release 1.0: cheat flags, chat, flagged moments in replays ---------- */
+.count.sev { color: #120a08; }
+.count.sev.lo { background: #f2c14e; } .count.sev.mid { background: #ff9a4d; } .count.sev.hi { background: var(--danger); }
+.report.flag .top-line { gap: 10px; }
+.sevbar { display: inline-block; width: 90px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
+.sevbar i { display: block; height: 100%; background: #f2c14e; }
+.sevbar.mid i { background: #ff9a4d; } .sevbar.hi i { background: var(--danger); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.chip.flagc { padding: 4px 8px; border: 1px solid rgba(255,93,77,.35); border-radius: 999px; background: var(--danger-bg); color: #ffd1cb; font-size: 12px; cursor: help; }
+.chip.flagc b { color: #fff; }
+.fhelp { margin: 6px 0 12px; color: var(--fg-2); font-size: 13px; line-height: 1.5; }
+.pad14 { padding: 14px; }
+.chatlist { max-height: 70vh; overflow: auto; }
+.chatmsg { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.chatmsg .when { color: var(--muted); font-size: 12px; }
+.chatmsg .tx { color: var(--fg-2); overflow-wrap: anywhere; }
+.chatmsg .acts { display: flex; gap: 4px; }
+@media (max-width: 700px) { .chatmsg { grid-template-columns: auto minmax(0, 1fr); } .chatmsg .when { display: none; } .chatmsg .acts { grid-column: 1 / -1; } }
+.rp-track { position: relative; flex: 1; display: flex; align-items: center; }
+.rp-track input[type=range] { width: 100%; }
+.rp-marks { position: absolute; left: 8px; right: 8px; top: -7px; height: 6px; pointer-events: none; }
+.rp-marks i { position: absolute; top: 0; width: 3px; height: 8px; margin-left: -1px; border-radius: 1px; background: var(--danger); box-shadow: 0 0 6px rgba(255,93,77,.7); pointer-events: auto; cursor: pointer; }
+.rp-flags { display: grid; gap: 4px; max-height: 190px; overflow: auto; }
+.rp-flag { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; padding: 6px 8px; text-align: left; background: var(--danger-bg); border: 1px solid rgba(255,93,77,.3); border-radius: var(--radius); color: var(--fg); }
+.rp-flag:hover, .rp-flag.on { border-color: var(--danger); }
+.rp-flag .mono { grid-row: span 2; color: #ffb3aa; font-size: 12px; }
+.rp-flag b { font-size: 12px; }
+.rp-flag small { color: var(--fg-2); font-size: 11px; }
+.rp-key i.fl { background: none; border: 2px solid var(--danger); width: 10px; height: 10px; border-radius: 50%; }

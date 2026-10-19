@@ -56,7 +56,7 @@ export const cleanDevice = (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,64
 export function createModeration(d) {
   // d: { DATA_DIR, accounts, saveAccounts, online, clients, statusOf, keyOf, userOf, nameOf, scrypt, now, log, send, kick, saveOf }
   const FILE = pathMod.join(d.DATA_DIR, 'moderation.json');
-  const mod = { owner: null, admins: [], setup: null, sessions: {}, bans: {}, deviceBans: {}, reports: [], log: [], bugs: [], news: [], notices: {} };
+  const mod = { owner: null, admins: [], setup: null, sessions: {}, bans: {}, deviceBans: {}, reports: [], log: [], bugs: [], news: [], notices: {}, flags: [] };
   try {
     const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     if (raw && typeof raw === 'object') for (const k of Object.keys(mod)) if (raw[k] !== undefined) mod[k] = raw[k];
@@ -154,6 +154,8 @@ export function createModeration(d) {
     // Release 1.0: everyone who reported this player is told that action was taken ("Action taken" in the game),
     // straight away if they are online, otherwise the next time they sign in. They are not told who it was.
     const told = new Set();
+    // Release 1.0: the player's open cheat flags are settled by the ban
+    for (const f of mod.flags) if (f.key === key && (f.status === 'open' || f.status === 'watch')) Object.assign(f, { status: 'banned', handledBy: by, handledAt: now() });
     for (const r of mod.reports) if (r.target === key && r.status === 'open') {
       Object.assign(r, { status: 'banned', handledBy: by, handledAt: now() });
       if (r.reporter && r.reporter !== 'system' && r.reporter !== key) told.add(r.reporter);
@@ -241,6 +243,31 @@ export function createModeration(d) {
     save(false);
     return rid;
   }
+
+  // ---------- Release 1.0: cheat flags ----------
+  // A player the server's anti-cheat flagged in a match: their suspicion score, what was flagged (and how often),
+  // the report (with the recording) it filed, and the moderator's verdict: open, watch, cleared or banned.
+  const MAX_FLAGS = 1000;
+  function flagAdd(e) {
+    if (!e?.key) return null;
+    const id = crypto.randomBytes(6).toString('hex');
+    mod.flags.unshift({ id, at: now(), status: 'open', key: e.key, name: e.name || d.nameOf(e.key), reportId: e.reportId || null, score: +e.score || 0, counts: e.counts && typeof e.counts === 'object' ? e.counts : {}, match: e.match || null });
+    if (mod.flags.length > MAX_FLAGS) mod.flags.length = MAX_FLAGS;
+    addLog('system', 'flag', e.key, `suspicion ${e.score}`);
+    save(false);
+    return id;
+  }
+  function flagUpdate(id, u = {}) {
+    const f = id && mod.flags.find((x) => x.id === id);
+    if (!f) return;
+    Number.isFinite(+u.score) && (f.score = Math.max(f.score, +u.score)), u.counts && (f.counts = u.counts), u.final && (f.final = true);
+    save(false);
+  }
+  function markReplay(reportId) {
+    const r = mod.reports.find((x) => x.id === reportId);
+    r && (r.replay = true, save(false));
+  }
+  const flagView = (f) => ({ ...f, name: d.nameOf(f.key), handledBy: f.handledBy ? d.nameOf(f.handledBy) : null, banned: !!activeBan(f.key) });
 
   // "Action taken" notices waiting for a player who was offline when a player they reported was banned
   function takeNotices(key) {
@@ -412,7 +439,7 @@ export function createModeration(d) {
         const open = mod.reports.filter((r) => r.status === 'open');
         send(res, 200, {
           me: d.nameOf(by), role: s.role, owner: d.nameOf(mod.owner),
-          counts: { openBugs: mod.bugs.filter((b) => b.status === 'open').length, news: mod.news.length, openReports: open.length, reportedPlayers: new Set(open.map((r) => r.target)).size, bans: Object.keys(mod.bans).filter((k) => activeBan(k)).length, online: d.online.size, accounts: Object.keys(d.accounts.users).length, reports: mod.reports.length },
+          counts: { openBugs: mod.bugs.filter((b) => b.status === 'open').length, news: mod.news.length, openReports: open.length, openFlags: mod.flags.filter((f) => f.status === 'open').length, reportedPlayers: new Set(open.map((r) => r.target)).size, bans: Object.keys(mod.bans).filter((k) => activeBan(k)).length, online: d.online.size, accounts: Object.keys(d.accounts.users).length, reports: mod.reports.length },
         });
         return true;
       }
@@ -423,6 +450,52 @@ export function createModeration(d) {
         const rep = r.replay ? d.replayLoad?.(r.id) : null;
         if (need(rep, 'There is no recording for this report.', 404)) return true;
         send(res, 200, { report: reportView(r), replay: rep });
+        return true;
+      }
+      // Release 1.0: cheat flags, grouped by player (highest suspicion first)
+      case 'flags': {
+        const status = q.get('status') || 'open';
+        const list = mod.flags.filter((f) => status === 'all' || f.status === status);
+        const by = new Map();
+        for (const f of list) {
+          const g = by.get(f.key) || { name: d.nameOf(f.key), key: f.key, flags: [], max: 0, last: 0, total: 0 };
+          g.flags.push(flagView(f)), g.max = Math.max(g.max, f.score), g.last = Math.max(g.last, f.at), g.total += f.score;
+          by.set(f.key, g);
+        }
+        const groups = [...by.values()].map((g) => ({ ...g, banned: !!activeBan(g.key), status: d.statusOf(g.key), history: mod.flags.filter((f) => f.key === g.key).length })).sort((a, b) => b.max - a.max || b.last - a.last);
+        send(res, 200, { groups: groups.slice(0, 300), counts: { open: mod.flags.filter((f) => f.status === 'open').length, watch: mod.flags.filter((f) => f.status === 'watch').length } });
+        return true;
+      }
+      case 'flags/review': {
+        if (need(post, 'Use POST.', 405)) return true;
+        const verdict = ['open', 'watch', 'cleared'].includes(body.verdict) ? body.verdict : null;
+        if (need(verdict, 'Pick a verdict: watch, cleared or open.')) return true;
+        const ids = new Set(Array.isArray(body.ids) ? body.ids.map(String) : []), key = body.name ? d.keyOf(body.name) : null;
+        let n = 0;
+        for (const f of mod.flags) if (ids.has(f.id) || (key && f.key === key && f.status !== 'banned')) {
+          Object.assign(f, { status: verdict, handledBy: by, handledAt: now() }), n++;
+          // clearing a flag closes the anti-cheat report it filed
+          if (verdict === 'cleared') for (const r of mod.reports) if (r.id === f.reportId && r.status === 'open') Object.assign(r, { status: 'dismissed', handledBy: by, handledAt: now() });
+        }
+        addLog(by, `flag_${verdict}`, key || [...ids][0] || null, `${n} flag${n === 1 ? '' : 's'}`);
+        save();
+        send(res, 200, { ok: true, changed: n });
+        return true;
+      }
+      // Release 1.0: lobby chat (All), and muting a player in chat
+      case 'chat': {
+        send(res, 200, { messages: d.chat?.list?.() || [], muted: d.chat?.mutedList?.() || [] });
+        return true;
+      }
+      case 'chat/mute': {
+        if (need(post, 'Use POST.', 405)) return true;
+        const key = d.keyOf(body.name);
+        if (need(userOf(key), 'There is no such player.', 404)) return true;
+        const hours = body.hours == null ? null : Math.max(0, Math.min(24 * 365, Number(body.hours) || 0));
+        d.chat?.mute?.(key, hours);
+        addLog(by, hours ? 'chat_mute' : 'chat_unmute', key, hours ? `${hours} h` : '');
+        save();
+        send(res, 200, { ok: true });
         return true;
       }
       case 'reports': {
@@ -708,5 +781,5 @@ export function createModeration(d) {
   }
 
   let ops = null;
-  return { attachOps: (o) => { ops = o; }, ownerKey: () => mod.owner, checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, autoReport, takeNotices, onBug, recentWith, newsPublic, roleOf, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
+  return { attachOps: (o) => { ops = o; }, ownerKey: () => mod.owner, checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, autoReport, flagAdd, flagUpdate, markReplay, takeNotices, onBug, recentWith, newsPublic, roleOf, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
 }

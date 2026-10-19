@@ -6,7 +6,11 @@ and keyboard.
 
 ## Release 1.0 downloads
 
-The current game (Release 1.0: the Halloween Pack DLC with the Skeleton and Pumpkin Head operators and the animated
+The current game (Release 1.0: melee weapons for the secondary slot (Viper Knife, Jackal Machete, Bison Axe and
+Slugger Bat, held one-handed), prestige levels past level 100, a Career page with lifetime stats, lobby chat (All and
+Party), party voice chat, muting and blocking players, gyro aiming and an Edit Controls screen that remaps every
+controller button on a picture of the controller, smarter cheat flags with replay review in the console, the
+Halloween Pack DLC with the Skeleton and Pumpkin Head operators and the animated
 Halloween camo, an Operators screen on the main menu, Blackout (a pitch-dark Team Deathmatch lit only by pumpkins,
 cauldrons and a few dim streetlights), detailed graphics settings with a Custom preset, a copyable
 user ID, an Action taken screen for reports, a new Loadouts screen with a Gunsmith and gun charms and stickers, weapon inspect, killcam tracers and

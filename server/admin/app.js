@@ -96,33 +96,34 @@
   }
 
   // ---------- shell ----------
-  const TABS = [['reports', 'Reports'], ['players', 'Players'], ['bugs', 'Bugs'], ['bans', 'Bans'], ['news', 'News'], ['server', 'Server'], ['activity', 'Activity'], ['mods', 'Moderators']];
+  const TABS = [['reports', 'Reports'], ['flags', 'Cheat flags'], ['players', 'Players'], ['chat', 'Chat'], ['bugs', 'Bugs'], ['bans', 'Bans'], ['news', 'News'], ['server', 'Server'], ['activity', 'Activity'], ['mods', 'Moderators']];
   const BUGCAT = { gameplay: 'Gameplay', graphics: 'Graphics', controls: 'Controls', online: 'Online', menus: 'Menus', performance: 'Performance', other: 'Other' };
   function shell() {
     app.innerHTML = `<header class="top"><div class="brand">${SHIELD}<div><b>VANGAURD</b><small>Anti-Cheat</small></div></div>
       <div class="me">Signed in as <b>${esc(ui.me)}</b><span class="role">${esc(ui.role)}</span><button class="btn sm" id="signout">Sign out</button></div></header>
       <section class="stats" id="stats"></section>
-      <nav class="tabs" role="tablist">${TABS.map(([k, t]) => `<button class="tab" role="tab" data-tab="${k}">${t}${k === 'reports' ? '<span class="n" id="nrep"></span>' : k === 'bugs' ? '<span class="n" id="nbug"></span>' : ''}</button>`).join('')}</nav>
+      <nav class="tabs" role="tablist">${TABS.map(([k, t]) => `<button class="tab" role="tab" data-tab="${k}">${t}${k === 'reports' ? '<span class="n" id="nrep"></span>' : k === 'flags' ? '<span class="n" id="nflag"></span>' : k === 'bugs' ? '<span class="n" id="nbug"></span>' : ''}</button>`).join('')}</nav>
       <main id="view"></main>`;
     $('#signout').onclick = async () => { try { await api('logout', { body: {} }); } catch { /* ignore */ } setToken(null); boot(); };
     $$('.tab').forEach((b) => { b.onclick = () => show(b.dataset.tab); });
     summary(); show(ui.tab);
-    ui.timer = setInterval(() => { summary(); if (ui.tab === 'reports' && !$('.modal')) groupsList(true); }, 15000);
+    ui.timer = setInterval(() => { summary(); if (ui.tab === 'reports' && !$('.modal')) groupsList(true); if (ui.tab === 'flags' && !$('.modal')) flagList(true); if (ui.tab === 'chat' && !$('.modal')) chatList(true); }, 15000);
   }
   async function summary() {
     try {
       const s = ui.summary = await api('summary');
       const c = s.counts;
-      $('#stats').innerHTML = [['Open reports', c.openReports, c.openReports > 0], ['Reported players', c.reportedPlayers], ['Active bans', c.bans], ['Players online', c.online], ['Accounts', c.accounts]]
+      $('#stats').innerHTML = [['Open reports', c.openReports, c.openReports > 0], ['Open cheat flags', c.openFlags || 0, c.openFlags > 0], ['Reported players', c.reportedPlayers], ['Active bans', c.bans], ['Players online', c.online], ['Accounts', c.accounts]]
         .map(([k, v, hot]) => `<div class="stat${hot ? ' hot' : ''}"><span class="k">${k}</span><b>${Number(v).toLocaleString()}</b></div>`).join('');
       $('#nrep').textContent = c.openReports ? String(c.openReports) : '';
+      $('#nflag').textContent = c.openFlags ? String(c.openFlags) : '';
       $('#nbug').textContent = c.openBugs ? String(c.openBugs) : '';
     } catch { /* handled by api() */ }
   }
   function show(tab) {
     ui.tab = tab;
     $$('.tab').forEach((b) => { const on = b.dataset.tab === tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-    ({ reports: viewReports, players: viewPlayers, bugs: viewBugs, bans: viewBans, news: viewNews, server: viewServer, activity: viewActivity, mods: viewMods })[tab]();
+    ({ reports: viewReports, flags: viewFlags, chat: viewChat, players: viewPlayers, bugs: viewBugs, bans: viewBans, news: viewNews, server: viewServer, activity: viewActivity, mods: viewMods })[tab]();
   }
 
   // ---------- reports ----------
@@ -169,6 +170,97 @@
         ${r.status !== 'open' ? `<button class="btn sm" data-reopen="${esc(r.id)}">Reopen</button>` : by ? `<button class="btn sm" data-dismiss="${esc(r.id)}">Dismiss</button>` : ''}</div></article>`;
   }
 
+  // ---------- Release 1.0: cheat flags ----------
+  // Players the server's anti-cheat flagged, highest suspicion first. Each flag is one match: what was flagged and how
+  // often, and its recording with the flagged moments marked. Verdicts: Watch (keep an eye on them), Clear (a false
+  // alarm: closes the report it filed) or Ban (the usual ban dialog).
+  const FLAGS = { range: 'Out of range', origin: 'From the wrong place', wall: 'No line of sight', snap: 'Aim snap', phantom: 'Hit without a shot', rate: 'Impossible fire rate', damage: 'Impossible damage', speed: 'Too fast', teleport: 'Teleport', headshots: 'Headshot rate', accuracy: 'Accuracy' };
+  const FLAG_HELP = { range: 'Hits from further than the gun reaches (not counted).', origin: 'Hits claimed from somewhere the player was not (not counted).', wall: 'Hits with no line of sight. Bullets do go through thin walls, so only many of them matter.', snap: 'The view swung 35° or more in a tenth of a second and stopped within 3° of the target as the hit landed.', phantom: 'Hits that came with no shot fired before them.', rate: 'More shots in two seconds than the gun can fire.', damage: 'More damage in one hit than the weapon can do (not counted).', speed: 'Moving faster than anyone can run for a second or more.', teleport: 'A jump of 25 m or more between two updates.', headshots: 'Nearly every kill a headshot (15 kills or more).', accuracy: 'Nearly every shot a hit (60 shots or more).' };
+  ui.fstatus = 'open';
+  const sevClass = (s) => (s >= 16 ? 'hi' : s >= 8 ? 'mid' : 'lo');
+  function viewFlags() {
+    $('#view').innerHTML = `<div class="split">
+      <section class="pane"><header><span class="k">Flagged players</span><span class="sp"></span>
+        <div class="seg" role="group" aria-label="Flag status">${[['open', 'Open'], ['watch', 'Watch'], ['cleared', 'Cleared'], ['banned', 'Banned'], ['all', 'All']].map(([k, t]) => `<button data-fst="${k}" class="${ui.fstatus === k ? 'on' : ''}">${t}</button>`).join('')}</div></header>
+        <div class="list" id="flaggroups"></div></section>
+      <section class="pane" id="flagdetail"><div class="empty"><b>Select a flagged player</b>What was flagged, the replay with each flagged moment marked, and the verdict buttons appear here.</div></section></div>`;
+    $$('[data-fst]').forEach((b) => { b.onclick = () => { ui.fstatus = b.dataset.fst; $$('[data-fst]').forEach((x) => x.classList.toggle('on', x === b)); flagList(); }; });
+    flagList();
+  }
+  async function flagList(quiet = false) {
+    const box = $('#flaggroups');
+    if (!box) return;
+    try {
+      const r = await api('flags', { query: { status: ui.fstatus } });
+      ui.flagGroups = r.groups;
+      if (!r.groups.length) { box.innerHTML = `<div class="empty"><b>${ui.fstatus === 'open' ? 'No open cheat flags' : 'Nothing here'}</b>${ui.fstatus === 'open' ? 'The server flags players by itself during online matches.' : ''}</div>`; return; }
+      box.innerHTML = r.groups.map((g) => {
+        const cats = {};
+        for (const f of g.flags) for (const [k, n] of Object.entries(f.counts || {})) cats[k] = (cats[k] || 0) + n;
+        const top = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => `${FLAGS[k] || k} ×${n}`).join(', ');
+        return `<button class="row${ui.fselected === g.name ? ' on' : ''}" data-fname="${esc(g.name)}"><span class="count sev ${sevClass(g.max)}" title="Highest suspicion">${Math.round(g.max)}</span>
+          <span class="main"><span class="nm">${dot(g.status)}${esc(g.name)}${g.banned ? '<span class="tag banned">Banned</span>' : ''}</span>
+          <span class="sub">${plural(g.flags.length, 'match')} flagged${g.history > g.flags.length ? ` · ${g.history} in all` : ''} · ${esc(top)} · ${ago(g.last)}</span></span></button>`;
+      }).join('');
+      $$('.row', box).forEach((b) => { b.onclick = () => { ui.fselected = b.dataset.fname; $$('.row', box).forEach((x) => x.classList.toggle('on', x === b)); flagDetail(b.dataset.fname); }; });
+      if (ui.fselected && !quiet) flagDetail(ui.fselected);
+    } catch (e) { if (!quiet) fail(e); }
+  }
+  function flagCard(f) {
+    const cats = Object.entries(f.counts || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+    const st = f.status === 'open' ? '' : `<span class="tag ${f.status === 'banned' ? 'banned' : ''}">${esc(f.status === 'watch' ? 'Watching' : f.status === 'cleared' ? 'Cleared' : 'Banned')}${f.handledBy ? ` by ${esc(f.handledBy)}` : ''}</span>`;
+    return `<article class="report flag${f.status !== 'open' && f.status !== 'watch' ? ' handled' : ''}">
+      <div class="top-line"><span class="sevbar ${sevClass(f.score)}"><i style="width:${Math.min(100, f.score / 24 * 100).toFixed(0)}%"></i></span><b>Suspicion ${Math.round(f.score * 10) / 10}</b>${st}<span class="when" title="${esc(fmt(f.at))}">${ago(f.at)}</span></div>
+      <div class="chips">${cats.map(([k, n]) => `<span class="chip flagc" title="${esc(FLAG_HELP[k] || '')}">${esc(FLAGS[k] || k)} <b>×${n}</b></span>`).join('')}</div>
+      <div class="meta"><span>${esc(MODES[f.match?.mode] || f.match?.mode || 'Match')} · ${esc(MAPS[f.match?.map] || f.match?.map || 'map not known')}${f.match?.region ? ` · ${esc(f.match.region.toUpperCase())}` : ''}</span>
+        ${f.reportId ? `<button class="btn sm pri" data-freplay="${esc(f.reportId)}">Review replay</button>` : ''}
+        ${f.status !== 'watch' && f.status !== 'banned' ? `<button class="btn sm" data-fv="watch" data-fid="${esc(f.id)}">Watch</button>` : ''}
+        ${f.status !== 'cleared' && f.status !== 'banned' ? `<button class="btn sm" data-fv="cleared" data-fid="${esc(f.id)}">Clear · false alarm</button>` : ''}
+        ${f.status === 'cleared' || f.status === 'watch' ? `<button class="btn sm" data-fv="open" data-fid="${esc(f.id)}">Reopen</button>` : ''}</div></article>`;
+  }
+  async function flagDetail(name) {
+    const box = $('#flagdetail');
+    if (!box) return;
+    const g = (ui.flagGroups || []).find((x) => x.name === name);
+    if (!g) { box.innerHTML = '<div class="empty">This player has no flags in this list.</div>'; return; }
+    box.innerHTML = `<div class="detail"><div class="section"><span class="k">Cheat flags · ${esc(g.name)} (${g.flags.length})</span>
+      <p class="fhelp">Open <b>Review replay</b> to watch the match from above: every flagged moment is marked on the timeline and listed on the right, so you can jump straight to it. Then clear it as a false alarm, keep watching, or ban the player below.</p>
+      ${g.flags.map(flagCard).join('')}</div><div id="flagplayer"></div></div>`;
+    $$('[data-freplay]', box).forEach((b) => { b.onclick = () => replayDialog(b.dataset.freplay); });
+    $$('[data-fv]', box).forEach((b) => {
+      b.onclick = async () => {
+        try {
+          await api('flags/review', { body: { ids: [b.dataset.fid], verdict: b.dataset.fv } });
+          toast(b.dataset.fv === 'cleared' ? 'Cleared as a false alarm (its report is dismissed).' : b.dataset.fv === 'watch' ? `Watching ${g.name}.` : 'Reopened.');
+          summary(); await flagList(true); flagDetail(name);
+        } catch (e) { fail(e); }
+      };
+    });
+    detail(g.name, $('#flagplayer', box));
+  }
+
+  // ---------- Release 1.0: lobby chat ----------
+  function viewChat() {
+    $('#view').innerHTML = `<div class="split">
+      <section class="pane"><header><span class="k">All chat · newest first</span><span class="sp"></span><button class="btn sm" id="chatref">Refresh</button></header><div class="list chatlist" id="chatbox"></div></section>
+      <section class="pane"><header><span class="k">Muted in chat</span></header><div id="chatmuted" class="pad14"></div>
+        <p class="fhelp pad14">A player muted in chat can still play and use party voice, but can't send chat messages until the mute ends. Party chat isn't kept on the server; players can block or mute each other in the game.</p></section></div>`;
+    $('#chatref').onclick = () => chatList();
+    chatList();
+  }
+  async function chatList(quiet = false) {
+    const box = $('#chatbox'), mb = $('#chatmuted');
+    if (!box) return;
+    try {
+      const r = await api('chat');
+      box.innerHTML = r.messages.length ? r.messages.map((m) => `<div class="chatmsg"><span class="mono when">${esc(new Date(m.at).toLocaleTimeString())}</span><b>${esc(m.from)}</b><span class="tx">${esc(m.text)}</span><span class="acts"><button class="btn sm" data-cmute="${esc(m.from)}" data-h="1">Mute 1 h</button><button class="btn sm" data-cmute="${esc(m.from)}" data-h="24">24 h</button><button class="btn sm" data-cplayer="${esc(m.from)}">Player</button></span></div>`).join('') : '<div class="empty"><b>No chat yet</b>Messages players send in All chat appear here.</div>';
+      mb.innerHTML = r.muted.length ? r.muted.map((m) => `<div class="chatmsg"><b>${esc(m.name)}</b><span class="tx">until ${esc(fmt(m.until))}</span><span class="acts"><button class="btn sm" data-cunmute="${esc(m.name)}">Unmute</button></span></div>`).join('') : '<div class="muted">Nobody is muted.</div>';
+      $$('[data-cmute]').forEach((b) => { b.onclick = async () => { try { await api('chat/mute', { body: { name: b.dataset.cmute, hours: +b.dataset.h } }); toast(`${b.dataset.cmute} is muted in chat for ${b.dataset.h === '1' ? '1 hour' : '24 hours'}.`); chatList(true); } catch (e) { fail(e); } }; });
+      $$('[data-cunmute]').forEach((b) => { b.onclick = async () => { try { await api('chat/mute', { body: { name: b.dataset.cunmute, hours: 0 } }); toast(`${b.dataset.cunmute} can chat again.`); chatList(true); } catch (e) { fail(e); } }; });
+      $$('[data-cplayer]').forEach((b) => { b.onclick = () => { ui.q = b.dataset.cplayer; ui.selected = b.dataset.cplayer; show('players'); }; });
+    } catch (e) { if (!quiet) fail(e); }
+  }
+
   // ---------- Release 1.0: replay of a reported player ----------
   // The server records every match (where each player is and looks, five times a second, and every shot, hit and
   // kill) and keeps the last minutes with each report. Shown from above: the walls, every player (the reported one
@@ -182,15 +274,17 @@
     m.className = 'modal replay';
     m.innerHTML = `<div class="card wide" role="dialog" aria-modal="true" aria-labelledby="rp-h">
       <div class="rp-top"><div><h3 id="rp-h">Replay · ${esc(rep.target)}</h3><p class="sub">${esc(MODES[R.mode] || R.mode || 'Match')} · ${esc(MAPS[R.map] || R.map || 'unknown map')} · the last ${(() => { const ms = (R.frames.at(-1)?.[0] || 0) - (R.frames[0]?.[0] || 0); return ms < 90e3 ? `${Math.max(1, Math.round(ms / 1000))} seconds` : `${Math.round(ms / 6e4 * 10) / 10} minutes`; })()} before the report · ${esc(rep.reasonText)}${rep.note ? ` · “${esc(rep.note)}”` : ''}</p></div><button class="btn" data-close>Close</button></div>
-      <div class="rp-body"><canvas width="900" height="620"></canvas><aside class="rp-side"><span class="k">Players</span><div class="rp-list"></div><span class="k">What happens</span><div class="rp-log"></div></aside></div>
-      <div class="rp-bar"><button class="btn sm" data-play>Pause</button><button class="btn sm" data-speed>1×</button><button class="btn sm" data-follow>Following ${esc(rep.target)}</button><input type="range" min="0" max="1000" value="0" aria-label="Time"><span class="rp-t mono">0:00</span></div>
-      <p class="rp-key"><i class="y"></i>${esc(rep.target)} <i class="b"></i>their team <i class="r"></i>the other team <i class="s"></i>shot <i class="h"></i>hit <i class="w"></i>hit with no line of sight <i class="kk"></i>kill</p></div>`;
+      <div class="rp-body"><canvas width="900" height="620"></canvas><aside class="rp-side"><span class="k">Players</span><div class="rp-list"></div><span class="k rp-fk" hidden>Flagged moments</span><div class="rp-flags" hidden></div><span class="k">What happens</span><div class="rp-log"></div></aside></div>
+      <div class="rp-bar"><button class="btn sm" data-play>Pause</button><button class="btn sm" data-speed>1×</button><button class="btn sm" data-follow>Following ${esc(rep.target)}</button><button class="btn sm" data-nextflag hidden>Next flag ›</button><div class="rp-track"><input type="range" min="0" max="1000" value="0" aria-label="Time"><div class="rp-marks" aria-hidden="true"></div></div><span class="rp-t mono">0:00</span></div>
+      <p class="rp-key"><i class="y"></i>${esc(rep.target)} <i class="b"></i>their team <i class="r"></i>the other team <i class="s"></i>shot <i class="h"></i>hit <i class="w"></i>hit with no line of sight <i class="kk"></i>kill <i class="fl"></i>flagged moment</p></div>`;
     document.body.appendChild(m);
     const cv = $('canvas', m), g = cv.getContext('2d'), range = $('input[type=range]', m), tEl = $('.rp-t', m), list = $('.rp-list', m), logEl = $('.rp-log', m);
     const frames = R.frames || [], ev = R.ev || [], t0 = frames[0]?.[0] ?? 0, t1 = Math.max(t0 + 1, frames.at(-1)?.[0] ?? 0);
     const byId = {};
     for (const f of frames) (byId[f[1]] ||= []).push(f);
     const tTeam = names[tid]?.team;
+    // Release 1.0: the anti-cheat's flagged moments (['F', player, category, detail, target])
+    const FL = ev.filter((e) => e[1] === 'F');
     // the walls, drawn once
     let wall = null, W = 160, Hh = 160, minX = 0, minZ = 0, res = 1;
     if (R.plan) {
@@ -240,6 +334,17 @@
           if (e[1] === 'k') g.strokeStyle = `rgba(255,70,60,${1 - age})`, g.lineWidth = 3, g.beginPath(), g.moveTo(X(b.x) - 7, Z(b.z) - 7), g.lineTo(X(b.x) + 7, Z(b.z) + 7), g.moveTo(X(b.x) + 7, Z(b.z) - 7), g.lineTo(X(b.x) - 7, Z(b.z) + 7), g.stroke();
         }
       }
+      // flagged moments: a red ring round the player for a second and a half, with what was flagged
+      for (const e of FL) {
+        if (e[0] > t || e[0] < t - 1500) continue;
+        const p = pose(e[2], e[0]);
+        if (!p) continue;
+        const age = (t - e[0]) / 1500;
+        g.strokeStyle = `rgba(255,70,60,${1 - age})`, g.lineWidth = 3, g.beginPath(), g.arc(X(p.x), Z(p.z), 12 + age * 18, 0, 7), g.stroke();
+        g.fillStyle = `rgba(255,120,110,${1 - age})`, g.font = '700 12px system-ui', g.fillText(FLAGS[e[3]] || e[3], X(p.x) + 14, Z(p.z) + 18);
+        const tp = e[5] ? pose(e[5], e[0]) : null;
+        tp && (g.setLineDash([5, 4]), g.beginPath(), g.moveTo(X(p.x), Z(p.z)), g.lineTo(X(tp.x), Z(tp.z)), g.stroke(), g.setLineDash([]));
+      }
       for (const id of Object.keys(byId)) {
         const p = pose(id, t);
         if (!p) continue;
@@ -255,9 +360,9 @@
       }
       tEl.textContent = `${fmtT(t - t0)} / ${fmtT(t1 - t0)}`, range.value = String(Math.round((t - t0) / (t1 - t0) * 1000));
     };
-    const evText = (e) => e[1] === 'k' ? `${nm(e[2])} killed ${nm(e[3])}` : e[1] === 'd' ? `${nm(e[2])} hit ${nm(e[3])} · ${e[4]} damage · ${e[7]} m${e[6] === 1 ? ' · <b class="bad">no line of sight</b>' : ''}` : e[1] === 'x' ? `<b class="bad">Thrown out:</b> ${nm(e[2])} hit ${nm(e[3])} ${e[4] === 'range' ? `from ${e[5]} m (too far for the gun)` : `from ${e[5]} m away from where they were`}` : '';
+    const evText = (e) => e[1] === 'F' ? `<b class="bad">Flag · ${esc(FLAGS[e[3]] || e[3])}</b> ${esc(nm(e[2]))}${e[4] ? ` · ${esc(e[4])}` : ''}` : e[1] === 'k' ? `${nm(e[2])} killed ${nm(e[3])}` : e[1] === 'd' ? `${nm(e[2])} hit ${nm(e[3])} · ${e[4]} damage · ${e[7]} m${e[6] === 1 ? ' · <b class="bad">no line of sight</b>' : ''}` : e[1] === 'x' ? `<b class="bad">Thrown out:</b> ${nm(e[2])} hit ${nm(e[3])} ${e[4] === 'range' ? `from ${e[5]} m (too far for the gun)` : `from ${e[5]} m away from where they were`}` : '';
     const logTo = () => {
-      const items = ev.filter((e) => e[0] <= t && e[1] !== 'f' && (e[2] === tid || e[3] === tid)).slice(-60).reverse();
+      const items = ev.filter((e) => e[0] <= t && e[1] !== 'f' && (e[2] === tid || e[3] === tid || e[1] === 'F' && e[5] === tid)).slice(-60).reverse();
       logEl.innerHTML = items.length ? items.map((e) => `<div><span class="mono">${fmtT(e[0] - t0)}</span> ${evText(e)}</div>`).join('') : '<div class="muted">Nothing yet.</div>';
     };
     const ids = Object.keys(byId);
@@ -281,8 +386,18 @@
     cv.onwheel = (ev2) => { ev2.preventDefault(); zoom = Math.max(1, Math.min(6, zoom * (ev2.deltaY < 0 ? 1.15 : 1 / 1.15))); };
     if (follow) zoom = 2.4;
     // start a few seconds before the reported player's first hit or kill, when there is one
-    const first = ev.find((e) => (e[1] === 'd' || e[1] === 'k') && e[2] === tid);
+    const first = FL.find((e) => e[2] === tid) || ev.find((e) => (e[1] === 'd' || e[1] === 'k') && e[2] === tid);
     first && (t = Math.max(t0, first[0] - 4000));
+    // the flagged moments: ticks on the timeline, a list to jump from, and Next flag
+    if (FL.length) {
+      const marks = $('.rp-marks', m), fl = $('.rp-flags', m);
+      marks.innerHTML = FL.map((e, i) => `<i style="left:${((e[0] - t0) / (t1 - t0) * 100).toFixed(2)}%" title="${esc(FLAGS[e[3]] || e[3])} · ${fmtT(e[0] - t0)}" data-fi="${i}"></i>`).join('');
+      fl.innerHTML = FL.map((e, i) => `<button class="rp-flag" data-fi="${i}"><span class="mono">${fmtT(e[0] - t0)}</span><b>${esc(FLAGS[e[3]] || e[3])}</b><small>${esc(nm(e[2]))}${e[4] ? ` · ${esc(e[4])}` : ''}</small></button>`).join('');
+      fl.hidden = false, $('.rp-fk', m).hidden = false, $('[data-nextflag]', m).hidden = false;
+      const jump = (i) => { const e = FL[i]; if (!e) return; t = Math.max(t0, e[0] - 2500); play = true; $('[data-play]', m).textContent = 'Pause'; $$('.rp-flag', m).forEach((b) => b.classList.toggle('on', +b.dataset.fi === i)); };
+      $$('[data-fi]', m).forEach((b) => { b.onclick = () => jump(+b.dataset.fi); });
+      $('[data-nextflag]', m).onclick = () => { const i = FL.findIndex((e) => e[0] - 2500 > t + 50); jump(i >= 0 ? i : 0); };
+    }
   }
 
   // ---------- player detail (used by Reports and Players) ----------

@@ -23304,6 +23304,11 @@ var QP = {
     crosshair: !0,
     hitmarkers: !0
   },
+  social: {
+    muted: [],
+    voiceVolume: 1,
+    chat: !0
+  },
   pad: {
     enabled: !0,
     lookSens: 5,
@@ -23317,7 +23322,13 @@ var QP = {
     vibration: !0,
     aimAssist: 0.5,
     preset: "auto",
-    map: null
+    map: null,
+    swapSticks: !1,
+    gyro: "off",
+    gyroSens: 1.5,
+    gyroAxis: "yaw",
+    gyroInvertX: !1,
+    gyroInvertY: !1
   }
 };
 function Fv(A) {
@@ -43601,6 +43612,11 @@ function w9(A) {
     } catch {
     }
     for (const R of Object.keys(yc)) if (yc[R].weaponId === v) return yc[R].name;
+    if (/^melee:/.test(String(v || ""))) try {
+      return lwById("pistol", String(v).slice(6))?.name || "Melee";
+    } catch {
+      return "Melee";
+    }
     return v === "melee" ? "Melee" : Ip(t, v).name || String(v);
   }
   function B(v) {
@@ -47834,6 +47850,9 @@ var Jo, x2, C3, jh, m3, w3, bp, y3, b3, D3, v2, M3, Y9 = YA((() => {
 .od-killcam-hit.head i { background: #ffd23f; }
 
 .od-menu { position: absolute; left: calc(var(--u) * 120); top: calc(var(--u) * 440); width: calc(var(--u) * 520); }
+/* Release 1.0: the main menu list starts right under the title, so every button fits above the online status box */
+.od-menu:not(.pause):not(.od-entry-menu) { top: calc(var(--u) * 312); }
+.od-menu:not(.pause):not(.od-entry-menu) > .od-item { margin-bottom: calc(var(--u) * 2); padding-top: calc(var(--u) * 10); padding-bottom: calc(var(--u) * 10); }
 .od-menu.pause { top: calc(var(--u) * 300); }
 .od-entry-menu { top: calc(var(--u) * 455); }
 .od-entry .od-title .sub { margin-top: calc(var(--u) * 24); }
@@ -48797,6 +48816,18 @@ function q9(A) {
     const list = (Array.isArray(un) ? un : []).filter(Boolean), ul = list.slice(0, 4).map((x, k) => `<em style="--k:${k}">${Nn(String(x))}</em>`).join("") + (list.length > 4 ? `<em style="--k:4">+${list.length - 4} more</em>` : "");
     lvEl = NA("div", "od-lvup", A.layer);
     lvEl.innerHTML = `<div class="fx"><i class="rays"></i><i class="ring"></i><i class="ring r2"></i>${sp}<svg class="emb" viewBox="0 0 120 132" aria-hidden="true"><defs><linearGradient id="odLvG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffeab0"/><stop offset=".55" stop-color="#f0c048"/><stop offset="1" stop-color="#b37f26"/></linearGradient><linearGradient id="odLvW" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><clipPath id="odLvC"><path d="M60 4 L112 22 V62 C112 94 90 114 60 126 C30 114 8 94 8 62 V22 Z"/></clipPath></defs><path d="M60 4 L112 22 V62 C112 94 90 114 60 126 C30 114 8 94 8 62 V22 Z" fill="#0d1114" stroke="url(#odLvG)" stroke-width="5"/><path d="M60 13 L104 28 V62 C104 89 85 106 60 116 C35 106 16 89 16 62 V28 Z" fill="none" stroke="rgba(240,192,72,.35)" stroke-width="1.5"/><path d="M38 90 L60 101 L82 90 V97 L60 108 L38 97 Z" fill="url(#odLvG)"/><path d="M46 21 H74 V25 H46 Z" fill="url(#odLvG)"/><text class="n0" x="60" y="${F > 99 ? 72 : 76}" text-anchor="middle" font-size="${fs(F)}">${F}</text><text class="n1" x="60" y="${L > 99 ? 72 : 76}" text-anchor="middle" font-size="${fs(L)}">${L}</text><g clip-path="url(#odLvC)"><rect class="gl" x="30" y="-10" width="34" height="150" fill="url(#odLvW)"/></g></svg><i class="flash"></i></div><div class="tx"><div class="kk">Level up</div><div class="tt">Level <b>${L}</b></div><div class="rule"></div>${ul ? `<div class="ul"><span>Unlocked</span>${ul}</div>` : ""}</div>`;
+    try {
+      const tr = typeof vgPrestigeTier == "function" ? vgPrestigeTier(L) : null;
+      if (tr) {
+        lvEl.classList.add("pr"), lvEl.style.setProperty("--pr", tr.color);
+        const st = lvEl.querySelectorAll("#odLvG stop"), kk = lvEl.querySelector(".kk");
+        st[0]?.setAttribute("stop-color", vgShade(tr.color, 0.6)), st[1]?.setAttribute("stop-color", tr.color), st[2]?.setAttribute("stop-color", vgShade(tr.color, -0.35));
+        kk && (kk.textContent = L === VG_PRESTIGE + 1 ? "Prestige unlocked" : `Prestige · ${tr.name}`);
+        const emb = lvEl.querySelector("svg.emb");
+        emb?.insertAdjacentHTML("beforeend", '<path d="M60 26.5 L62.6 32.6 L69.2 33 L64.2 37.2 L65.8 43.6 L60 40 L54.2 43.6 L55.8 37.2 L50.8 33 L57.4 32.6 Z" fill="url(#odLvG)"/>');
+      }
+    } catch {
+    }
     lvT = setTimeout(() => {
       lvEl?.remove(), lvEl = null;
     }, 5200);
@@ -48884,10 +48915,10 @@ function $9(A) {
     A.hudU;
     const aA = j.weapon, z = j.player, cA = !!aA.id;
     (aA.id !== X.weaponId || aA.name !== X.weaponName) && (X.weaponId = aA.id, X.weaponName = aA.name, $t(r, (aA.name || "").toUpperCase()), X.activity = 0);
-    const bA = String(aA.fireMode || "auto").toLowerCase();
-    bA !== X.fmode && (X.fmode = bA, Hr(l, bA.startsWith("semi") || bA === "single" ? P3 : bA.startsWith("burst") ? T3 : L3), $t(g, bA.startsWith("semi") || bA === "single" ? "SEMI" : bA.startsWith("burst") ? "BURST" : "AUTO"));
-    const GA = aA.magSize || 0, FA = Math.max(0, aA.ammo | 0), xA = Math.max(0, aA.reserve | 0);
-    (FA !== X.lastAmmo || xA !== X.lastRes) && (X.lastAmmo = FA, X.lastRes = xA, X.activity = 0, $t(h, String(FA)), $t(I, String(xA)));
+    const vgMl = !!aA.melee, bA = vgMl ? "melee" : String(aA.fireMode || "auto").toLowerCase();
+    bA !== X.fmode && (X.fmode = bA, Hr(l, bA.startsWith("semi") || bA === "single" || vgMl ? P3 : bA.startsWith("burst") ? T3 : L3), $t(g, vgMl ? "MELEE" : bA.startsWith("semi") || bA === "single" ? "SEMI" : bA.startsWith("burst") ? "BURST" : "AUTO"));
+    const GA = vgMl ? 0 : aA.magSize || 0, FA = Math.max(0, aA.ammo | 0), xA = Math.max(0, aA.reserve | 0);
+    (FA !== X.lastAmmo || xA !== X.lastRes || vgMl !== X.lastMl) && (X.lastMl = vgMl, X.lastAmmo = FA, X.lastRes = xA, X.activity = 0, $t(h, vgMl ? "\u221E" : String(FA)), $t(I, vgMl ? "\u2014" : String(xA)));
     const hA = GA ? FA / GA : 1, qA = GA > 0 && hA <= 0.3;
     if (Ka(h, "low", qA && FA > 0), Ka(h, "empty", FA === 0 && GA > 0), Ka(I, "low", GA > 0 && xA <= GA), GA !== X.magSize)
       if (X.magSize = GA, GA > 0 && GA <= 60) {
@@ -49897,7 +49928,38 @@ function perkHas(A) {
 }
 var pgSlotLv = [1, 1, 3, 4, 5], pgCtx = null;
 function pgCost(A) {
-  return 5e3 + 500 * (A - 1);
+  // Release 1.0: past level 100 every prestige level costs the same as level 100
+  return 5e3 + 500 * (Math.min(A, 100) - 1);
+}
+/* ------------------------------------------------------------------ Release 1.0: Prestige */
+// Levelling goes on past 100: levels 101, 102, 103 and up are prestige levels. Each one shows a prestige badge whose
+// colour moves up a tier as you go (Bronze, Silver, Gold, Platinum, Diamond, then Master from level 200).
+var VG_PRESTIGE = 100;
+var VG_PRESTIGE_TIERS = [[1, "Bronze", "#d38c52"], [11, "Silver", "#d8dee3"], [26, "Gold", "#f2c14e"], [51, "Platinum", "#8fe6d6"], [76, "Diamond", "#7cc8ff"], [100, "Master", "#ff5a4e"]];
+function vgPrestige(level) {
+  return Math.max(0, (level | 0) - VG_PRESTIGE);
+}
+function vgPrestigeTier(level) {
+  const p = vgPrestige(level);
+  if (!p) return null;
+  let t = VG_PRESTIGE_TIERS[0];
+  for (const x of VG_PRESTIGE_TIERS) p >= x[0] && (t = x);
+  return { p, name: t[1], color: t[2] };
+}
+function vgShade(hex, f) {
+  const n = parseInt(String(hex).slice(1), 16), c = [n >> 16 & 255, n >> 8 & 255, n & 255].map((v) => Math.round(f >= 0 ? v + (255 - v) * f : v * (1 + f)));
+  return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+// the prestige badge (a star on a shield) for a level, or "" below 101
+function vgPrestigeBadge(level, px = 22) {
+  const t = vgPrestigeTier(level);
+  if (!t) return "";
+  const id = `vgPrG${t.name}`;
+  return `<svg class="vg-prb" width="${px}" height="${px}" viewBox="0 0 40 44" aria-label="Prestige ${t.name}" role="img"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${vgShade(t.color, 0.55)}"/><stop offset=".55" stop-color="${t.color}"/><stop offset="1" stop-color="${vgShade(t.color, -0.35)}"/></linearGradient></defs><path d="M20 1.5 L37.5 7.5 V21 C37.5 32 30 38.5 20 42.5 C10 38.5 2.5 32 2.5 21 V7.5 Z" fill="#0d1114" stroke="url(#${id})" stroke-width="2.6"/><path d="M20 9.5 L23.1 17.2 L31.3 17.6 L25 22.8 L27.1 30.8 L20 26.3 L12.9 30.8 L15 22.8 L8.7 17.6 L16.9 17.2 Z" fill="url(#${id})"/></svg>`;
+}
+function vgLvLine(level) {
+  const t = vgPrestigeTier(level);
+  return t ? `Level ${level} · Prestige ${t.name}` : `Level ${level}`;
 }
 function pgLevel(A = Za.xp) {
   let e = 1, t = Math.max(0, Math.floor(A || 0));
@@ -50035,7 +50097,7 @@ function Z3() {
 function iJ(A, e = !1, dist = null) {
   const before = camoDefs.filter((c) => c.ch && camoUnlocked(c));
   Za.kills++, e && Za.headshots++, dist != null && dist >= 35 && (Za.longshots = (Za.longshots | 0) + 1);
-  const t = String(A || "").startsWith("pistol") ? "pistol" : "rifle";
+  const t = /^(pistol|melee:)/.test(String(A || "")) ? "pistol" : "rifle";
   Za.weapons[t] ||= { kills: 0 }, Za.weapons[t].kills++, om(), pgAddXp($3 + (e ? 50 : 0), "kill");
   // Beta 1.3: weapon levels and challenges
   const vid = wpnVariantFor(A), lng = dist != null && dist >= 35;
@@ -50051,12 +50113,180 @@ function iJ(A, e = !1, dist = null) {
 function aJ() {
   Za.deaths++, om();
 }
+/* ------------------------------------------------------------------ Release 1.0: Career */
+// Lifetime stats, kept with your progress (and your account's cloud save): kills, deaths, wins and losses, kept apart
+// for multiplayer and singleplayer (the Firing Range doesn't count). Older kills, deaths and headshots from before
+// Release 1.0 still count in the overall totals.
+var vgCar = { streak: 0, lastHit: -1, shots: 0 };
+function vgCareerBlank() {
+  return { kills: 0, deaths: 0, headshots: 0, longshots: 0, melee: 0, matches: 0, wins: 0, losses: 0, bestStreak: 0, timeS: 0, shots: 0, hits: 0, waves: 0, bestWave: 0, opsWon: 0 };
+}
+function vgCareer() {
+  if (typeof Za != "object" || !Za) return { mp: vgCareerBlank(), sp: vgCareerBlank() };
+  (!Za.career || typeof Za.career != "object") && (Za.career = {});
+  for (const k of ["mp", "sp"]) {
+    const c = Za.career[k] && typeof Za.career[k] == "object" ? Za.career[k] : {}, b2 = vgCareerBlank();
+    for (const f of Object.keys(b2)) b2[f] = Math.max(0, Number(c[f]) || 0);
+    Za.career[k] = b2;
+  }
+  return Za.career;
+}
+function vgCareerMode() {
+  try {
+    const S = pgCtx?.services, st = S?.gamemode?.state;
+    if (!st || st.stage === "range" || st.matchType === "range" || S?.world?.mapId === "range" || st.stage === "menu") return null;
+    return S?.network?.state?.active ? "mp" : "sp";
+  } catch {
+    return null;
+  }
+}
+function vgCareerAdd(f, n = 1, mode = vgCareerMode()) {
+  if (!mode || typeof Za != "object" || !Za) return;
+  const c = vgCareer()[mode];
+  c[f] = (c[f] || 0) + n;
+}
+function vgCareerHook(ev) {
+  if (vgCar.hooked) return;
+  vgCar.hooked = !0;
+  const friendly = (t) => t?.team === "player" || t?.team === "friendly" || t?.isPlayer;
+  ev.on("combat:kill", (k) => {
+    if (k?.source !== "player" || friendly(k.target)) return;
+    const m = vgCareerMode();
+    if (!m) return;
+    const c = vgCareer()[m];
+    c.kills++, k.zone === "head" && c.headshots++, /melee/i.test(String(k.weaponId || "")) && c.melee++;
+    try {
+      const d = vgKillDist(k);
+      d != null && d >= 35 && c.longshots++;
+    } catch {
+    }
+    vgCar.streak++, c.bestStreak = Math.max(c.bestStreak, vgCar.streak), om();
+  }), ev.on("player:died", () => {
+    vgCar.streak = 0, vgCareerAdd("deaths"), om();
+  }), ev.on("weapon:fired", () => {
+    vgCar.shots++, vgCareerAdd("shots");
+  }), ev.on("combat:hit", (h) => {
+    // one hit per shot (a shotgun's pellets count once)
+    h?.source !== "player" || friendly(h.target) || vgCar.lastHit === vgCar.shots || (vgCar.lastHit = vgCar.shots, vgCareerAdd("hits"));
+  }), ev.on("gamemode:match-end", () => {
+    const m = vgCareerMode() || (pgCtx?.services?.network?.state?.active ? "mp" : "sp"), st = pgCtx?.services?.gamemode?.state || {};
+    if (st.matchType === "range") return;
+    vgCareerAdd("matches", 1, m), vgCareerAdd(st.victory ? "wins" : "losses", 1, m), om();
+  }), ev.on("gamemode:end", (e2) => {
+    // Protection (singleplayer waves): holding to the end is a win
+    vgCareerAdd("matches", 1, "sp"), vgCareerAdd(e2?.victory ? "wins" : "losses", 1, "sp"), e2?.victory && vgCareerAdd("opsWon", 1, "sp");
+    const c = vgCareer().sp;
+    c.bestWave = Math.max(c.bestWave, e2?.wave | 0), om();
+  }), ev.on("gamemode:wave", (w) => {
+    w?.phase === "clear" && vgCareerAdd("waves", 1, "sp");
+  }), ev.on("gamemode:start", () => {
+    vgCar.streak = 0;
+  });
+  // time played: counted while a match is on screen and not paused
+  setInterval(() => {
+    const m = vgCareerMode(), S = pgCtx?.services;
+    m && S?.hud?.menu === "none" && !/ended|vote|queue|lobby|intermission|result/.test(String(S?.gamemode?.state?.stage || "")) && vgCareerAdd("timeS", 5, m);
+  }, 5e3);
+}
+function vgCareerTotals(which) {
+  const C = vgCareer(), a = C.mp, b2 = C.sp;
+  if (which === "mp" || which === "sp") return { ...C[which] };
+  const o = vgCareerBlank();
+  for (const f of Object.keys(o)) o[f] = (a[f] || 0) + (b2[f] || 0);
+  o.bestStreak = Math.max(a.bestStreak, b2.bestStreak), o.bestWave = b2.bestWave;
+  // lifetime totals from before Release 1.0
+  o.kills = Math.max(o.kills, Za.kills | 0), o.deaths = Math.max(o.deaths, Za.deaths | 0), o.headshots = Math.max(o.headshots, Za.headshots | 0), o.longshots = Math.max(o.longshots, Za.longshots | 0);
+  return o;
+}
+var vgCareerCss = `
+.vg-car { position: fixed; inset: 0; z-index: 400; overflow-y: auto; background: radial-gradient(ellipse at 18% 0%, rgba(242,193,78,.08), transparent 55%), linear-gradient(180deg, #0a0c0e, #07090a); color: #e9ece6; font-family: inherit; animation: vgCarIn .2s ease-out; }
+@keyframes vgCarIn { from { opacity: 0; } to { opacity: 1; } }
+.vg-car .wrap { max-width: 1180px; margin: 0 auto; padding: clamp(18px, 4vw, 48px) clamp(16px, 4vw, 56px) 40px; }
+.vg-car header { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; }
+.vg-car .kk { color: #f2c14e; font-size: 11px; font-weight: 800; letter-spacing: .34em; text-transform: uppercase; }
+.vg-car h2 { margin: 6px 0 6px; font-size: clamp(34px, 5.5vw, 60px); line-height: 1; letter-spacing: .12em; text-transform: uppercase; }
+.vg-car .who { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; color: #b9c0b8; font-size: 14px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.vg-car .who .vg-prb { flex: none; }
+.vg-car .who .xp { color: #8b938c; font-weight: 600; letter-spacing: .08em; }
+.vg-car .lvbar { width: min(420px, 100%); height: 5px; margin-top: 10px; background: rgba(236,240,234,.1); }
+.vg-car .lvbar i { display: block; height: 100%; background: var(--pr, #f2c14e); transform-origin: left; }
+.vg-car header .back { margin-left: auto; padding: 11px 22px; background: rgba(255,255,255,.06); border: 1px solid rgba(236,240,234,.24); color: #e9ece6; font: 800 12px/1 inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
+.vg-car header .back:hover, .vg-car header .back:focus-visible { border-color: #f2c14e; outline: none; }
+.vg-car .tabs { display: flex; gap: 6px; margin: 26px 0 18px; border-bottom: 1px solid rgba(236,240,234,.1); flex-wrap: wrap; }
+.vg-car .tabs button { padding: 12px 18px; background: none; border: 0; border-bottom: 3px solid transparent; color: #9aa29b; font: 800 13px/1 inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; margin-bottom: -1px; }
+.vg-car .tabs button.on { color: #e9ece6; border-bottom-color: #f2c14e; }
+.vg-car .tabs button:hover, .vg-car .tabs button:focus-visible { color: #e9ece6; outline: none; }
+.vg-car .big { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.vg-car .big div { padding: 20px 20px 18px; background: linear-gradient(160deg, rgba(255,255,255,.055), rgba(255,255,255,.02)); border: 1px solid rgba(236,240,234,.1); border-top: 3px solid rgba(242,193,78,.75); }
+.vg-car .big b { display: block; font-size: clamp(32px, 4.6vw, 54px); line-height: 1; font-weight: 800; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.vg-car .big span { display: block; margin-top: 10px; color: #a9b0a8; font-size: 12px; font-weight: 800; letter-spacing: .24em; text-transform: uppercase; }
+.vg-car .big .kd b { color: #f2c14e; }
+.vg-car .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 12px; }
+.vg-car .grid div { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; background: rgba(255,255,255,.03); border: 1px solid rgba(236,240,234,.08); }
+.vg-car .grid b { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.vg-car .grid span { color: #8f978f; font-size: 11px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; }
+.vg-car h4 { margin: 28px 0 10px; color: #949c95; font-size: 12px; letter-spacing: .26em; text-transform: uppercase; }
+.vg-car .wl { display: grid; gap: 6px; }
+.vg-car .wl div { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 10px 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(236,240,234,.07); }
+.vg-car .wl i { color: #f2c14e; font-style: normal; font-weight: 800; }
+.vg-car .wl b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .06em; }
+.vg-car .wl small { color: #8f978f; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+.vg-car .wl em { font-style: normal; font-weight: 800; font-variant-numeric: tabular-nums; }
+.vg-car .empty { color: #8a928b; line-height: 1.5; }
+.vg-car .foot { display: flex; gap: 22px; margin-top: 30px; color: #7f8880; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; }
+.vg-car .foot b { padding: 3px 7px; margin-right: 8px; border: 1px solid rgba(236,240,234,.25); color: #cfd5cc; }
+@media (max-width: 760px) { .vg-car .big { grid-template-columns: repeat(2, minmax(0, 1fr)); } .vg-car .wl div { grid-template-columns: 26px minmax(0, 1fr) auto; } .vg-car .wl small { display: none; } }
+.vg-prb { display: inline-block; vertical-align: -0.22em; margin-right: .32em; }
+.vg-prt { margin-left: .4em; padding: 2px 6px; border: 1px solid currentColor; color: #f2c14e; font-size: .62em; letter-spacing: .18em; vertical-align: .15em; }
+`;
+function vgCareerScreen() {
+  if (typeof document > "u" || document.querySelector(".vg-car")) return;
+  if (!document.getElementById("vg-car-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-car-style", st.textContent = vgCareerCss, document.head.appendChild(st);
+  }
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  const root = document.createElement("div");
+  root.className = "vg-car", root.setAttribute("role", "dialog"), root.setAttribute("aria-label", "Career");
+  const TABS = [["all", "Overall"], ["mp", "Multiplayer"], ["sp", "Singleplayer"]];
+  let tab = 0;
+  const fmtN = (n) => Math.round(n || 0).toLocaleString(), pct = (a, b2) => b2 > 0 ? `${(a / b2 * 100).toFixed(1)}%` : "\u2014";
+  const hours = (s) => s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m` : `${Math.floor(s / 60)}m`;
+  const render = () => {
+    const lv = pgLevel(), tr = vgPrestigeTier(lv.level), id = TABS[tab][0], o = vgCareerTotals(id), kd = o.deaths > 0 ? o.kills / o.deaths : o.kills;
+    const wpn = Object.entries(Za.wpn && typeof Za.wpn == "object" ? Za.wpn : {}).filter(([, w]) => (w?.kills | 0) > 0).sort((a, b2) => (b2[1].kills | 0) - (a[1].kills | 0)).slice(0, 6);
+    const tiles = [["Matches", fmtN(o.matches)], ["Losses", fmtN(o.losses)], ["Win rate", pct(o.wins, o.wins + o.losses)], ["Headshots", fmtN(o.headshots)], ["Headshot rate", pct(o.headshots, o.kills)], ["Longshots", fmtN(o.longshots)], ["Melee eliminations", fmtN(o.melee)], ["Best streak", fmtN(o.bestStreak)], ["Accuracy", pct(Math.min(o.hits, o.shots), o.shots)], ["Time played", hours(o.timeS)]];
+    id !== "mp" && tiles.push(["Waves survived", fmtN(o.waves)], ["Best wave", o.bestWave ? fmtN(o.bestWave) : "\u2014"], ["Operations won", fmtN(o.opsWon)]);
+    root.style.setProperty("--pr", tr ? tr.color : "#f2c14e");
+    root.innerHTML = `<div class="wrap"><header><div><div class="kk">Vangaurd · Lifetime</div><h2>Career</h2><p class="who">${vgPrestigeBadge(lv.level, 28)}<span>${vgEsc(vgAuth.user || "Offline profile")}</span><span>${vgEsc(vgLvLine(lv.level))}</span><span class="xp">${fmtN(lv.xp)} / ${fmtN(lv.need)} XP</span></p><div class="lvbar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div></div><button type="button" class="back" data-back>Back</button></header>
+      <nav class="tabs" role="tablist">${TABS.map(([k, n], i) => `<button type="button" role="tab" aria-selected="${i === tab}" class="${i === tab ? "on" : ""}" data-tab="${i}">${n}</button>`).join("")}</nav>
+      <section class="big"><div><b>${fmtN(o.kills)}</b><span>Eliminations</span></div><div><b>${fmtN(o.deaths)}</b><span>Deaths</span></div><div class="kd"><b>${kd.toFixed(2)}</b><span>K/D ratio</span></div><div><b>${fmtN(o.wins)}</b><span>Wins</span></div></section>
+      <section class="grid">${tiles.map(([n, v]) => `<div><b>${v}</b><span>${n}</span></div>`).join("")}</section>
+      <h4>Top weapons · all modes</h4><div class="wl">${wpn.length ? wpn.map(([wid, w], i) => `<div><i>${i + 1}</i><b>${vgEsc(wpnName(wid))}</b><small>Weapon level ${wpnStat(wid).level}</small><em>${fmtN(w.kills)} eliminations</em></div>`).join("") : '<p class="empty">No weapon eliminations yet. Your best guns show up here.</p>'}</div>
+      <div class="foot"><span><b>ESC</b>Back</span><span><b>\u2190 \u2192</b>Switch</span></div></div>`;
+    root.querySelectorAll("[data-tab]").forEach((b2) => b2.addEventListener("click", () => {
+      tab = +b2.dataset.tab, render(), root.querySelector(".tabs .on")?.focus();
+    })), root.querySelector("[data-back]").addEventListener("click", close);
+  };
+  const close = () => {
+    root.remove(), window.removeEventListener("keydown", key, !0), window.removeEventListener("keyup", stop, !0);
+  }, stop = (ev) => ev.stopImmediatePropagation(), key = (ev) => {
+    ev.stopImmediatePropagation();
+    const k = ev.code;
+    k === "Escape" || k === "Backspace" ? (ev.preventDefault(), close()) : k === "ArrowRight" || k === "KeyD" || k === "KeyE" ? (ev.preventDefault(), tab = (tab + 1) % TABS.length, render()) : (k === "ArrowLeft" || k === "KeyA" || k === "KeyQ") && (ev.preventDefault(), tab = (tab + TABS.length - 1) % TABS.length, render());
+  };
+  window.addEventListener("keydown", key, !0), window.addEventListener("keyup", stop, !0), root.addEventListener("mousedown", (ev) => ev.stopPropagation()), document.body.appendChild(root), render(), setTimeout(() => root.querySelector("[data-back]")?.focus(), 30);
+  return { close, root };
+}
 /* ------------------------------------------------------------------ Beta 1.3: weapon levels */
 // Every gun has its own level (1 – 20) earned with kills: 100 XP a kill, +50 for a headshot, +50 for a longshot.
 // A gun's level unlocks attachments for that gun early (they still unlock for every gun at the operator level).
 var WPN_MAX = 20;
 var WPN_ATT_LV = { "optic:reflex": 2, "suppressor:muzzle": 3, "grip:tactical": 4, "barrel:extended": 5, "optic:scope": 6, "suppressor:heavy": 8, "grip:heavy": 9, "barrel:precision": 11, "optic:night": 13 };
-var WPN_CLASS = { ar7: "ar", br4: "ar", smg9: "smg", lmg60: "lmg", dmr14: "sniper", sr50: "sniper", sg12: "shotgun", p9: "pistol", mp20: "pistol", hc50: "pistol", p3b: "pistol" };
+var WPN_CLASS = { ar7: "ar", br4: "ar", smg9: "smg", lmg60: "lmg", dmr14: "sniper", sr50: "sniper", sg12: "shotgun", p9: "pistol", mp20: "pistol", hc50: "pistol", p3b: "pistol", knife: "melee", machete: "melee", axe: "melee", bat: "melee" };
 var WPN_CLASS_NAME = { ar: "assault rifles", smg: "SMGs", lmg: "LMGs", sniper: "marksman or sniper rifles", shotgun: "shotguns", pistol: "pistols" };
 function wpnCost(l) {
   return 300 + 60 * (l - 1);
@@ -50079,6 +50309,7 @@ function wpnName(id) {
 function wpnVariantFor(weaponId) {
   const s = String(weaponId || "");
   try {
+    if (s.startsWith("melee:")) return s.slice(6) || null;
     if (s.startsWith("pistol")) return sB?.pistol?.variantId || null;
     if (s.startsWith("rifle")) return sB?.rifle?.variantId || null;
   } catch {
@@ -50105,7 +50336,7 @@ function wpnAddXp(id, amount, kill = !0) {
   const after = wpnStat(id).level;
   if (after > before) {
     const un = [];
-    for (let l = before + 1; l <= after; l++) un.push(...wpnUnlocksAt(l));
+    for (let l = before + 1; l <= after; l++) WPN_CLASS[id] === "melee" || un.push(...wpnUnlocksAt(l));
     try {
       pgCtx?.services.hud?.banner?.(`${wpnName(id)} · Level ${after}`, { kicker: after >= WPN_MAX ? "Weapon mastered" : "Weapon level up", sub: un.length ? `Unlocked for this gun: ${un.join(", ")}` : after >= WPN_MAX ? "Maximum weapon level" : `${(wpnStat(id).need - wpnStat(id).xp).toLocaleString()} XP to level ${after + 1}`, duration: 3.6 }), pgCtx?.services.audio?.ui?.("notify");
     } catch {
@@ -51960,8 +52191,53 @@ var wvSpecs = {
     mag(A) {
       A.add("polyBlack", wvJ(0.02, 0.022, 0.03, 2e-3), [0, -0.01, 3e-3], [-18, 0, 0]);
     }
-  }
+  },
+  // Release 1.0: melee weapons. Built with the fist at the origin (forward is +d, up is +y), then tipped up and put
+  // where the pistol's grip is, so the hand that holds a pistol holds these.
+  knife: { frame: "pistol", melee: !0, build(A) { vgMeleeBuild(A, "knife"); } },
+  machete: { frame: "pistol", melee: !0, build(A) { vgMeleeBuild(A, "machete"); } },
+  axe: { frame: "pistol", melee: !0, build(A) { vgMeleeBuild(A, "axe"); } },
+  bat: { frame: "pistol", melee: !0, build(A) { vgMeleeBuild(A, "bat"); } }
 };
+var VG_MELEE_POSE = {
+  knife: { pos: [3e-3, -0.064, -0.03], rot: [24, -6, 0] },
+  machete: { pos: [3e-3, -0.064, -0.03], rot: [26, -6, 0] },
+  axe: { pos: [3e-3, -0.066, -0.026], rot: [34, -8, 0] },
+  bat: { pos: [3e-3, -0.066, -0.026], rot: [36, -8, 0] }
+};
+function vgMeleeBuild(A, kind) {
+  const P = VG_MELEE_POSE[kind], put = (mat, g) => A.add(mat, g, P.pos, P.rot);
+  const tr = (g, x, y, d) => (g.translate(x, y, -d), g);
+  const box = (mat, d0, d1, y0, y1, w, x = 0, bev = 12e-4) => put(mat, tr(wvJ(w, y1 - y0, d1 - d0, bev), x, (y0 + y1) / 2, (d0 + d1) / 2));
+  const prof = (mat, pts, w, r = 2e-3, x = 0, bev = 1e-3) => put(mat, Jt(Gt(pts, r, 3), w, { cx: x, bevel: bev }));
+  const lathe = (mat, pts, seg = 22) => put(mat, qt(pts, seg));
+  const pin = (d, y = 0, r = 3e-3, w = 0.026) => put("steel", tr(Ln(r, w, 3e-4, 10, "x"), 0, y, d));
+  if (kind === "knife") {
+    prof("rubber", [[-0.058, -0.011], [0.04, -0.0125], [0.046, 0.011], [-0.052, 0.0125], [-0.064, 4e-3]], 0.022, 5e-3);
+    for (const d of [-0.03, -6e-3, 0.018]) box("cavity", d, d + 3e-3, -0.0105, 0.0105, 0.0224, 0, 2e-4);
+    box("steel", -0.074, -0.058, -0.0095, 0.0095, 0.02, 0, 3e-3);
+    prof("steel", [[0.044, -0.024], [0.054, -0.022], [0.054, 0.018], [0.044, 0.016]], 0.028, 2e-3);
+    prof("steel", [[0.054, -0.013], [0.15, -0.013], [0.188, -7e-3], [0.214, 3e-3], [0.172, 0.0105], [0.054, 0.0105]], 45e-4, 8e-4, 0, 6e-4);
+    box("cavity", 0.066, 0.142, 2e-3, 5e-3, 47e-4, 0, 2e-4);
+  } else if (kind === "machete") {
+    prof("polyBlack", [[-0.062, -0.012], [0.045, -0.013], [0.05, 0.012], [-0.056, 0.013], [-0.07, 2e-3]], 0.024, 6e-3);
+    for (const d of [-0.036, 2e-3, 0.032]) pin(d, 0, 32e-4, 0.0262);
+    box("steel", 0.046, 0.058, -0.016, 0.014, 0.02, 0, 2e-3);
+    prof("steel", [[0.056, -0.016], [0.3, -0.023], [0.4, -0.017], [0.442, 0], [0.43, 0.016], [0.3, 0.0175], [0.056, 0.012]], 4e-3, 1e-3, 0, 6e-4);
+    box("cavity", 0.07, 0.38, 0.0105, 0.0125, 42e-4, 0, 2e-4);
+  } else if (kind === "axe") {
+    lathe("polyTan", [[0, -0.078], [0.0155, -0.078], [0.0172, -0.064], [0.0146, -0.045], [0.0136, 0.2], [0.0146, 0.36], [0.012, 0.372], [0, 0.372]]);
+    lathe("rubber", [[0, -0.06], [0.0158, -0.06], [0.0158, 0.05], [0, 0.05]]);
+    box("paintRed", 0.302, 0.368, -0.022, 0.036, 0.03, 0, 3e-3);
+    prof("steel", [[0.31, -0.02], [0.362, -0.02], [0.404, -0.064], [0.412, -0.118], [0.262, -0.118], [0.276, -0.064]], 0.012, 3e-3, 0, 1e-3);
+    prof("paintRed", [[0.306, -0.021], [0.366, -0.021], [0.388, -0.06], [0.29, -0.06]], 0.0136, 2e-3, 0, 8e-4);
+    prof("paintRed", [[0.312, 0.034], [0.358, 0.034], [0.346, 0.088], [0.334, 0.094], [0.324, 0.088]], 0.016, 3e-3);
+  } else if (kind === "bat") {
+    lathe("polyTan", [[0, -0.086], [0.022, -0.086], [0.0242, -0.079], [0.0205, -0.07], [0.0136, -0.06], [0.0132, 0.12], [0.0172, 0.25], [0.026, 0.38], [0.0318, 0.5], [0.0335, 0.6], [0.0322, 0.624], [0.025, 0.636], [0, 0.637]], 26);
+    lathe("rubber", [[0, -0.062], [0.0146, -0.062], [0.0146, 0.072], [0, 0.072]], 18);
+    lathe("paintRed", [[0.0262, 0.4], [0.0292, 0.4], [0.0302, 0.43], [0.0272, 0.43]], 26);
+  }
+}
 function wvBuild(A, e, t, i) {
   const a = wvSpecs[A];
   if (!a) return null;
@@ -51997,7 +52273,11 @@ var atMount = {
   p9: { pistol: !0 },
   mp20: { pistol: !0 },
   hc50: { pistol: !0 },
-  p3b: { pistol: !0 }
+  p3b: { pistol: !0 },
+  knife: { pistol: !0 },
+  machete: { pistol: !0 },
+  axe: { pistol: !0 },
+  bat: { pistol: !0 }
 };
 function atBuild(A, e, t, i) {
   const B = new Js(), R = e.rail ?? 0.04, z = e.oz ?? 0.04, M = e.muzzleAt ?? 0.6, dots = [], info = {}, extra = [];
@@ -52117,8 +52397,8 @@ var VG_PAD_NAMES = {
   ps: ["\u2715", "\u25CB", "\u25A1", "\u25B3", "L1", "R1", "L2", "R2", "Create", "Options", "L3", "R3", "D-pad up", "D-pad down", "D-pad left", "D-pad right", "PS", "Touchpad"],
   switch: ["B", "A", "Y", "X", "L", "R", "ZL", "ZR", "\u2212", "+", "L-stick", "R-stick", "D-pad up", "D-pad down", "D-pad left", "D-pad right", "Home", "Capture"]
 };
-var VG_PAD_ACTS = [["fire", "Fire"], ["ads", "Aim down sights"], ["jump", "Jump / mantle"], ["crouch", "Crouch / slide"], ["prone", "Prone"], ["sprint", "Sprint (press)"], ["reload", "Reload"], ["swapWeapon", "Switch weapon"], ["melee", "Melee"], ["grenade", "Lethal"], ["tactical", "Tactical"], ["ping", "Mark (double-tap: enemy)"], ["killstreak", "Use killstreak"], ["interact", "Interact"], ["inspect", "Inspect weapon"], ["fireMode", "Fire mode"], ["scoreboard", "Scoreboard"]];
-var VG_PAD_BASE = { fire: 7, ads: 6, jump: 0, crouch: 1, prone: 13, sprint: 10, reload: 2, swapWeapon: 3, melee: 11, grenade: 5, tactical: 4, ping: 12, killstreak: 12, interact: 15, inspect: 14, fireMode: -1, scoreboard: 8 };
+var VG_PAD_ACTS = [["fire", "Fire"], ["ads", "Aim down sights"], ["jump", "Jump / mantle"], ["crouch", "Crouch / slide"], ["prone", "Prone"], ["sprint", "Sprint (press)"], ["reload", "Reload"], ["swapWeapon", "Switch weapon"], ["melee", "Melee"], ["grenade", "Lethal"], ["tactical", "Tactical"], ["ping", "Mark (double-tap: enemy)"], ["killstreak", "Use killstreak"], ["interact", "Interact"], ["inspect", "Inspect weapon"], ["fireMode", "Fire mode"], ["scoreboard", "Scoreboard"], ["pause", "Pause menu"]];
+var VG_PAD_BASE = { fire: 7, ads: 6, jump: 0, crouch: 1, prone: 13, sprint: 10, reload: 2, swapWeapon: 3, melee: 11, grenade: 5, tactical: 4, ping: 12, killstreak: 12, interact: 15, inspect: 14, fireMode: -1, scoreboard: 8, pause: 9 };
 // Switch: A (the right button) jumps and B (bottom) crouches, the way Nintendo games do it
 var VG_PAD_PRESET = { xbox: VG_PAD_BASE, ps: VG_PAD_BASE, switch: { ...VG_PAD_BASE, jump: 1, crouch: 0 } };
 var vgPadBind = { on: !1, cb: null, row: null, id: "" };
@@ -52137,6 +52417,312 @@ function vgPadMap(S, id) {
 }
 function vgPadName(S, i, id) {
   return i >= 0 ? VG_PAD_NAMES[vgPadKind(S, id)][i] || `Button ${i + 1}` : "\u2014";
+}
+/* ------------------------------------------------------------------ Release 1.0: gyro aiming */
+// The browser's Gamepad API has no motion sensors, so the controller is also opened over WebHID (Chrome, Edge and
+// the Vangaurd app) and its gyro read straight from its reports: DualShock 4 and DualSense over USB or Bluetooth, and
+// the Switch Pro Controller. Rates are in degrees per second, summed between frames; the drift of a controller at
+// rest is measured and taken off (and Calibrate measures it on demand).
+var vgGyro = { dev: null, kind: "", name: "", conn: "", acc: { yaw: 0, pitch: 0, roll: 0 }, bias: [0, 0, 0], rest: [], last: 0, rate: [0, 0, 0], live: 0, cal: null, err: "", tried: !1 };
+var VG_GYRO_IDS = { 1356: { 1476: "ds4", 2508: "ds4", 2976: "ds4", 3302: "ds", 3570: "ds" }, 1406: { 8201: "sw" } };
+var VG_GYRO_NAMES = { ds4: "DualShock 4", ds: "DualSense", sw: "Switch Pro Controller" };
+function vgGyroKind(d) {
+  return VG_GYRO_IDS[d?.vendorId]?.[d?.productId] || "";
+}
+function vgGyroReport(e) {
+  const G = vgGyro, d = e.data, id = e.reportId, n = d.byteLength;
+  let o = -1, sc = 1 / 16.384, sw = !1;
+  G.kind === "ds4" ? o = id === 1 && n >= 30 ? 12 : id === 17 && n >= 32 ? 14 : -1 : G.kind === "ds" ? o = id === 1 && n >= 30 ? 15 : id === 49 && n >= 32 ? 16 : -1 : G.kind === "sw" && id === 48 && n >= 36 && (o = 18, sc = 0.07, sw = !0);
+  if (o < 0) return;
+  G.conn ||= id === 1 ? "USB" : "Bluetooth";
+  // [pitch, yaw, roll] in degrees per second (pitch: top edge up; yaw: turning left; roll: leaning right)
+  const r = sw ? [-d.getInt16(o + 2, !0) * sc, d.getInt16(o + 4, !0) * sc, d.getInt16(o, !0) * sc] : [d.getInt16(o, !0) * sc, d.getInt16(o + 2, !0) * sc, d.getInt16(o + 4, !0) * sc];
+  const t = performance.now(), dt = G.last ? Math.min(0.03, (t - G.last) / 1e3) : 0;
+  G.last = t, G.live = t;
+  // drift: a controller lying still for a second and a half sets the bias
+  const still = r.every((v, i) => Math.abs(v - G.bias[i]) < 2.5);
+  if (still) {
+    G.rest.push(r), G.rest.length > 300 && G.rest.shift();
+    if (G.rest.length >= 150) for (let i = 0; i < 3; i++) G.bias[i] = G.bias[i] * 0.9 + G.rest.reduce((s, x) => s + x[i], 0) / G.rest.length * 0.1;
+  } else G.rest.length = 0;
+  G.cal && (G.cal.push(r), G.cal.length >= 200 && (G.bias = [0, 1, 2].map((i) => G.cal.reduce((s, x) => s + x[i], 0) / G.cal.length), G.cal = null));
+  const c = r.map((v, i) => Math.abs(v - G.bias[i]) < 0.6 ? 0 : v - G.bias[i]);
+  G.rate = c, G.acc.pitch += c[0] * dt, G.acc.yaw += c[1] * dt, G.acc.roll += c[2] * dt;
+}
+// the turn since the last frame (degrees), or null with no gyro
+function vgGyroTake() {
+  const G = vgGyro;
+  if (!G.dev || performance.now() - G.live > 500) return null;
+  const a = { ...G.acc };
+  return G.acc.yaw = G.acc.pitch = G.acc.roll = 0, a;
+}
+async function vgGyroOpen(d) {
+  const G = vgGyro;
+  d.opened || await d.open();
+  G.dev = d, G.kind = vgGyroKind(d), G.name = VG_GYRO_NAMES[G.kind] || d.productName || "Controller", G.conn = "", G.err = "", d.addEventListener("inputreport", vgGyroReport);
+  if (G.kind === "ds4") try {
+    await d.receiveFeatureReport(2);
+  } catch {
+  }
+  if (G.kind === "sw") try {
+    // Switch Pro: turn the motion sensors on, then ask for full reports
+    const sub = async (n, cmd, arg) => d.sendReport(1, new Uint8Array([n, 0, 1, 64, 64, 0, 1, 64, 64, cmd, arg]));
+    await sub(1, 64, 1), await new Promise((r) => setTimeout(r, 60)), await sub(2, 3, 48);
+  } catch {
+  }
+  return G;
+}
+async function vgGyroConnect(ask = !1) {
+  const G = vgGyro;
+  if (G.dev) return { ok: !0, name: G.name };
+  if (!navigator.hid) return { error: "Gyro aiming needs Chrome or Edge, or the Vangaurd app." };
+  try {
+    let list = (await navigator.hid.getDevices()).filter(vgGyroKind);
+    !list.length && ask && (list = (await navigator.hid.requestDevice({ filters: [{ vendorId: 1356 }, { vendorId: 1406, productId: 8201 }] })).filter(vgGyroKind));
+    if (!list.length) return { error: ask ? "No supported controller was picked. Gyro works with DualShock 4, DualSense and the Switch Pro Controller." : "" };
+    await vgGyroOpen(list[0]);
+    return { ok: !0, name: G.name };
+  } catch (err) {
+    return G.err = String(err?.message || err), { error: `Couldn't open the controller: ${G.err}` };
+  }
+}
+typeof navigator < "u" && navigator.hid && (navigator.hid.addEventListener?.("disconnect", (ev) => {
+  ev.device === vgGyro.dev && (vgGyro.dev = null, vgGyro.conn = "");
+}), navigator.hid.addEventListener?.("connect", () => vgGyroConnect(!1)), setTimeout(() => vgGyroConnect(!1), 4e3));
+
+/* ------------------------------------------------------------------ Release 1.0: Edit Controls */
+// Every controller button on a picture of the controller (Xbox, PlayStation or Switch, as detected or picked): pick a
+// button, then the action for it. An action moves to the button you pick, and whatever was on that button moves to
+// where the action was, so nothing is ever left unbound by accident. Sticks & Gyro has southpaw and gyro aiming.
+var vgPadCss = `
+.vg-pad { position: fixed; inset: 0; z-index: 405; overflow-y: auto; background: linear-gradient(180deg, #0b0e11, #07090b); color: #e9ece6; font-family: inherit; }
+.vg-pad .wrap { max-width: 1240px; margin: 0 auto; padding: clamp(14px, 3vw, 34px) clamp(14px, 3vw, 40px) 30px; }
+.vg-pad .hd { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.vg-pad .kk { color: #f2c14e; font-size: 11px; font-weight: 800; letter-spacing: .34em; text-transform: uppercase; }
+.vg-pad h2 { margin: 6px 0 0; font-size: clamp(28px, 4.4vw, 46px); letter-spacing: .12em; text-transform: uppercase; line-height: 1; }
+.vg-pad .legend { margin-left: auto; display: grid; gap: 6px; padding: 10px 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(236,240,234,.12); font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.vg-pad .legend i { display: inline-block; width: 11px; height: 11px; margin-right: 8px; vertical-align: -1px; }
+.vg-pad .legend .h i { background: #4fc3ff; } .vg-pad .legend .d i { background: #ff8fc7; }
+.vg-pad .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 18px 0 14px; border-bottom: 1px solid rgba(236,240,234,.1); }
+.vg-pad .bar .tab { padding: 11px 16px; background: none; border: 0; border-bottom: 3px solid transparent; color: #9aa29b; font: 800 13px/1 inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; margin-bottom: -1px; }
+.vg-pad .bar .tab.on { color: #e9ece6; border-bottom-color: #f2c14e; }
+.vg-pad .bar .sp { flex: 1; }
+.vg-pad .seg { display: inline-flex; border: 1px solid rgba(236,240,234,.2); margin-bottom: 6px; }
+.vg-pad .seg button { padding: 8px 12px; background: none; border: 0; color: #9aa29b; font: 800 11px/1 inherit; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; }
+.vg-pad .seg button.on { background: #f2c14e; color: #111; }
+.vg-pad .stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: center; }
+.vg-pad .col { display: grid; gap: 8px; }
+.vg-pad .col.r { }
+.vg-pad .lab { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 7px 12px; background: #1d3466; border: 1px solid rgba(160,190,255,.25); color: #fff; font: 800 13px/1.15 inherit; letter-spacing: .04em; text-align: left; cursor: pointer; transition: background .12s, border-color .12s; }
+.vg-pad .lab:hover, .vg-pad .lab:focus-visible, .vg-pad .lab.sel { background: #2a4a8e; border-color: #f2c14e; outline: none; }
+.vg-pad .lab.hit { border-color: #7fe08c; box-shadow: 0 0 0 2px rgba(127,224,140,.5); }
+.vg-pad .lab .g { flex: none; min-width: 30px; height: 26px; padding: 0 6px; display: grid; place-items: center; background: rgba(255,255,255,.14); border-radius: 13px; font-size: 12px; letter-spacing: .02em; }
+.vg-pad .lab .a { min-width: 0; }
+.vg-pad .lab .a small { display: block; margin-top: 2px; font-size: 11px; letter-spacing: .06em; }
+.vg-pad .lab .a .hold { color: #7fd3ff; } .vg-pad .lab .a .dbl { color: #ffa6d3; }
+.vg-pad .lab.none .a { color: #9eb0d9; font-weight: 600; }
+.vg-pad .bottom { display: flex; justify-content: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.vg-pad .bottom .lab { width: auto; min-width: 230px; }
+.vg-pad svg.ctl { width: 100%; height: auto; max-height: 52vh; }
+.vg-pad svg.ctl .body { fill: #2b3f6e; stroke: #c9d6f2; stroke-width: 2.5; }
+.vg-pad svg.ctl .bt { fill: #22355f; stroke: #c9d6f2; stroke-width: 2; transition: fill .1s; }
+.vg-pad svg.ctl .bt.on { fill: #f2c14e; stroke: #fff; }
+.vg-pad svg.ctl .bt.hit { fill: #7fe08c; }
+.vg-pad svg.ctl text { fill: #e9ece6; font: 800 15px ui-sans-serif, system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.vg-pad svg.ctl text.sm { font-size: 11px; }
+.vg-pad .foot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 18px; }
+.vg-pad .btn { padding: 11px 18px; background: rgba(255,255,255,.06); border: 1px solid rgba(236,240,234,.24); color: #e9ece6; font: 800 12px/1 inherit; letter-spacing: .18em; text-transform: uppercase; cursor: pointer; }
+.vg-pad .btn:hover, .vg-pad .btn:focus-visible { border-color: #f2c14e; outline: none; }
+.vg-pad .btn.pri { background: #f2c14e; border-color: #f2c14e; color: #111; }
+.vg-pad .foot .hint { margin-left: auto; color: #7f8880; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
+.vg-pad .pick { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center; background: rgba(3,5,8,.62); }
+.vg-pad .pick .card { width: min(460px, 94vw); max-height: 86vh; overflow-y: auto; padding: 18px; background: #10151a; border: 1px solid rgba(236,240,234,.16); border-top: 3px solid #f2c14e; }
+.vg-pad .pick h3 { margin: 0 0 4px; font-size: 16px; letter-spacing: .18em; text-transform: uppercase; }
+.vg-pad .pick p { margin: 0 0 12px; color: #9aa29b; font-size: 13px; }
+.vg-pad .pick .opt { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; margin-bottom: 4px; background: rgba(255,255,255,.04); border: 1px solid rgba(236,240,234,.1); color: #e9ece6; font: 700 13px/1.2 inherit; text-align: left; cursor: pointer; }
+.vg-pad .pick .opt:hover, .vg-pad .pick .opt:focus-visible { border-color: #f2c14e; outline: none; }
+.vg-pad .pick .opt.cur { border-color: #f2c14e; background: rgba(242,193,78,.12); }
+.vg-pad .pick .opt small { color: #8f978f; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.vg-pad .gy { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 380px); gap: 22px; }
+.vg-pad .gy .rows { display: grid; gap: 8px; align-content: start; }
+.vg-pad .gy .row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: rgba(255,255,255,.035); border: 1px solid rgba(236,240,234,.1); }
+.vg-pad .gy .row > span:first-child { flex: 1; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; font-size: 13px; }
+.vg-pad .gy .row > span:first-child small { display: block; margin-top: 4px; color: #8f978f; font-weight: 600; letter-spacing: .02em; text-transform: none; font-size: 12px; }
+.vg-pad .gy input[type=range] { width: 180px; accent-color: #f2c14e; }
+.vg-pad .gy .val { min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 800; }
+.vg-pad .gy .card2 { padding: 16px; background: rgba(255,255,255,.035); border: 1px solid rgba(236,240,234,.1); align-self: start; }
+.vg-pad .gy .card2 h4 { margin: 0 0 6px; font-size: 13px; letter-spacing: .2em; text-transform: uppercase; }
+.vg-pad .gy .st { margin: 0 0 12px; color: #b4bbb3; font-size: 13px; line-height: 1.45; }
+.vg-pad .gy .st b.ok { color: #7fe08c; } .vg-pad .gy .st b.no { color: #ff8070; }
+.vg-pad .gy .meter { position: relative; height: 150px; margin: 10px 0 12px; background: radial-gradient(circle at 50% 50%, rgba(242,193,78,.08), transparent 60%), rgba(0,0,0,.25); border: 1px solid rgba(236,240,234,.1); overflow: hidden; }
+.vg-pad .gy .meter::before, .vg-pad .gy .meter::after { content: ""; position: absolute; background: rgba(236,240,234,.1); }
+.vg-pad .gy .meter::before { left: 50%; top: 0; bottom: 0; width: 1px; } .vg-pad .gy .meter::after { top: 50%; left: 0; right: 0; height: 1px; }
+.vg-pad .gy .meter i { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #f2c14e; box-shadow: 0 0 12px rgba(242,193,78,.8); }
+@media (max-width: 900px) { .vg-pad .stage { grid-template-columns: 1fr 1fr; } .vg-pad .stage .pic { grid-column: 1 / -1; order: -1; } .vg-pad .gy { grid-template-columns: 1fr; } .vg-pad .legend { margin-left: 0; } }
+`;
+var VG_PAD_HOLD = { ping: "killstreak" };
+function vgPadSvg(kind) {
+  const ps = kind === "ps", sw = kind === "switch", N = VG_PAD_NAMES[kind] || VG_PAD_NAMES.xbox, face = (i, x, y) => `<circle class="bt" data-b="${i}" cx="${x}" cy="${y}" r="19"/>${ps ? `<text x="${x}" y="${y}">${["\u2715", "\u25CB", "\u25A1", "\u25B3"][i]}</text>` : `<text x="${x}" y="${y}">${N[i]}</text>`}`;
+  return `<svg class="ctl" viewBox="0 0 600 400" role="img" aria-label="Controller">
+    <path class="body" d="M150 92 C110 92 82 112 70 160 C52 232 34 318 66 352 C94 382 132 366 160 318 C176 290 196 274 222 274 H378 C404 274 424 290 440 318 C468 366 506 382 534 352 C566 318 548 232 530 160 C518 112 490 92 450 92 Z"/>
+    <rect class="bt" data-b="6" x="112" y="26" width="86" height="34" rx="12"/><text x="155" y="43">${N[6]}</text>
+    <rect class="bt" data-b="4" x="104" y="64" width="102" height="24" rx="10"/><text class="sm" x="155" y="76">${N[4]}</text>
+    <rect class="bt" data-b="7" x="402" y="26" width="86" height="34" rx="12"/><text x="445" y="43">${N[7]}</text>
+    <rect class="bt" data-b="5" x="394" y="64" width="102" height="24" rx="10"/><text class="sm" x="445" y="76">${N[5]}</text>
+    <rect class="bt" data-b="12" x="150" y="140" width="30" height="34" rx="5"/><rect class="bt" data-b="13" x="150" y="198" width="30" height="34" rx="5"/>
+    <rect class="bt" data-b="14" x="116" y="171" width="36" height="30" rx="5"/><rect class="bt" data-b="15" x="178" y="171" width="36" height="30" rx="5"/>
+    ${face(3, 445, 148)}${face(1, 484, 186)}${face(0, 445, 224)}${face(2, 406, 186)}
+    <circle class="bt" data-b="10" cx="222" cy="262" r="33"/><text class="sm" x="222" y="262">${N[10]}</text>
+    <circle class="bt" data-b="11" cx="378" cy="262" r="33"/><text class="sm" x="378" y="262">${N[11]}</text>
+    ${ps ? '<rect class="bt" data-b="17" x="246" y="104" width="108" height="62" rx="10"/><text class="sm" x="300" y="135">Touchpad</text>' : ""}
+    <rect class="bt" data-b="8" x="${ps ? 214 : 240}" y="${ps ? 110 : 150}" width="${ps ? 22 : 38}" height="${ps ? 32 : 22}" rx="8"/><text class="sm" x="${ps ? 225 : 259}" y="${ps ? 158 : 192}">${N[8]}</text>
+    <rect class="bt" data-b="9" x="${ps ? 364 : 322}" y="${ps ? 110 : 150}" width="${ps ? 22 : 38}" height="${ps ? 32 : 22}" rx="8"/><text class="sm" x="${ps ? 375 : 341}" y="${ps ? 158 : 192}">${N[9]}</text>
+    <circle class="bt" data-b="16" cx="300" cy="${ps ? 196 : 112}" r="14"/>
+  </svg>`;
+}
+function vgPadScreen(S) {
+  if (typeof document > "u" || document.querySelector(".vg-pad")) return;
+  S ||= pgCtx?.settings;
+  if (!S) return;
+  if (!document.getElementById("vg-pad-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-pad-style", st.textContent = vgPadCss, document.head.appendChild(st);
+  }
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  const root = document.createElement("div");
+  root.className = "vg-pad", root.setAttribute("role", "dialog"), root.setAttribute("aria-label", "Edit controls");
+  const LEFT = [6, 4, 12, 14, 15, 13, 10], RIGHT = [7, 5, 3, 2, 1, 0, 11], ACT = Object.fromEntries(VG_PAD_ACTS);
+  let tab = "buttons", sel = 0, picking = null, raf = 0, hits = {};
+  const kind = () => vgPadKind(S), map = () => vgPadMap(S), name = (i) => vgPadName(S, i);
+  const actsOn = (i) => VG_PAD_ACTS.map(([a]) => a).filter((a) => map()[a] === i);
+  const label = (i) => {
+    const a = actsOn(i), main = a.filter((x) => !Object.values(VG_PAD_HOLD).includes(x) || !a.includes(Object.keys(VG_PAD_HOLD).find((k) => VG_PAD_HOLD[k] === x))), hold = a.filter((x) => !main.includes(x));
+    if (!a.length) return '<span class="a">Unbound</span>';
+    const nm = (x) => x === "ping" ? "Mark" : (ACT[x] || x).replace(/ \(.*\)$/, "");
+    return `<span class="a">${main.map(nm).join(" / ")}${a.includes("ping") ? '<small class="dbl">Double tap: enemy mark</small>' : ""}${hold.length ? `<small class="hold">Also: ${hold.map(nm).join(" / ")}</small>` : ""}</span>`;
+  };
+  const lab = (i) => `<button type="button" class="lab${actsOn(i).length ? "" : " none"}" data-i="${i}"><span class="g">${vgEsc(name(i))}</span>${label(i)}</button>`;
+  const order = () => [...root.querySelectorAll(".lab[data-i]")];
+  const gyroRows = () => {
+    const g = S.get("pad.gyro", "off"), sens = Number(S.get("pad.gyroSens", 1.5)) || 1.5, axis = S.get("pad.gyroAxis", "yaw"), G = vgGyro;
+    const seg = (path, opts, cur) => `<span class="seg" role="group">${opts.map(([v, t]) => `<button type="button" data-set="${path}" data-v="${v}" class="${String(cur) === String(v) ? "on" : ""}">${t}</button>`).join("")}</span>`;
+    const st = G.dev ? `<b class="ok">${vgEsc(G.name)} connected</b>${G.conn ? ` over ${G.conn}` : ""}. ${performance.now() - G.live < 800 ? "Gyro is live: turn the controller and watch the dot." : "Waiting for gyro data…"}` : navigator.hid ? '<b class="no">No gyro controller connected.</b> Connect a DualShock 4, DualSense or Switch Pro Controller, then press Connect.' : '<b class="no">Gyro isn\'t available here.</b> It needs Chrome or Edge, or the Vangaurd app.';
+    return `<div class="gy"><div class="rows">
+      <div class="row"><span>Stick layout<small>Southpaw swaps the sticks: move with the right stick, look with the left.</small></span>${seg("pad.swapSticks", [[!1, "Default"], [!0, "Southpaw"]], !!S.get("pad.swapSticks", !1))}</div>
+      <div class="row"><span>Gyro aiming<small>Turn and tilt the controller to aim. "While aiming" uses it only when you aim down sights.</small></span>${seg("pad.gyro", [["off", "Off"], ["ads", "While aiming"], ["always", "Always"]], g)}</div>
+      <div class="row"><span>Gyro sensitivity<small>How far the view turns for each degree you turn the controller.</small></span><input type="range" min="0.25" max="5" step="0.25" value="${sens}" data-range="pad.gyroSens" aria-label="Gyro sensitivity"><b class="val">${sens.toFixed(2)}×</b></div>
+      <div class="row"><span>Turning axis<small>Yaw: turn the controller like a steering wheel lying flat. Roll: lean it left and right.</small></span>${seg("pad.gyroAxis", [["yaw", "Yaw"], ["roll", "Roll"]], axis)}</div>
+      <div class="row"><span>Invert gyro horizontal</span>${seg("pad.gyroInvertX", [[!1, "Off"], [!0, "On"]], !!S.get("pad.gyroInvertX", !1))}</div>
+      <div class="row"><span>Invert gyro vertical</span>${seg("pad.gyroInvertY", [[!1, "Off"], [!0, "On"]], !!S.get("pad.gyroInvertY", !1))}</div>
+    </div><div class="card2"><h4>Gyro</h4><p class="st">${st}</p><div class="meter"><i></i></div><div class="foot" style="margin:0"><button type="button" class="btn pri" data-gconnect>${G.dev ? "Connected" : "Connect"}</button><button type="button" class="btn" data-gcal ${G.dev ? "" : "disabled"}>${G.cal ? "Hold still…" : "Calibrate"}</button></div><p class="st" style="margin:12px 0 0">Calibrate with the controller lying still. Drift is also corrected by itself whenever it rests.</p></div></div>`;
+  };
+  const render = () => {
+    const k = kind();
+    root.innerHTML = `<div class="wrap"><div class="hd"><div><div class="kk">Settings · Controller</div><h2>Edit controls</h2></div><div class="legend"><span class="d"><i></i>Double tap action</span><span class="h"><i></i>Also on this button</span></div></div>
+      <div class="bar"><button type="button" class="tab${tab === "buttons" ? " on" : ""}" data-tab="buttons">Buttons</button><button type="button" class="tab${tab === "gyro" ? " on" : ""}" data-tab="gyro">Sticks &amp; gyro</button><span class="sp"></span><span class="seg" role="group" aria-label="Controller layout">${[["auto", "Auto"], ["xbox", "Xbox"], ["ps", "PlayStation"], ["switch", "Switch"]].map(([v, t]) => `<button type="button" data-preset="${v}" class="${S.get("pad.preset", "auto") === v ? "on" : ""}">${t}</button>`).join("")}</span></div>
+      ${tab === "buttons" ? `<div class="stage"><div class="col">${LEFT.map(lab).join("")}</div><div class="pic">${vgPadSvg(k)}</div><div class="col r">${RIGHT.map(lab).join("")}</div></div><div class="bottom">${[8, 9, ...k === "ps" ? [17] : []].map(lab).join("")}</div>` : gyroRows()}
+      <div class="foot"><button type="button" class="btn" data-reset>Reset to default</button><button type="button" class="btn pri" data-back>Done</button><span class="hint">${tab === "buttons" ? "Pick a button to change it · press a button on your controller to find it" : "ESC · Done"}</span></div></div>`;
+    const L = order();
+    L.length && (sel = Math.min(sel, L.length - 1), L[sel]?.classList.add("sel"));
+  };
+  const flash = (i) => {
+    root.querySelectorAll(`[data-b="${i}"], .lab[data-i="${i}"]`).forEach((el) => {
+      el.classList.add(el.classList.contains("lab") ? "hit" : "hit"), clearTimeout(hits[i]), hits[i] = setTimeout(() => el.classList.remove("hit"), 260);
+    });
+  };
+  const assign = (btn, action) => {
+    const m = { ...S.get("pad.map", null) || {} }, cur = map(), from = cur[action] ?? -1;
+    if (action === "@none") {
+      for (const a of actsOn(btn)) m[a] = -1;
+    } else {
+      // the action moves here; what was here moves to where the action was
+      for (const a of actsOn(btn)) a !== action && !(a === VG_PAD_HOLD[action] || VG_PAD_HOLD[a] === action) && (m[a] = from);
+      m[action] = btn;
+    }
+    S.set("pad.map", m);
+    try {
+      pgCtx?.services?.audio?.play?.("ui_select", { bus: "ui", volume: 0.5 });
+    } catch {
+    }
+  };
+  const openPick = (i) => {
+    picking = i;
+    const box = document.createElement("div");
+    box.className = "pick", box.innerHTML = `<div class="card" role="dialog" aria-label="Choose an action"><h3>${vgEsc(name(i))}</h3><p>Pick the action for this button. What's there now moves to the button the action came from.</p>${VG_PAD_ACTS.map(([a, t]) => `<button type="button" class="opt${map()[a] === i ? " cur" : ""}" data-act="${a}"><span>${vgEsc(t)}</span><small>${vgEsc(name(map()[a] ?? -1))}</small></button>`).join("")}<button type="button" class="opt" data-act="@none"><span>Unbound</span><small>Nothing on this button</small></button></div>`;
+    root.appendChild(box), (box.querySelector(".opt.cur") || box.querySelector(".opt"))?.focus();
+    box.addEventListener("click", (ev) => {
+      const b = ev.target.closest("[data-act]");
+      b ? (assign(i, b.dataset.act), closePick(), render()) : ev.target === box && closePick();
+    });
+  };
+  const closePick = () => {
+    root.querySelector(".pick")?.remove(), picking = null;
+    const L = order();
+    L[sel]?.focus();
+  };
+  root.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button");
+    if (!b || b.closest(".pick")) return;
+    const d = b.dataset;
+    if (d.tab) return tab = d.tab, render();
+    if (d.preset) return S.set("pad.preset", d.preset), S.set("pad.map", null), render();
+    if ("back" in d) return close();
+    if ("reset" in d) return S.set("pad.map", null), S.set("pad.swapSticks", !1), render(), vgToast("Controller buttons are back to the default layout.");
+    if (d.i != null) return sel = order().indexOf(b), openPick(+d.i);
+    if (d.set) return S.set(d.set, d.v === "true" ? !0 : d.v === "false" ? !1 : d.v), render();
+    if ("gconnect" in d) return vgGyroConnect(!0).then((r) => {
+      r?.error && vgToast(r.error), r?.ok && vgToast(`Gyro: ${r.name} connected`), render();
+    });
+    if ("gcal" in d && vgGyro.dev) return vgGyro.cal = [], render(), setTimeout(render, 1600);
+  });
+  root.addEventListener("input", (ev) => {
+    const r = ev.target.closest("[data-range]");
+    r && (S.set(r.dataset.range, Number(r.value)), r.nextElementSibling && (r.nextElementSibling.textContent = `${Number(r.value).toFixed(2)}\u00D7`));
+  });
+  const close = () => {
+    cancelAnimationFrame(raf), root.remove(), window.removeEventListener("keydown", key, !0), window.removeEventListener("keyup", stop, !0);
+  }, stop = (ev) => ev.stopImmediatePropagation(), key = (ev) => {
+    ev.stopImmediatePropagation();
+    const k = ev.code || ev.key;
+    if (picking != null) {
+      if (k === "Escape" || k === "Backspace") return ev.preventDefault(), closePick();
+      const O = [...root.querySelectorAll(".pick .opt")], j = O.indexOf(document.activeElement);
+      k === "ArrowDown" ? (ev.preventDefault(), O[(j + 1) % O.length]?.focus()) : k === "ArrowUp" ? (ev.preventDefault(), O[(j - 1 + O.length) % O.length]?.focus()) : k === "Enter" && (ev.preventDefault(), document.activeElement?.click());
+      return;
+    }
+    if (k === "Escape" || k === "Backspace") return ev.preventDefault(), close();
+    if (k === "KeyQ" || k === "KeyE") return ev.preventDefault(), tab = tab === "buttons" ? "gyro" : "buttons", render();
+    if (tab !== "buttons") return;
+    const L = order(), nL = LEFT.length, nR = RIGHT.length;
+    if (!L.length) return;
+    const col = sel < nL ? 0 : sel < nL + nR ? 1 : 2, row = col === 0 ? sel : col === 1 ? sel - nL : sel - nL - nR;
+    let nx = sel;
+    k === "ArrowDown" ? nx = col === 2 ? sel : row + 1 < (col ? nR : nL) ? sel + 1 : nL + nR : k === "ArrowUp" ? nx = col === 2 ? nL - 1 : row > 0 ? sel - 1 : sel : k === "ArrowRight" ? nx = col === 0 ? nL + Math.min(row, nR - 1) : col === 2 ? Math.min(L.length - 1, sel + 1) : sel : k === "ArrowLeft" ? nx = col === 1 ? Math.min(row, nL - 1) : col === 2 ? Math.max(nL + nR, sel - 1) : sel : k === "Enter" && (ev.preventDefault(), L[sel]?.click());
+    nx !== sel && (ev.preventDefault(), L[sel]?.classList.remove("sel"), sel = Math.max(0, Math.min(L.length - 1, nx)), L[sel]?.classList.add("sel"), L[sel]?.focus());
+  };
+  // highlight the button being pressed on the controller, and move the gyro dot
+  let prev = [], dot = { x: 0, y: 0 };
+  const loop = () => {
+    raf = requestAnimationFrame(loop);
+    try {
+      const g = [...navigator.getGamepads?.() || []].find((x) => x && x.connected);
+      if (g) {
+        const b = g.buttons.map((x) => !!x && (x.pressed || x.value > 0.5));
+        b.forEach((on, i) => on && !prev[i] && tab === "buttons" && flash(i)), prev = b;
+      }
+    } catch {
+    }
+    const m = root.querySelector(".meter i");
+    if (m) {
+      const r = vgGyro.rate;
+      dot.x = Math.max(-1, Math.min(1, dot.x * 0.9 - r[1] / 400)), dot.y = Math.max(-1, Math.min(1, dot.y * 0.9 - r[0] / 400)), m.style.transform = `translate(${(dot.x * 120).toFixed(1)}px, ${(dot.y * 60).toFixed(1)}px)`;
+    }
+  };
+  window.addEventListener("keydown", key, !0), window.addEventListener("keyup", stop, !0), root.addEventListener("mousedown", (ev) => ev.stopPropagation()), document.body.appendChild(root), render(), loop(), setTimeout(() => order()[0]?.focus(), 40);
+  return { close, root };
 }
 function padSystem(A, H) {
   const inp = A.input, st = { active: !1, raf: 0, last: 0, prev: [], held: {}, navT: {}, sprint: !1, moving: !1, told: !1 }, eye = new b(), fwd = new b(), v = new b();
@@ -52262,7 +52848,7 @@ function padSystem(A, H) {
       st.active && deactivate();
       return;
     }
-    const g = pickPad(pads()), ax = [...g.axes], bv = g.buttons.map((x) => x ? x.value ?? (x.pressed ? 1 : 0) : 0), b = g.buttons.map((x, i) => !!x && (x.pressed || (i === 6 || i === 7 ? (x.value || 0) > 0.35 : !1))), zL = Number(S("deadzoneL", 0.12)), zR = Number(S("deadzoneR", 0.1));
+    const g = pickPad(pads()), ax0 = [...g.axes], ax = S("swapSticks", !1) ? [ax0[2], ax0[3], ax0[0], ax0[1]] : ax0, bv = g.buttons.map((x) => x ? x.value ?? (x.pressed ? 1 : 0) : 0), b = g.buttons.map((x, i) => !!x && (x.pressed || (i === 6 || i === 7 ? (x.value || 0) > 0.35 : !1))), zL = Number(S("deadzoneL", 0.12)), zR = Number(S("deadzoneR", 0.1));
     if (!st.active) {
       if (!(b.some(Boolean) || Math.abs(ax[0] || 0) > Math.max(0.3, zL) || Math.abs(ax[1] || 0) > Math.max(0.3, zL) || Math.abs(ax[2] || 0) > Math.max(0.3, zR) || Math.abs(ax[3] || 0) > Math.max(0.3, zR))) {
         st.prev = b;
@@ -52294,13 +52880,19 @@ function padSystem(A, H) {
       const mx = mcurve(ax[0], zL), my = -mcurve(ax[1], zL);
       mx || my ? (inp.injectMove(mx, my), st.moving = !0) : st.moving && (inp.injectMove(null), st.moving = !1);
       const M = vgPadMap(A.settings, g.id), on = (i) => i >= 0 && !!b[i];
-      for (const a2 in M) a2 === "sprint" || setAct(a2, on(M[a2]) && !(M[a2] === 3 && b[8]));
-      b[9] && !st.prev[9] && H.pause();
+      for (const a2 in M) a2 === "sprint" || a2 === "pause" || setAct(a2, on(M[a2]) && !(M[a2] === 3 && b[8]));
+      M.pause >= 0 && b[M.pause] && !st.prev[M.pause] && H.pause();
       on(M.sprint) && !st.prev[M.sprint] && (st.sprint = !st.sprint), (my < 0.35 || st.held.ads || st.held.fire) && (st.sprint = !1), setAct("sprint", st.sprint);
       let rx = curve(ax[2], zR), ry = curve(ax[3], zR);
       S("invertY", !1) && (ry = -ry);
       const ads = (A.services.weapons?.state?.ads ?? 0) > 0.5, ms = Number(A.settings.get("controls.sensitivity", 3)) || 3, pxPerRad = 1 / (0.022 * ms * Math.PI / 180), degPerSec = 38 * Number(S("lookSens", 5)) * (ads ? Number(S("adsSens", 0.8)) : 1), k = assist(dt, !!(rx || ry || mx || my || st.held.ads), pxPerRad);
       (rx || ry) && look(rx * degPerSec * k * dt * Math.PI / 180 * pxPerRad, ry * degPerSec * 0.72 * k * dt * Math.PI / 180 * pxPerRad);
+      // Release 1.0: gyro aiming (DualShock 4, DualSense, Switch Pro): turning the controller turns the view
+      const gm = S("gyro", "off"), gy = vgGyroTake();
+      if (gy && (gm === "always" || gm === "ads" && st.held.ads)) {
+        const gs = Math.max(0.1, Number(S("gyroSens", 1.5)) || 1.5) * (ads ? Number(S("adsSens", 0.8)) || 0.8 : 1), hx = S("gyroAxis", "yaw") === "roll" ? gy.roll : gy.yaw;
+        look(-hx * (S("gyroInvertX", !1) ? -1 : 1) * gs * Math.PI / 180 * pxPerRad, -gy.pitch * (S("gyroInvertY", !1) ? -1 : 1) * gs * Math.PI / 180 * pxPerRad);
+      }
     } else
       release(), nav(b, ax, t);
     st.prev = b;
@@ -54314,6 +54906,39 @@ function lwData() {
           soundPitch: 1.05,
           finish: 4870200
         }
+      },
+      // Release 1.0: melee weapons for the secondary slot. Fire swings; every hit to the body takes a player down.
+      {
+        id: "knife",
+        name: "VIPER KNIFE",
+        cls: "Melee",
+        desc: "Combat knife. The fastest swing, the shortest reach, and you move quicker with it out.",
+        bars: [9, 10, 2, 9, 10],
+        stats: { name: "VIPER KNIFE", melee: !0, damage: 150, meleeRange: 2.1, swing: 0.44, magSize: 1, reserve: 0, reserveMax: 0, rpm: 120, modes: ["semi"], moveScale: 1.1, equipTime: 0.35, holsterTime: 0.2, adsTime: 0.2, soundPitch: 1.25 }
+      },
+      {
+        id: "machete",
+        name: "JACKAL MACHETE",
+        cls: "Melee",
+        desc: "A long blade with more reach than the knife and nearly the same speed.",
+        bars: [9, 8, 4, 8, 9],
+        stats: { name: "JACKAL MACHETE", melee: !0, damage: 150, meleeRange: 2.5, swing: 0.54, magSize: 1, reserve: 0, reserveMax: 0, rpm: 110, modes: ["semi"], moveScale: 1.07, equipTime: 0.4, holsterTime: 0.25, adsTime: 0.2, soundPitch: 1.05 }
+      },
+      {
+        id: "axe",
+        name: "BISON AXE",
+        cls: "Melee",
+        desc: "Fire axe. A slow, heavy swing that hits hard and reaches well.",
+        bars: [10, 5, 5, 6, 7],
+        stats: { name: "BISON AXE", melee: !0, damage: 200, meleeRange: 2.5, swing: 0.78, magSize: 1, reserve: 0, reserveMax: 0, rpm: 75, modes: ["semi"], moveScale: 1.02, equipTime: 0.55, holsterTime: 0.3, adsTime: 0.2, soundPitch: 0.8 }
+      },
+      {
+        id: "bat",
+        name: "SLUGGER BAT",
+        cls: "Melee",
+        desc: "Baseball bat. The longest reach of any melee weapon.",
+        bars: [9, 6, 7, 7, 8],
+        stats: { name: "SLUGGER BAT", melee: !0, damage: 160, meleeRange: 2.9, swing: 0.66, magSize: 1, reserve: 0, reserveMax: 0, rpm: 90, modes: ["semi"], moveScale: 1.04, equipTime: 0.5, holsterTime: 0.3, adsTime: 0.2, soundPitch: 0.7 }
       }
     ],
     classes: [
@@ -54797,6 +55422,349 @@ function vgToast(text) {
   for (t.className = "vg-toast", t.textContent = text, box.appendChild(t); box.children.length > 4; ) box.firstChild.remove();
   setTimeout(() => t.classList.add("out"), 4200), setTimeout(() => t.remove(), 4600);
 }
+/* ------------------------------------------------------------------ Release 1.0: chat, mute, block, party voice */
+// Lobby chat has two channels: All (everyone signed in) and Party. Muting someone (kept in your settings) hides their
+// chat and silences their voice for you; blocking them (kept on the server) also hides you from each other in chat,
+// ends any friendship and stops friend requests and party invites both ways. Party voice chat runs player to player
+// (WebRTC); the server only passes the set-up messages between party members.
+var vgSoc = { muted: null, chat: { all: [], party: [], unread: 0, open: !1, tab: "all", hist: !1 }, menu: null, frRender: null, chatBtns: [] };
+function vgMutedSet() {
+  if (vgSoc.muted) return vgSoc.muted;
+  let a = null;
+  try {
+    a = pgCtx?.settings?.get?.("social.muted", null);
+  } catch {
+  }
+  if (!Array.isArray(a) || !a.length) try {
+    a = JSON.parse(localStorage.getItem("vangaurd.muted") || "[]");
+  } catch {
+    a = [];
+  }
+  return vgSoc.muted = new Set((Array.isArray(a) ? a : []).map((x) => String(x).toLowerCase()).slice(0, 500));
+}
+function vgIsMuted(name) {
+  return vgMutedSet().has(String(name || "").toLowerCase());
+}
+function vgSetMuted(name, on) {
+  const s = vgMutedSet(), k = String(name || "").toLowerCase();
+  if (!k) return;
+  on ? s.add(k) : s.delete(k);
+  const arr = [...s];
+  try {
+    pgCtx?.settings?.set?.("social.muted", arr);
+  } catch {
+  }
+  try {
+    localStorage.setItem("vangaurd.muted", JSON.stringify(arr));
+  } catch {
+  }
+  vgVoiceApply(), vgChatRender(), vgSoc.frRender?.(), vgToast(on ? `Muted ${name}: you won't see their chat or hear their voice.` : `Unmuted ${name}.`);
+}
+function vgIsBlocked(name) {
+  const k = String(name || "").toLowerCase();
+  return !!vgNet.social?.blocked?.some?.((b) => String(b).toLowerCase() === k);
+}
+function vgBlock(name, on) {
+  vgNetSend({ type: "block", username: name, on }) || vgToast("Not connected to the Vangaurd server yet. Try again in a moment.");
+}
+var vgSocCss = `
+.vg-pmenu { position: fixed; z-index: 430; min-width: 190px; padding: 6px; background: rgba(12,15,17,.98); border: 1px solid rgba(236,240,234,.18); box-shadow: 0 18px 50px rgba(0,0,0,.55); color: #e9ece6; }
+.vg-pmenu .hd { padding: 6px 10px 8px; font-weight: 800; letter-spacing: .08em; border-bottom: 1px solid rgba(236,240,234,.1); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vg-pmenu button { display: block; width: 100%; padding: 9px 10px; background: none; border: 0; color: #e9ece6; font: 700 12px/1 inherit; letter-spacing: .14em; text-transform: uppercase; text-align: left; cursor: pointer; }
+.vg-pmenu button:hover, .vg-pmenu button:focus-visible { background: rgba(255,255,255,.07); outline: none; }
+.vg-pmenu button.bad { color: #ff8070; }
+.vg-chatbtn { position: absolute; left: calc(var(--u) * 188); top: calc(var(--u) * 22); z-index: 30; width: calc(var(--u) * 46); height: calc(var(--u) * 40); display: grid; place-items: center; padding: 0; background: rgba(10,13,15,.6); border: 1px solid rgba(236,240,234,.18); color: #e9ece6; cursor: pointer; }
+.vg-chatbtn:hover, .vg-chatbtn:focus-visible, .vg-chatbtn.on { border-color: #f2c14e; color: #f2c14e; outline: none; }
+.vg-chatbtn svg { width: calc(var(--u) * 21); height: calc(var(--u) * 21); }
+.vg-chatbtn b { position: absolute; right: -7px; top: -7px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #f2c14e; color: #111; font: 800 11px/18px ui-sans-serif, system-ui, sans-serif; text-align: center; }
+.vg-chatbtn b:empty { display: none; }
+.vg-chat { position: fixed; right: 0; top: 0; bottom: 0; z-index: 385; width: min(400px, 94vw); display: flex; flex-direction: column; background: rgba(10,13,15,.97); border-left: 1px solid rgba(236,240,234,.14); box-shadow: -20px 0 60px rgba(0,0,0,.5); color: #e9ece6; transform: translateX(102%); transition: transform .22s ease; }
+.vg-chat.on { transform: none; }
+.vg-chat header { display: flex; align-items: center; gap: 8px; padding: 18px 18px 0; }
+.vg-chat header h3 { margin: 0; font-size: 18px; letter-spacing: .26em; text-transform: uppercase; }
+.vg-chat header .x { margin-left: auto; background: none; border: 1px solid rgba(236,240,234,.2); color: #e9ece6; width: 32px; height: 32px; font-size: 18px; cursor: pointer; }
+.vg-chat .tabs { display: flex; gap: 4px; padding: 12px 18px 0; border-bottom: 1px solid rgba(236,240,234,.1); }
+.vg-chat .tabs button { position: relative; padding: 10px 14px; background: none; border: 0; border-bottom: 3px solid transparent; color: #9aa29b; font: 800 12px/1 inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; margin-bottom: -1px; }
+.vg-chat .tabs button.on { color: #e9ece6; border-bottom-color: #f2c14e; }
+.vg-chat .tabs button i { position: absolute; top: 4px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: #f2c14e; }
+.vg-chat .msgs { flex: 1; overflow-y: auto; padding: 10px 18px; display: flex; flex-direction: column; gap: 7px; }
+.vg-chat .m { line-height: 1.4; font-size: 14px; overflow-wrap: anywhere; }
+.vg-chat .m .who { padding: 0; margin-right: 6px; background: none; border: 0; color: #f2c14e; font: 800 13px/1.4 inherit; cursor: pointer; }
+.vg-chat .m .who:hover { text-decoration: underline; }
+.vg-chat .m.me .who { color: #7fe08c; }
+.vg-chat .m.dev .who::after { content: "DEV"; margin-left: 5px; padding: 1px 4px; border: 1px solid #ff8a3d; color: #ff8a3d; font-size: 9px; letter-spacing: .12em; vertical-align: 1px; }
+.vg-chat .m time { margin-left: 6px; color: #69716a; font-size: 11px; }
+.vg-chat .empty, .vg-chat .note { color: #858d86; font-size: 13px; line-height: 1.45; }
+.vg-chat .note { padding: 0 18px; min-height: 0; color: #ff8070; }
+.vg-chat .note:not(:empty) { padding: 6px 18px 0; }
+.vg-chat form { display: flex; gap: 8px; padding: 12px 18px 18px; border-top: 1px solid rgba(236,240,234,.08); }
+.vg-chat form input { flex: 1; min-width: 0; padding: 10px 11px; background: rgba(255,255,255,.05); border: 1px solid rgba(236,240,234,.2); color: #fff; font: 600 14px/1.2 inherit; outline: none; }
+.vg-chat form input:focus { border-color: #f2c14e; }
+.vg-chat form button { padding: 0 14px; background: #f2c14e; border: 0; color: #111; font: 800 12px/1 inherit; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; }
+.vg-chat form button:disabled { opacity: .5; cursor: default; }
+.vg-fr .vbar { display: flex; align-items: center; gap: 8px; padding: 4px 20px 8px; flex-wrap: wrap; }
+.vg-fr .vbar small { color: #949c95; font-size: 11px; }
+.vg-fr .vic { flex: none; width: 18px; height: 18px; color: #4c534d; display: grid; place-items: center; }
+.vg-fr .vic svg { width: 16px; height: 16px; }
+.vg-fr .vic.on { color: #9aa29b; }
+.vg-fr .vic.on.talk { color: #7fe08c; filter: drop-shadow(0 0 4px rgba(127,224,140,.8)); }
+.vg-fr .vic.mut { color: #ff8070; }
+.vg-fr .btn.dots { padding: 7px 8px; letter-spacing: .05em; }
+.vg-fr .tagm { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #ff8070; padding: 0 4px; }
+`;
+function vgSocStyle() {
+  if (document.getElementById("vg-soc-style")) return;
+  const st = document.createElement("style");
+  st.id = "vg-soc-style", st.textContent = vgSocCss, document.head.appendChild(st);
+}
+// the little menu for a player: add friend, mute, block
+function vgPersonMenu(name, anchor) {
+  vgSocStyle(), vgSoc.menu?.remove(), vgSoc.menu = null;
+  const sn = vgNet.social;
+  if (!name || !sn || name === sn.me) return;
+  const muted = vgIsMuted(name), blocked = vgIsBlocked(name), friend = sn.friends?.some((f) => f.name === name), sent = sn.outgoing?.includes(name);
+  const d = document.createElement("div");
+  d.className = "vg-pmenu", d.setAttribute("role", "menu");
+  d.innerHTML = `<div class="hd">${vgEsc(name)}</div>${!friend && !blocked && !sent ? '<button type="button" role="menuitem" data-a="add">Add friend</button>' : ""}<button type="button" role="menuitem" data-a="${muted ? "unmute" : "mute"}">${muted ? "Unmute" : "Mute (chat and voice)"}</button><button type="button" role="menuitem" class="${blocked ? "" : "bad"}" data-a="${blocked ? "unblock" : "block"}">${blocked ? "Unblock" : "Block"}</button>`;
+  document.body.appendChild(d);
+  const r = anchor.getBoundingClientRect(), w = d.offsetWidth, h = d.offsetHeight;
+  d.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.left))}px`, d.style.top = `${Math.max(8, Math.min(window.innerHeight - h - 8, r.bottom + 4))}px`;
+  vgSoc.menu = d;
+  const close = () => {
+    d.remove(), vgSoc.menu === d && (vgSoc.menu = null), document.removeEventListener("mousedown", out, !0), window.removeEventListener("keydown", key, !0);
+  }, out = (ev) => d.contains(ev.target) || close(), key = (ev) => {
+    ev.key === "Escape" && (ev.stopImmediatePropagation(), ev.preventDefault(), close());
+  };
+  setTimeout(() => {
+    document.addEventListener("mousedown", out, !0), window.addEventListener("keydown", key, !0), d.querySelector("button")?.focus();
+  }, 0);
+  d.addEventListener("click", (ev) => {
+    const a = ev.target.closest("button")?.dataset.a;
+    if (!a) return;
+    ev.stopPropagation(), close();
+    a === "add" ? vgNetSend({ type: "friend_add", username: name }) : a === "mute" || a === "unmute" ? vgSetMuted(name, a === "mute") : a === "block" ? confirm(`Block ${name}? You won't see each other in chat, they can't invite you or send you friend requests, and if they are your friend they won't be any more.`) && vgBlock(name, !0) : a === "unblock" && vgBlock(name, !1);
+  }), d.addEventListener("keydown", (ev) => ev.stopPropagation());
+}
+// ---- lobby chat
+function vgChatEnsure() {
+  if (vgSoc.chat.el) return vgSoc.chat.el;
+  vgSocStyle();
+  const el = document.createElement("aside");
+  el.className = "vg-chat", el.setAttribute("aria-label", "Chat"), el.innerHTML = '<header><h3>Chat</h3><button type="button" class="x" data-close aria-label="Close">×</button></header><nav class="tabs" role="tablist"><button type="button" data-tab="all">All</button><button type="button" data-tab="party">Party</button></nav><div class="msgs" aria-live="polite"></div><div class="note" role="alert"></div><form autocomplete="off"><input maxlength="200" placeholder="Say something to everyone" spellcheck="true" aria-label="Message"><button type="submit">Send</button></form>';
+  document.body.appendChild(el), vgSoc.chat.el = el;
+  const input = el.querySelector("input"), note = el.querySelector(".note");
+  el.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    "close" in b.dataset ? vgChatToggle(!1) : b.dataset.tab ? (vgSoc.chat.tab = b.dataset.tab, note.textContent = "", vgChatRender(), input.focus()) : b.dataset.who && vgPersonMenu(b.dataset.who, b);
+  }), el.querySelector("form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    if (!vgAuth.user) return note.textContent = "Sign in to chat.";
+    if (vgSoc.chat.tab === "party" && !vgNet.social?.party) return note.textContent = "You're not in a party. Invite friends from the Friends panel.";
+    vgNetSend({ type: "chat_send", ch: vgSoc.chat.tab, text }) ? (input.value = "", note.textContent = "") : note.textContent = "Not connected to the Vangaurd server yet. Try again in a moment.";
+  }), el.addEventListener("keydown", (ev) => {
+    ev.stopPropagation(), ev.key === "Escape" && (ev.preventDefault(), vgChatToggle(!1));
+  }), el.addEventListener("keyup", (ev) => ev.stopPropagation()), el.addEventListener("mousedown", (ev) => ev.stopPropagation());
+  return el;
+}
+function vgChatToggle(v = !vgSoc.chat.open) {
+  const el = vgChatEnsure();
+  vgSoc.chat.open = v, el.classList.toggle("on", v), vgSoc.chatBtns.forEach((b) => b.classList.toggle("on", v));
+  if (v) {
+    try {
+      document.pointerLockElement && document.exitPointerLock();
+    } catch {
+    }
+    vgSoc.chat.hist || (vgSoc.chat.hist = vgNetSend({ type: "chat_history" })), vgSoc.chat.unread = 0, vgChatRender(), setTimeout(() => el.querySelector("input")?.focus(), 230);
+  }
+  vgChatBadge();
+}
+function vgChatBadge() {
+  for (const b of vgSoc.chatBtns) b.querySelector("b").textContent = vgSoc.chat.unread ? String(Math.min(99, vgSoc.chat.unread)) : "";
+}
+function vgChatRender() {
+  const el = vgSoc.chat.el;
+  if (!el) return;
+  const C = vgSoc.chat, tab = C.tab, sn = vgNet.social, me = sn?.me || vgAuth.user;
+  el.querySelectorAll(".tabs button").forEach((b) => {
+    b.classList.toggle("on", b.dataset.tab === tab), b.setAttribute("aria-selected", b.dataset.tab === tab);
+    const dot = b.dataset.tab !== tab && C[`new_${b.dataset.tab}`];
+    b.innerHTML = `${b.dataset.tab === "all" ? "All" : "Party"}${dot ? "<i></i>" : ""}`;
+  });
+  C[`new_${tab}`] = !1;
+  const box = el.querySelector(".msgs"), list = C[tab].filter((m) => !vgIsMuted(m.from) && !vgIsBlocked(m.from)), stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+  const tm = (t) => {
+    try {
+      return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return "";
+    }
+  };
+  box.innerHTML = !vgAuth.user ? '<p class="empty">Sign in to your Vangaurd account to chat.</p>' : tab === "party" && !sn?.party ? '<p class="empty">Party chat is for you and your party. Invite friends from the Friends panel (the three lines, top left).</p>' : list.length ? list.map((m) => `<div class="m${m.from === me ? " me" : ""}${m.dev ? " dev" : ""}"><button type="button" class="who" data-who="${vgEsc(m.from)}">${vgEsc(m.from)}</button><span>${vgEsc(m.text)}</span><time>${tm(m.at)}</time></div>`).join("") : `<p class="empty">${tab === "all" ? "No messages yet. Everyone signed in sees what you send here." : "No party messages yet."}</p>`;
+  (stick || C.jump) && (box.scrollTop = box.scrollHeight), C.jump = !1;
+  const input = el.querySelector("input");
+  input.placeholder = tab === "all" ? "Say something to everyone" : "Message your party", input.disabled = !vgAuth.user, el.querySelector("form button").disabled = !vgAuth.user;
+}
+function vgChatButton(host) {
+  vgSocStyle();
+  const b = document.createElement("button");
+  b.type = "button", b.className = "vg-chatbtn", b.title = "Chat", b.setAttribute("aria-label", "Chat"), b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5h16v11H9l-5 4z"/><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M8 9.5h8M8 12.5h5"/></svg><b></b>', host.appendChild(b), vgSoc.chatBtns.push(b), vgChatBadge();
+  b.addEventListener("click", (ev) => {
+    ev.stopPropagation(), vgChatToggle();
+  });
+}
+typeof window < "u" && vgNet.listeners.push((m) => {
+  const C = vgSoc.chat;
+  if (m.type === "chat") {
+    const L = C[m.ch === "party" ? "party" : "all"];
+    if (L.some((x) => x.id === m.id)) return;
+    L.push(m), L.length > 150 && L.splice(0, L.length - 150);
+    const mine = m.from === vgNet.social?.me, hidden = vgIsMuted(m.from) || vgIsBlocked(m.from);
+    !hidden && !mine && (!C.open || C.tab !== (m.ch === "party" ? "party" : "all")) && (C[`new_${m.ch === "party" ? "party" : "all"}`] = !0, C.open || (C.unread++, vgChatBadge()));
+    mine && (C.jump = !0), vgChatRender();
+  } else if (m.type === "chat_history") {
+    const seen = new Set(C.all.map((x) => x.id));
+    C.all = [...(Array.isArray(m.list) ? m.list : []).filter((x) => !seen.has(x.id)), ...C.all].slice(-150), C.jump = !0, vgChatRender();
+  } else if (m.type === "chat_error") {
+    const n = C.el?.querySelector(".note");
+    n ? n.textContent = m.message : vgToast(m.message);
+  } else if (m.type === "social" || m.type === "_closed") {
+    m.type === "_closed" && (C.hist = !1), vgChatRender(), vgVoiceSync();
+  } else if (m.type === "rtc") vgVoiceRtc(m).catch((err) => console.warn("[voice]", err));
+  else m.type === "voice_leave" ? vgVoiceDrop(m.name) : m.type === "voice_join" && vgVoiceSync();
+});
+// ---- party voice chat
+var vgVoice = { on: !1, joining: !1, mic: !1, stream: null, peers: /* @__PURE__ */ new Map(), ac: null, level: {}, meters: /* @__PURE__ */ new Map(), tick: 0 };
+var VG_ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+function vgVoiceVol() {
+  try {
+    return Math.max(0, Math.min(1, Number(pgCtx?.settings?.get?.("social.voiceVolume", 1)) ?? 1));
+  } catch {
+    return 1;
+  }
+}
+async function vgVoiceJoin() {
+  if (vgVoice.on || vgVoice.joining) return;
+  if (!vgNet.social?.party) return vgToast("Join a party to use voice chat.");
+  if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection > "u") return vgToast("Voice chat needs a microphone, and it isn't available here.");
+  vgVoice.joining = !0, vgSoc.frRender?.();
+  try {
+    vgVoice.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: !0, noiseSuppression: !0, autoGainControl: !0 }, video: !1 });
+  } catch (err) {
+    vgVoice.joining = !1, vgSoc.frRender?.();
+    return vgToast(err?.name === "NotAllowedError" ? "Microphone access was blocked. Allow it to use voice chat." : "No microphone was found for voice chat.");
+  }
+  vgVoice.joining = !1, vgVoice.on = !0, vgVoiceMic(), vgVoiceMeter("@me", vgVoice.stream);
+  vgNetSend({ type: "voice", on: !0, muted: vgVoice.mic }), vgVoiceSync(), vgSoc.frRender?.(), vgToast("You joined party voice chat.");
+}
+function vgVoiceDrop(name) {
+  const P = vgVoice.peers.get(name);
+  if (!P) return;
+  vgVoice.peers.delete(name);
+  try {
+    P.pc.close();
+  } catch {
+  }
+  P.audio && (P.audio.srcObject = null), vgVoice.meters.get(name)?.disconnect?.(), vgVoice.meters.delete(name), delete vgVoice.level[name];
+}
+function vgVoiceLeave(tell = !0) {
+  if (!vgVoice.on && !vgVoice.stream) return;
+  for (const n of [...vgVoice.peers.keys()]) vgVoiceDrop(n);
+  for (const t of vgVoice.stream?.getTracks() || []) t.stop();
+  vgVoice.meters.get("@me")?.disconnect?.(), vgVoice.meters.delete("@me"), vgVoice.stream = null, vgVoice.on = !1, vgVoice.level = {}, tell && vgNetSend({ type: "voice", on: !1 }), vgSoc.frRender?.();
+}
+function vgVoiceMic() {
+  for (const t of vgVoice.stream?.getAudioTracks() || []) t.enabled = !vgVoice.mic;
+}
+function vgVoiceToggleMic() {
+  vgVoice.mic = !vgVoice.mic, vgVoiceMic(), vgVoice.on && vgNetSend({ type: "voice", on: !0, muted: vgVoice.mic }), vgSoc.frRender?.();
+}
+function vgVoiceApply() {
+  const vol = vgVoiceVol();
+  for (const P of vgVoice.peers.values()) P.audio && (P.audio.muted = vgIsMuted(P.name), P.audio.volume = vol);
+}
+function vgVoiceMeter(name, stream) {
+  try {
+    vgVoice.ac ||= new (window.AudioContext || window.webkitAudioContext)(), vgVoice.ac.state === "suspended" && vgVoice.ac.resume().catch(() => {
+    });
+    vgVoice.meters.get(name)?.disconnect?.();
+    const src = vgVoice.ac.createMediaStreamSource(stream), an = vgVoice.ac.createAnalyser();
+    an.fftSize = 512, src.connect(an), vgVoice.meters.set(name, { an, buf: new Float32Array(an.fftSize), disconnect: () => src.disconnect() });
+    vgVoice.tick ||= setInterval(vgVoiceLevels, 120);
+  } catch {
+  }
+}
+function vgVoiceLevels() {
+  for (const [n, M] of vgVoice.meters) {
+    M.an.getFloatTimeDomainData(M.buf);
+    let s = 0;
+    for (const v of M.buf) s += v * v;
+    vgVoice.level[n] = Math.sqrt(s / M.buf.length);
+  }
+  const me = vgNet.social?.me;
+  document.querySelectorAll(".vg-fr .vic[data-vname]").forEach((el) => {
+    const n = el.dataset.vname, lv = vgVoice.level[n === me ? "@me" : n] || 0;
+    el.classList.toggle("talk", lv > 0.025 && !(n === me ? vgVoice.mic : vgIsMuted(n)));
+  });
+}
+function vgVoicePeer(name, initiate) {
+  let P = vgVoice.peers.get(name);
+  if (P) return P;
+  const pc = new RTCPeerConnection({ iceServers: VG_ICE });
+  P = { pc, name, audio: null, cands: [], initiate }, vgVoice.peers.set(name, P);
+  for (const t of vgVoice.stream?.getTracks() || []) pc.addTrack(t, vgVoice.stream);
+  pc.onicecandidate = (e) => e.candidate && vgNetSend({ type: "rtc", to: name, d: { kind: "ice", cand: e.candidate.toJSON() } });
+  pc.ontrack = (e) => {
+    const s = e.streams?.[0] || new MediaStream([e.track]);
+    P.audio ||= Object.assign(new Audio(), { autoplay: !0 }), P.audio.srcObject = s, vgVoiceApply(), P.audio.play?.()?.catch?.(() => {
+    }), vgVoiceMeter(name, s);
+  };
+  pc.onconnectionstatechange = () => {
+    // a dropped connection is tried again once by the player who started it
+    pc.connectionState === "failed" && vgVoice.peers.get(name) === P && (vgVoiceDrop(name), initiate && vgVoice.on && setTimeout(() => vgVoice.on && !vgVoice.peers.has(name) && vgVoicePeer(name, !0), 1500));
+  };
+  initiate && (async () => {
+    const o = await pc.createOffer({ offerToReceiveAudio: !0 });
+    await pc.setLocalDescription(o), vgNetSend({ type: "rtc", to: name, d: { kind: "offer", sdp: pc.localDescription.sdp } });
+  })().catch((err) => console.warn("[voice] offer", err));
+  return P;
+}
+async function vgVoiceRtc(m) {
+  if (!vgVoice.on || !m?.from || vgIsBlocked(m.from)) return;
+  const d = m.d || {}, name = m.from;
+  if (d.kind === "offer") {
+    vgVoiceDrop(name);
+    const P = vgVoicePeer(name, !1);
+    await P.pc.setRemoteDescription({ type: "offer", sdp: String(d.sdp || "") });
+    for (const c of P.cands.splice(0)) await P.pc.addIceCandidate(c).catch(() => {
+    });
+    const a = await P.pc.createAnswer();
+    await P.pc.setLocalDescription(a), vgNetSend({ type: "rtc", to: name, d: { kind: "answer", sdp: P.pc.localDescription.sdp } });
+  } else if (d.kind === "answer") {
+    const P = vgVoice.peers.get(name);
+    if (!P || P.pc.signalingState !== "have-local-offer") return;
+    await P.pc.setRemoteDescription({ type: "answer", sdp: String(d.sdp || "") });
+    for (const c of P.cands.splice(0)) await P.pc.addIceCandidate(c).catch(() => {
+    });
+  } else if (d.kind === "ice" && d.cand) {
+    const P = vgVoice.peers.get(name);
+    if (!P) return;
+    P.pc.remoteDescription ? await P.pc.addIceCandidate(d.cand).catch(() => {
+    }) : P.cands.push(d.cand);
+  }
+}
+// who to talk to: everyone in the party who is in voice (the player whose name sorts first makes the call)
+function vgVoiceSync() {
+  const sn = vgNet.social, pt = sn?.party;
+  if ((vgVoice.on || vgVoice.stream) && !pt) return vgVoiceLeave(!1), vgToast("You left party voice chat.");
+  if (!vgVoice.on) return;
+  const want = new Set((pt.members || []).filter((x) => x.voice && x.name !== sn.me && !vgIsBlocked(x.name)).map((x) => x.name));
+  for (const n of [...vgVoice.peers.keys()]) want.has(n) || vgVoiceDrop(n);
+  for (const n of want) !vgVoice.peers.has(n) && sn.me < n && vgVoicePeer(n, !0);
+}
+typeof window < "u" && (window.__VGSOC__ = { soc: vgSoc, voice: vgVoice, mute: (n, on) => vgSetMuted(n, on), muted: (n) => vgIsMuted(n), chat: (v) => vgChatToggle(v), menu: (n, el) => vgPersonMenu(n, el), join: () => vgVoiceJoin(), leave: () => vgVoiceLeave() });
 /* Friends panel: the three-line button in the top-left corner of the lobby. */
 var vgFrCss = `
 .vg-burger { position: absolute; left: calc(var(--u) * 28); top: calc(var(--u) * 22); z-index: 30; width: calc(var(--u) * 46); height: calc(var(--u) * 40); display: flex; flex-direction: column; justify-content: center; gap: calc(var(--u) * 6); padding: 0 calc(var(--u) * 11); background: rgba(10,13,15,.6); border: 1px solid rgba(236,240,234,.18); cursor: pointer; }
@@ -54862,6 +55830,8 @@ function vgFriendsMount(host, opts = {}) {
     nw.addEventListener("click", (ev) => {
       ev.stopPropagation(), vgNewsShow(!1);
     });
+    // Release 1.0: lobby chat, next to the other buttons
+    vgChatButton(h);
     render();
   }
   const panel = document.createElement("aside");
@@ -54895,18 +55865,23 @@ function vgFriendsMount(host, opts = {}) {
       return;
     }
     const pt = sn.party, leader = pt && pt.leader === sn.me, h = [];
-    pt && (h.push(`<h4>Party · ${pt.members.length}/6</h4>`), pt.members.forEach((m) => h.push(`<div class="row"><span class="dot ${m.status}"></span><span class="nm">${esc(m.name)}${m.leader ? '<span class="crown" title="Party leader">★</span>' : ""}<small>${m.name === sn.me ? "You" : status(m.status)}</small></span>${leader && m.name !== sn.me ? `<button class="btn x" data-kick="${esc(m.name)}" title="Remove from party">×</button>` : ""}</div>`)), h.push(`<div class="row"><span class="nm"><small>${leader ? "When you queue for Multiplayer, your party joins your match on your team." : "Your party joins the leader's match when they queue."}</small></span><button class="btn" data-leave>Leave party</button></div>`));
+    // Release 1.0: party voice chat (join, mute your mic) and a mute/block menu on every player
+    const vOn = vgVoice.on, vic = (m) => `<span class="vic${m.voice ? " on" : ""}${m.voice && (m.vmuted || m.name !== sn.me && vgIsMuted(m.name)) ? " mut" : ""}" data-vname="${esc(m.name)}" title="${m.voice ? m.vmuted ? "In voice · mic muted" : m.name !== sn.me && vgIsMuted(m.name) ? "In voice · muted by you" : "In voice chat" : "Not in voice chat"}">${'<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 11a6 6 0 0 0 12 0M12 17v4"/></svg>'}</span>`, dots = (n) => n === sn.me ? "" : `<button class="btn dots" data-pm="${esc(n)}" title="Mute or block ${esc(n)}" aria-label="More for ${esc(n)}">\u22EF</button>`;
+    pt && (h.push(`<h4>Party · ${pt.members.length}/6</h4>`), h.push(`<div class="vbar">${vOn ? `<button class="btn${vgVoice.mic ? " pri" : ""}" data-vmic>${vgVoice.mic ? "Unmute mic" : "Mute mic"}</button><button class="btn" data-vleave>Leave voice</button><small>${vgVoice.mic ? "Your mic is muted" : "Your party can hear you"}</small>` : `<button class="btn pri" data-vjoin${vgVoice.joining ? " disabled" : ""}>${vgVoice.joining ? "Joining…" : "Join voice"}</button><small>${pt.members.filter((x) => x.voice).length ? `${pt.members.filter((x) => x.voice).length} in voice chat` : "Talk to your party"}</small>`}</div>`), pt.members.forEach((m) => h.push(`<div class="row">${vic(m)}<span class="dot ${m.status}"></span><span class="nm">${esc(m.name)}${m.leader ? '<span class="crown" title="Party leader">★</span>' : ""}<small>${m.name === sn.me ? "You" : status(m.status)}</small></span>${m.name !== sn.me && vgIsMuted(m.name) ? '<span class="tagm">Muted</span>' : ""}${dots(m.name)}${leader && m.name !== sn.me ? `<button class="btn x" data-kick="${esc(m.name)}" title="Remove from party">×</button>` : ""}</div>`)), h.push(`<div class="row"><span class="nm"><small>${leader ? "When you queue for Multiplayer, your party joins your match on your team." : "Your party joins the leader's match when they queue."}</small></span><button class="btn" data-leave>Leave party</button></div>`));
     sn.invites.length && (h.push("<h4>Party invites</h4>"), sn.invites.forEach((iv) => h.push(`<div class="row"><span class="dot online"></span><span class="nm">${esc(iv.from)}<small>Invited you to their party (${iv.size}/6)</small></span><button class="btn pri" data-join="${esc(iv.partyId)}">Join</button><button class="btn x" data-nojoin="${esc(iv.partyId)}" title="Decline">×</button></div>`)));
     sn.incoming.length && (h.push("<h4>Friend requests</h4>"), sn.incoming.forEach((nm) => h.push(`<div class="row"><span class="dot"></span><span class="nm">${esc(nm)}<small>Wants to be your friend</small></span><button class="btn pri" data-accept="${esc(nm)}">Accept</button><button class="btn x" data-decline="${esc(nm)}" title="Decline">×</button></div>`)));
     h.push(`<h4>Friends · ${sn.friends.filter((f) => f.status !== "offline").length} online</h4>`), sn.friends.length || h.push('<div class="empty">No friends yet. Add someone by their username above.</div>');
     for (const f of sn.friends) {
       const canInvite = f.status !== "offline" && !f.inParty && (!pt || leader);
-      h.push(`<div class="row"><span class="dot ${f.status}"></span><span class="nm">${esc(f.name)}<small>${f.inParty ? "In your party" : status(f.status)}</small></span>${canInvite ? `<button class="btn" data-invite="${esc(f.name)}">Invite</button>` : ""}<button class="btn x" data-remove="${esc(f.name)}" title="Remove friend">${confirmRemove === f.name ? "Remove?" : "×"}</button></div>`);
+      h.push(`<div class="row"><span class="dot ${f.status}"></span><span class="nm">${esc(f.name)}<small>${f.inParty ? "In your party" : status(f.status)}</small></span>${vgIsMuted(f.name) ? '<span class="tagm">Muted</span>' : ""}${canInvite ? `<button class="btn" data-invite="${esc(f.name)}">Invite</button>` : ""}${dots(f.name)}<button class="btn x" data-remove="${esc(f.name)}" title="Remove friend">${confirmRemove === f.name ? "Remove?" : "×"}</button></div>`);
     }
     sn.outgoing.length && (h.push("<h4>Sent requests</h4>"), sn.outgoing.forEach((nm) => h.push(`<div class="row"><span class="dot"></span><span class="nm">${esc(nm)}<small>Waiting for them to accept</small></span><button class="btn x" data-decline="${esc(nm)}" title="Cancel request">×</button></div>`)));
     // Recently played (Beta 1.2): people from your recent online matches, with Add friend
     const rc = Array.isArray(sn.recent) ? sn.recent : [];
-    rc.length && (h.push(`<h4>Recently played · ${rc.length}</h4>`), rc.forEach((r) => h.push(`<div class="row"><span class="dot ${r.status}"></span><span class="nm">${esc(r.name)}<small>${esc(vgRecentLine(r))}</small></span>${r.friend ? '<span class="tagf">Friend</span>' : r.sent || added.has(r.name) ? '<button class="btn" disabled>Requested</button>' : r.incoming ? `<button class="btn pri" data-accept="${esc(r.name)}">Accept</button>` : `<button class="btn" data-add="${esc(r.name)}">Add friend</button>`}</div>`)));
+    rc.length && (h.push(`<h4>Recently played · ${rc.length}</h4>`), rc.forEach((r) => h.push(`<div class="row"><span class="dot ${r.status}"></span><span class="nm">${esc(r.name)}<small>${esc(vgRecentLine(r))}</small></span>${vgIsBlocked(r.name) ? '<span class="tagm">Blocked</span>' : r.friend ? '<span class="tagf">Friend</span>' : r.sent || added.has(r.name) ? '<button class="btn" disabled>Requested</button>' : r.incoming ? `<button class="btn pri" data-accept="${esc(r.name)}">Accept</button>` : `<button class="btn" data-add="${esc(r.name)}">Add friend</button>`}${dots(r.name)}</div>`)));
+    // Release 1.0: blocked players
+    const bl = Array.isArray(sn.blocked) ? sn.blocked : [];
+    bl.length && (h.push(`<h4>Blocked · ${bl.length}</h4>`), bl.forEach((n) => h.push(`<div class="row"><span class="dot"></span><span class="nm">${esc(n)}<small>Blocked: hidden in chat, can't invite or add you</small></span><button class="btn" data-unblock="${esc(n)}">Unblock</button></div>`)));
     list.innerHTML = h.join("");
   }
   panel.addEventListener("click", (ev) => {
@@ -54924,6 +55899,11 @@ function vgFriendsMount(host, opts = {}) {
     if (d.invite) return vgNetSend({ type: "party_invite", username: d.invite }), b.disabled = !0, b.textContent = "Invited";
     if (d.add) return vgNetSend({ type: "friend_add", username: d.add }) && added.add(d.add), b.disabled = !0, b.textContent = "Requested";
     if (d.remove) return confirmRemove === d.remove ? (confirmRemove = null, vgNetSend({ type: "friend_remove", username: d.remove })) : (confirmRemove = d.remove, render());
+    if (d.pm) return vgPersonMenu(d.pm, b);
+    if (d.unblock) return vgBlock(d.unblock, !1);
+    if ("vjoin" in d) return vgVoiceJoin();
+    if ("vleave" in d) return vgVoiceLeave();
+    if ("vmic" in d) return vgVoiceToggleMic();
   }), panel.querySelector("form").addEventListener("submit", (ev) => {
     ev.preventDefault();
     const nm = input.value.trim();
@@ -54938,7 +55918,7 @@ function vgFriendsMount(host, opts = {}) {
   addButtons(host);
   vgNet.listeners.push((m) => {
     m.type === "social_error" ? (msg.textContent = m.message, panel.classList.contains("on") || vgToast(m.message)) : m.type === "social_note" && (vgToast(m.text), m.kind === "friend_request" || m.kind === "party_invite") && burgers.forEach((x) => x.animate?.([{ transform: "scale(1)" }, { transform: "scale(1.15)" }, { transform: "scale(1)" }], { duration: 500, iterations: 2 })), (m.type === "social" || m.type === "_closed") && render(), opts.onMessage?.(m);
-  }), vgAuth.listeners.push(() => render()), render();
+  }), vgAuth.listeners.push(() => render()), vgSoc.frRender = render, vgSocStyle(), render();
   return ui;
 }
 /* Quit Game (menus): closes the desktop app, or the browser tab when the browser allows it. */
@@ -55641,7 +56621,7 @@ typeof window < "u" && vgNet.listeners.push((m) => vgReadyMsg(m));
 /* ------------------------------------------------------------------ Beta 1.2: news & patch notes */
 // Only the current version's notes are shown (Beta 1.21: older versions are no longer listed).
 var VG_PATCH_NOTES = [
-  { v: "Release 1.0", items: ["New: the Halloween Pack DLC ($2.99 on Steam) with two new operators, Skeleton and Pumpkin Head, and the animated Halloween camo.", "New: an Operators screen on the main menu to choose who you play as. You see your operator's arms in first person, and other players see your operator in matches.", "New: a weekly game mode online next to Team Deathmatch. This week it's Kill Confirmed; it changes every Monday (Gun Game is next).", "New: North American and European servers. Pick yours in Settings > Account (or leave it on Automatic).", "Enemies only show on your minimap while your team has a UAV up. Ghost now keeps you off enemy UAVs.", "Halloween on every map until 10 November: pumpkin patches, graveyards, witches' cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky. Listen out in the main menu...", "A new level-up sound.", "Daily challenges are easier.", "Drone mode now works with a controller.", "New: Blackout, team deathmatch in the dark. Only pumpkins, cauldrons and (on Vardanek, Lindenhof and Kessel) dim streetlights light the map. It joins the weekly rotation.", "New: Loadouts, weapon charms and stickers, inspecting your gun (I), switching fire mode (B), and tracers and hitmarkers in the killcam.", "New: remap your controller buttons, with Xbox, PlayStation and Switch layouts. Settings > Account shows your ping to each server region and lets you copy your user ID.", "New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing. Changing one on its own sets the preset to Custom. 3D resolution now goes down to 25%.", "Progression is now called Challenges. When a player you reported gets banned, you see an Action taken screen.", "The FPS counter and network stats are now off by default, and the news shows every time you sign in.", "Fixed: the rifle went through operators on the Operators screen. The Skeleton now carries its rifle too.", "The Season Pass is open: unlock it for free and it follows your level, with three new operators (Frostline, Nightshade and Ember), camos, charms, stickers, XP and double XP. Everything up to your level unlocks straight away.", "Streetlights in Blackout are a little brighter.", "Fixed: the gun got smaller every time you picked a camo (with a barrel or suppressor on).", "New graphics setting: View distance (Near, Medium, Far, Epic), under the quality preset.", "Fixed: shooting the ground could kill enemies. A glitch in a soldier's animation could break its hitboxes so every bullet counted as a headshot on it."] },
+  { v: "Release 1.0", items: ["New: melee weapons for your secondary: the Viper Knife, Jackal Machete, Bison Axe and Slugger Bat. Fire swings, one hit downs a player, and you move faster with them out.", "New: Prestige. Levelling goes on past level 100 (101, 102, 103 and up) with a prestige badge that changes colour as you climb.", "New: Career, on the main menu: your lifetime eliminations, deaths, K/D, wins and more, overall and for multiplayer and singleplayer.", "New: lobby chat (the speech bubble, top left) with All and Party channels.", "New: party voice chat in the Friends panel, with Mute mic.", "New: mute or block any player from the ⋯ menu in Friends or by clicking their name in chat.", "New: gyro aiming for DualShock 4, DualSense and Switch Pro controllers, and an Edit Controls screen that remaps every controller button on a picture of your controller (Settings > Controls or Keybinds).", "Smarter anti-cheat: the server now spots aim snaps, impossible fire rates and damage, shots that never happened and speed hacks, and moderators review the flagged moments in a replay.", "The main menu buttons sit higher so they all fit on both screens.", "New: the Halloween Pack DLC ($2.99 on Steam) with two new operators, Skeleton and Pumpkin Head, and the animated Halloween camo.", "New: an Operators screen on the main menu to choose who you play as. You see your operator's arms in first person, and other players see your operator in matches.", "New: a weekly game mode online next to Team Deathmatch. This week it's Kill Confirmed; it changes every Monday (Gun Game is next).", "New: North American and European servers. Pick yours in Settings > Account (or leave it on Automatic).", "Enemies only show on your minimap while your team has a UAV up. Ghost now keeps you off enemy UAVs.", "Halloween on every map until 10 November: pumpkin patches, graveyards, witches' cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky. Listen out in the main menu...", "A new level-up sound.", "Daily challenges are easier.", "Drone mode now works with a controller.", "New: Blackout, team deathmatch in the dark. Only pumpkins, cauldrons and (on Vardanek, Lindenhof and Kessel) dim streetlights light the map. It joins the weekly rotation.", "New: Loadouts, weapon charms and stickers, inspecting your gun (I), switching fire mode (B), and tracers and hitmarkers in the killcam.", "New: remap your controller buttons, with Xbox, PlayStation and Switch layouts. Settings > Account shows your ping to each server region and lets you copy your user ID.", "New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing. Changing one on its own sets the preset to Custom. 3D resolution now goes down to 25%.", "Progression is now called Challenges. When a player you reported gets banned, you see an Action taken screen.", "The FPS counter and network stats are now off by default, and the news shows every time you sign in.", "Fixed: the rifle went through operators on the Operators screen. The Skeleton now carries its rifle too.", "The Season Pass is open: unlock it for free and it follows your level, with three new operators (Frostline, Nightshade and Ember), camos, charms, stickers, XP and double XP. Everything up to your level unlocks straight away.", "Streetlights in Blackout are a little brighter.", "Fixed: the gun got smaller every time you picked a camo (with a barrel or suppressor on).", "New graphics setting: View distance (Near, Medium, Far, Epic), under the quality preset.", "Fixed: shooting the ground could kill enemies. A glitch in a soldier's animation could break its hitboxes so every bullet counted as a headshot on it."] },
   { v: "Beta 1.32", items: ["Small fixes and improvements."] },
   { v: "Beta 1.31", items: ["The game now shows when the servers are offline or under maintenance, even if you are not signed in.", "The sign-in page now tells you on its own when the servers go down."] },
   { v: "Beta 1.3", items: ["Fixed Matchmaking", "Many QoL Fixes", "You can now see on the report page who the last player who killed you was.", "Switched from NA West Servers to NA East Servers", "Fixed a Bug where if you would Slide or go Prone it would not show it on another players screen", "Weapon Leveling", "Weapon Mounting", "Kill Streaks", "Daily and Weekly Challenges and more!"] },
@@ -58563,6 +59543,43 @@ function rJ(A) {
         step: 0.05,
         fmt: (t) => t > 0 ? Math.round(t * 100) + "%" : "OFF",
         desc: "Controller only. Slows your aim while the crosshair is on an enemy and gently follows them while you move or aim. 0% turns it off."
+      },
+      {
+        type: "link",
+        label: "Edit controller layout",
+        desc: "Every button on a picture of your controller: pick a button, then the action for it. Also southpaw sticks and gyro aiming.",
+        open: () => vgPadScreen()
+      },
+      { sec: "Gyro aiming" },
+      {
+        path: "pad.gyro",
+        label: "Gyro aiming",
+        type: "cycle",
+        options: [["off", "OFF"], ["ads", "WHILE AIMING"], ["always", "ALWAYS ON"]],
+        desc: "Turn and tilt the controller to aim (DualShock 4, DualSense and Switch Pro Controller, in Chrome, Edge or the Vangaurd app). Connect the controller below the first time."
+      },
+      {
+        path: "pad.gyroSens",
+        label: "Gyro sensitivity",
+        type: "slider",
+        min: 0.25,
+        max: 5,
+        step: 0.25,
+        fmt: (t) => (+t).toFixed(2) + "\u00D7",
+        desc: "How far the view turns for each degree you turn the controller."
+      },
+      {
+        path: "pad.gyroAxis",
+        label: "Gyro turning axis",
+        type: "cycle",
+        options: [["yaw", "YAW"], ["roll", "ROLL"]],
+        desc: "Yaw: turn the controller left and right. Roll: lean it left and right."
+      },
+      {
+        type: "link",
+        label: "Connect controller for gyro",
+        desc: "Opens your controller for its motion sensor. Your browser may ask which controller to use.",
+        open: () => vgGyroConnect(!0).then((r) => vgToast(r?.ok ? `Gyro: ${r.name} connected` : r?.error || "No controller connected."))
       }
     ],
     audio: [
@@ -58798,6 +59815,7 @@ function cJ(A) {
     de(d, "Challenges", "Daily and weekly challenges · finish them for XP", () => {
       F.armoryPage = "challenges", F.armoryFrom = "main", z(), tt("armory");
     }),
+    de(d, "Career", "Lifetime stats · eliminations, deaths, wins and K/D", () => vgCareerScreen()),
     de(d, "Settings", "Graphics, mouse, audio and interface", () => Ct("graphics")),
     de(d, "Back", "Return to deployment selection", () => tt("entry"))
   ], vgDroneItem = (() => {
@@ -58873,7 +59891,7 @@ function cJ(A) {
     const yA = Z3(), lv = pgLevel(), D = lwData();
     F.armoryPage = "challenges";
     for (const VA of ["challenges"]) Ka(nA[VA], "sel", F.armoryPage === VA);
-    pgK.textContent = `Level ${lv.level} · ${lv.total.toLocaleString()} XP earned`;
+    pgK.textContent = `${vgLvLine(lv.level)} · ${lv.total.toLocaleString()} XP earned`;
     const bars = ["Damage", "Fire rate", "Range", "Control", "Mobility"], barH = (w) => `<div class="od-lw-bars">${bars.map((n, i) => `<span>${n}</span><i><b style="transform:scaleX(${(w.bars[i] / 10).toFixed(2)})"></b></i>`).join("")}</div>`;
     if (F.armoryPage === "level") {
       const track = [];
@@ -58888,7 +59906,7 @@ function cJ(A) {
         for (let i = 1; i < L; i++) t += pgCost(i);
         return Math.max(0, t - lv.total);
       };
-      j.innerHTML = `<div class="od-armory-grid"><section><h3>Operator level</h3><p class="od-armory-rank od-pg-level">Level ${lv.level}</p><div class="od-armory-bar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div><p>${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.level + 1}</p><p>${nxt ? `Next unlock at level ${nxt}: <strong>${pgUnlocksAt(nxt).map(Nn).join(", ")}</strong> · ${toL(nxt).toLocaleString()} XP to go` : "Every loadout and attachment is unlocked."}</p><h3>Service record</h3><p>${yA.kills} eliminations · ${yA.headshots} headshots · ${yA.longshots | 0} longshots · ${yA.deaths} deaths · ${lv.total.toLocaleString()} XP total</p></section><section><h3>How to earn XP</h3><div class="od-armory-unlock on"><b>+100</b><span>Elimination (+50 more for a headshot)</span></div><div class="od-armory-unlock on"><b>+50</b><span>Confirming a dog tag in Kill Confirmed</span></div><div class="od-armory-unlock on"><b>+200</b><span>Surviving a wave in Protection</span></div><div class="od-armory-unlock on"><b>+500</b><span>Winning a match (+150 for finishing one)</span></div><div class="od-armory-unlock on"><b>+1,500 and up</b><span>Daily and weekly challenges (see the Challenges tab)</span></div><div class="od-armory-unlock on"><b>+50</b><span>A kill by one of your killstreaks</span></div><p>Level 1 to 2 takes 5,000 XP, level 2 to 3 takes 5,500, and each level after takes 500 more. Your XP bar starts from zero after every level up.</p></section></div><div class="od-armory-grid od-armory-weapons"><section><h3>Unlock track</h3>${track.join("")}</section><section><h3>Loadout slots</h3>${pgSlotLv.map((L, i) => `<div class="od-armory-unlock ${pgUnlocked(i) ? "on" : ""}"><b>${pgUnlocked(i) ? "UNLOCKED" : "LEVEL " + L}</b><span>Loadout ${i + 1}${i === pgActive() ? " · equipped" : ""}</span></div>`).join("")}<p>Build and equip loadouts from <strong>Loadouts</strong> in the main menu or the pause menu.</p></section></div>`;
+      j.innerHTML = `<div class="od-armory-grid"><section><h3>Operator level</h3><p class="od-armory-rank od-pg-level">${vgPrestigeBadge(lv.level, 30)}Level ${lv.level}</p><div class="od-armory-bar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div><p>${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.level + 1}</p><p>${nxt ? `Next unlock at level ${nxt}: <strong>${pgUnlocksAt(nxt).map(Nn).join(", ")}</strong> · ${toL(nxt).toLocaleString()} XP to go` : "Every loadout and attachment is unlocked."}</p><h3>Service record</h3><p>${yA.kills} eliminations · ${yA.headshots} headshots · ${yA.longshots | 0} longshots · ${yA.deaths} deaths · ${lv.total.toLocaleString()} XP total</p></section><section><h3>How to earn XP</h3><div class="od-armory-unlock on"><b>+100</b><span>Elimination (+50 more for a headshot)</span></div><div class="od-armory-unlock on"><b>+50</b><span>Confirming a dog tag in Kill Confirmed</span></div><div class="od-armory-unlock on"><b>+200</b><span>Surviving a wave in Protection</span></div><div class="od-armory-unlock on"><b>+500</b><span>Winning a match (+150 for finishing one)</span></div><div class="od-armory-unlock on"><b>+1,500 and up</b><span>Daily and weekly challenges (see the Challenges tab)</span></div><div class="od-armory-unlock on"><b>+50</b><span>A kill by one of your killstreaks</span></div><p>Level 1 to 2 takes 5,000 XP, level 2 to 3 takes 5,500, and each level after takes 500 more. Your XP bar starts from zero after every level up.</p></section></div><div class="od-armory-grid od-armory-weapons"><section><h3>Unlock track</h3>${track.join("")}</section><section><h3>Loadout slots</h3>${pgSlotLv.map((L, i) => `<div class="od-armory-unlock ${pgUnlocked(i) ? "on" : ""}"><b>${pgUnlocked(i) ? "UNLOCKED" : "LEVEL " + L}</b><span>Loadout ${i + 1}${i === pgActive() ? " · equipped" : ""}</span></div>`).join("")}<p>Build and equip loadouts from <strong>Loadouts</strong> in the main menu or the pause menu.</p></section></div>`;
     } else if (F.armoryPage === "challenges") {
       const st = chState(), row = (c) => `<div class="od-ch${c.done ? " done" : ""}"><div class="t"><b>${Nn(c.text)}</b><span>${c.done ? "Complete" : `${(c.prog | 0).toLocaleString()} / ${c.n.toLocaleString()}`}</span></div><div class="od-armory-bar"><i style="transform:scaleX(${Math.min(1, (c.prog | 0) / c.n).toFixed(3)})"></i></div><em>+${c.xp.toLocaleString()} XP</em></div>`, done = [...st.d.list, ...st.w.list].filter((c) => c.done).length;
       j.innerHTML = `<p class="od-armory-note">Challenges pay out XP the moment you finish them. Kills from any match count; wins and finished matches count in Team Deathmatch and Domination, online or offline. ${done} of 6 done.</p><div class="od-armory-grid"><section><h3>Daily challenges</h3><p class="od-ch-left">New challenges in ${chTimeLeft(!1)}</p>${st.d.list.map(row).join("")}</section><section><h3>Weekly challenges</h3><p class="od-ch-left">New challenges in ${chTimeLeft(!0)}</p>${st.w.list.map(row).join("")}</section></div>`;
@@ -59033,15 +60051,15 @@ function cJ(A) {
     const L = S[k], open = pgUnlocked(k), st = e.services.gamemode?.state?.stage;
     let V = F.loView || (F.loView = { v: "home" });
     !open && V.v !== "home" && (V = F.loView = { v: "home" });
-    loK.textContent = `Level ${lv.level} · ${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP`;
+    loK.textContent = `${vgLvLine(lv.level)} · ${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP`;
     const roleName = (r) => r === "secondary" ? "Secondary" : "Primary", listOf = (r) => r === "secondary" ? D.secondary : D.primary, gunOf = (r) => listOf(r).find((w) => w.id === L[r]) || listOf(r)[0];
     const bars = ["Damage", "Fire rate", "Range", "Control", "Mobility"], barH = (w) => `<div class="od-lw-bars">${bars.map((n, i) => `<span>${n}</span><i><b style="transform:scaleX(${(w.bars[i] / 10).toFixed(2)})"></b></i>`).join("")}</div>`;
-    const slotsOf = (r) => Object.entries(_c).filter(([, d]) => !d.frames || d.frames.includes(r === "secondary" ? "pistol" : "rifle"));
+    const slotsOf = (r) => gunOf(r)?.stats?.melee ? [] : Object.entries(_c).filter(([, d]) => !d.frames || d.frames.includes(r === "secondary" ? "pistol" : "rifle"));
     const attN = (r) => slotsOf(r).filter(([sl]) => L.att[r][sl] && L.att[r][sl] !== "none").length;
     const wlvH = (w) => {
       const ws = wpnStat(w.id);
       let nx = null;
-      for (let l2 = ws.level + 1; l2 <= WPN_MAX && !nx; l2++) wpnUnlocksAt(l2).length && (nx = l2);
+      for (let l2 = ws.level + 1; l2 <= WPN_MAX && !nx && WPN_CLASS[w.id] !== "melee"; l2++) wpnUnlocksAt(l2).length && (nx = l2);
       return `<div class="od-lo-wlv"><div class="hd"><b>Weapon level ${ws.level}${ws.max ? " · Mastered" : ""}</b><span>${ws.kills.toLocaleString()} kills</span></div><div class="od-armory-bar"><i style="transform:scaleX(${ws.progress.toFixed(3)})"></i></div><small>${ws.max ? "Maximum level" : `${ws.xp.toLocaleString()} / ${ws.need.toLocaleString()} XP to level ${ws.level + 1}${nx ? ` · level ${nx} unlocks ${Nn(wpnUnlocksAt(nx).join(", "))}` : ""}`}</small></div>`;
     };
     const crumbs = (...parts) => `<nav class="od-lo2-crumbs"><button type="button" data-nav data-lo-crumb="home">Loadouts</button><i>›</i>${parts.map((p, i) => i < parts.length - 1 ? `<span>${Nn(p)}</span><i>›</i>` : `<b>${Nn(p)}</b>`).join("")}</nav>`;
@@ -59060,7 +60078,7 @@ function cJ(A) {
       const cards = `<div class="od-lo2-cards">${wcard("primary")}${wcard("secondary")}<div class="od-lo2-row3"><button type="button" data-nav class="od-lo2-card" data-lo-go="perks"><span class="k">Perks</span>${pk.map((id, i) => `<span class="li"><i>${i + 1}</i>${Nn(perkDef(id)?.name || id)}</span>`).join("")}</button><button type="button" data-nav class="od-lo2-card" data-lo-go="lethal"><span class="k">Lethal</span><span class="li big">${Nn(LO_GREN[L.grenade]?.[0] || L.grenade)}</span><small>${Nn(LO_GREN[L.grenade]?.[1] || "")}</small></button><button type="button" data-nav class="od-lo2-card" data-lo-go="streaks"><span class="k">Killstreaks</span><span class="ks">${[0, 1, 2].map((i) => ks[i] ? `<span title="${Nn(ksDef(ks[i]).name)}">${ksSvg(ks[i])}<small>${ksDef(ks[i]).kills}</small></span>` : '<span class="empty">+</span>').join("")}</span></button></div></div>`;
       const head = `<div class="od-lo2-head"><label class="od-lo-namebox"><span>Loadout name</span><input class="od-lo-name" maxlength="20" value="${Nn(L.name)}" spellcheck="false"></label>${k === act ? '<span class="od-lo-eqd">Equipped</span>' : '<button type="button" data-nav class="od-btn pri" data-lo-equip>Equip loadout</button>'}<div class="od-lo-presets"><span>Start from a class</span>${D.classes.map((c) => `<button type="button" data-nav class="od-btn od-lo-opt" data-lo-class="${c.id}">${Nn(c.name)}</button>`).join("")}</div></div>`;
       const body = open ? `${head}${cards}${note}` : `<div class="od-lo-lockcard"><b>Locked</b><p>${Nn(L.name)} unlocks at level ${pgSlotLv[k]}. You are level ${lv.level} · ${loXpTo(pgSlotLv[k]).toLocaleString()} XP to go.</p></div>`;
-      html = `<div class="od-lo2 home"><aside class="od-lo-slots">${slots}<div class="od-lo-lv"><b>Level ${lv.level}</b><div class="od-armory-bar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div><small>${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.level + 1}</small></div></aside><div class="od-lo2-main">${body}</div></div>`;
+      html = `<div class="od-lo2 home"><aside class="od-lo-slots">${slots}<div class="od-lo-lv"><b>${vgPrestigeBadge(lv.level, 22)}Level ${lv.level}${vgPrestige(lv.level) ? ' <span class="vg-prt">Prestige</span>' : ""}</b><div class="od-armory-bar"><i style="transform:scaleX(${lv.progress.toFixed(3)})"></i></div><small>${lv.xp.toLocaleString()} / ${lv.need.toLocaleString()} XP to level ${lv.level + 1}</small></div></aside><div class="od-lo2-main">${body}</div></div>`;
     } else if (V.v === "weapon") {
       const r = V.role, cur = gunOf(r), peek = listOf(r).find((w) => w.id === V.peek) || cur, groups = [];
       for (const w of listOf(r)) {
@@ -59075,10 +60093,10 @@ function cJ(A) {
       const opts = d ? d.options.filter((o) => pgAttFits(r, cur, o.id)).map((o) => {
         const ok = pgAttOk(r, cur, o.id, w.id), wl = wpnAttLv(cur, o.id);
         return `<button type="button" data-nav class="od-lo2-opt${sel === o.id ? " pri" : ""}" data-lo-att="${r}:${cur}:${o.id}" ${ok ? "" : "disabled"}><b>${Nn(o.name)}</b><small>${ok ? Nn(o.effect || "") : `Unlocks at level ${o.lv}${wl ? ` or weapon level ${wl}` : ""}`}</small></button>`;
-      }).join("") : "";
+      }).join("") : w?.stats?.melee ? '<p class="od-lo-note">Melee weapons don\'t take attachments. Give them a camo in Cosmetics.</p>' : "";
       html = `<div class="od-lo2 page">${crumbs(L.name, roleName(r), "Gunsmith")}<div class="od-lo2-gs"><div class="od-lo2-slotlist">${sl.map(([s, dd]) => `<button type="button" data-nav class="od-lo2-slot${s === cur ? " sel" : ""}" data-lo-gsslot="${s}"><span class="k">${Nn(dd.label)}</span><b>${Nn(pgAttOpt(s, L.att[r][s] || "none")?.name || "None")}</b></button>`).join("")}</div><div class="od-lo2-stage"><div class="cap"><b>${Nn(w.name)}</b><span>${attN(r)} / ${sl.length} attachments · drag to turn</span></div></div><div class="od-lo2-optlist"><h4>${Nn(d?.label || "")}</h4>${opts}<div class="od-lo2-stats">${barH(w)}</div></div></div></div>`;
     } else if (V.v === "cosmetics") {
-      const r = V.role, w = gunOf(r), tab = V.tab || "camo", lvl = lv.level;
+      const r = V.role, w = gunOf(r), tab = w?.stats?.melee ? "camo" : V.tab || "camo", lvl = lv.level;
       V.tab = tab;
       let tiles = "", info = "";
       if (tab === "camo") {
@@ -59096,7 +60114,7 @@ function cJ(A) {
         }).join("");
         info = `<b>${Nn(pick.name)}</b><span>${pick.id === "none" ? "Nothing on the gun" : `${pick.desc ? `${Nn(pick.desc)} · ` : ""}Level ${pick.lv}`}</span>${pick.id === cur ? '<span class="od-lo-eqd">Equipped</span>' : locked ? `<button type="button" class="od-btn" disabled>Reach level ${pick.lv}</button>` : `<button type="button" data-nav class="od-btn pri" data-lo-apply="${kind}:${pick.id}">${pick.id === "none" ? "Remove" : `Apply ${kind}`}</button>`}`;
       }
-      html = `<div class="od-lo2 page">${crumbs(L.name, roleName(r), "Cosmetics")}<div class="od-lo2-cos"><div class="od-lo2-cosl"><div class="od-lo2-tabs">${[["camo", "Camo"], ["charm", "Charm"], ["sticker", "Sticker"]].map(([id, n]) => `<button type="button" data-nav class="${id === tab ? "sel" : ""}" data-lo-tab="${id}">${n}</button>`).join("")}</div><div class="od-lo2-tiles">${tiles}</div></div><div class="od-lo2-cosr"><div class="od-lo2-stage"><div class="cap"><b>${Nn(w.name)}</b><span>Drag to turn</span></div></div><div class="od-lo2-cosinfo">${info}</div></div></div></div>`;
+      html = `<div class="od-lo2 page">${crumbs(L.name, roleName(r), "Cosmetics")}<div class="od-lo2-cos"><div class="od-lo2-cosl"><div class="od-lo2-tabs">${(w?.stats?.melee ? [["camo", "Camo"]] : [["camo", "Camo"], ["charm", "Charm"], ["sticker", "Sticker"]]).map(([id, n]) => `<button type="button" data-nav class="${id === tab ? "sel" : ""}" data-lo-tab="${id}">${n}</button>`).join("")}</div><div class="od-lo2-tiles">${tiles}</div></div><div class="od-lo2-cosr"><div class="od-lo2-stage"><div class="cap"><b>${Nn(w.name)}</b><span>Drag to turn</span></div></div><div class="od-lo2-cosinfo">${info}</div></div></div></div>`;
     } else if (V.v === "perks") {
       const cur = pgPerks(k);
       html = `<div class="od-lo2 page">${crumbs(L.name, "Perks")}<div class="od-lo2-perks">${perkDefs.map((list, ci) => `<section><h4>Perk ${ci + 1}</h4>${list.map((p) => {
@@ -59405,6 +60423,11 @@ function cJ(A) {
     aJ(), F.screen === "armory" && z();
   };
   pgCtx = e;
+  try {
+    vgCareerHook(e.events);
+  } catch (err) {
+    e.reportError?.("hud", "career", err);
+  }
   const pgTag = (yA = {}) => {
     yA.byPlayer && yA.confirmed && pgAddXp(50, "Kill confirmed", !1);
   }, pgEnd = (yA = {}) => {
@@ -60074,6 +61097,12 @@ function cJ(A) {
       // Release 1.0: controller buttons (layouts for Xbox, PlayStation and Switch, and any button can be changed)
       NA("div", "od-sec", ie).textContent = "Controller";
       {
+        const def = { type: "link", label: "Edit controller layout", desc: "Every button on a picture of your controller, southpaw sticks and gyro aiming.", open: () => vgPadScreen(e.settings) }, Se = NA("div", "od-row link", ie);
+        NA("div", "lb", Se).textContent = def.label;
+        const lt = { def, el: Se, ctl: NA("div", "ctl", Se) };
+        Se.addEventListener("click", () => def.open()), Se.addEventListener("mouseenter", () => Oi(F.rows.indexOf(lt))), F.rows.push(lt), hi(lt);
+      }
+      {
         const def = { path: "pad.preset", label: "Controller layout", type: "cycle", options: [["auto", "AUTO-DETECT"], ["xbox", "XBOX"], ["ps", "PLAYSTATION"], ["switch", "SWITCH"]], desc: "The button names and layout for your controller. Auto-detect follows the controller you use. Picking a layout resets the buttons below to that layout (on Switch, A jumps and B crouches)." }, Se = NA("div", "od-row", ie);
         NA("div", "lb", Se).textContent = def.label;
         const Ue = NA("div", "ctl", Se), lt = { def, el: Se, ctl: Ue }, $e = NA("div", "od-cyc", Ue), it = NA("span", "a", $e, _3), ot = NA("div", "", $e);
@@ -60113,6 +61142,10 @@ function cJ(A) {
           el: Se,
           ctl: Ue
         };
+        if (ge.type === "link") {
+          Se.classList.add("link"), Se.addEventListener("click", () => ge.open?.()), Se.addEventListener("mouseenter", () => Oi(F.rows.indexOf(lt))), F.rows.push(lt), hi(lt);
+          continue;
+        }
         if (ge.type === "slider") {
           const $e = NA("div", "od-sl", Ue);
           NA("div", "tr", $e), lt.fill = NA("div", "fl", $e), lt.knob = NA("div", "kn", $e), lt.val = NA("div", "val", Ue);
@@ -60162,7 +61195,7 @@ function cJ(A) {
       xe(le, oe(le) + VA * le.step * (le.max - le.min > 5, 1));
       return;
     }
-    if (le.type === "bind" || le.type === "padbind" || le.enabled && !le.enabled()) return;
+    if (le.type === "bind" || le.type === "padbind" || le.type === "link" || le.enabled && !le.enabled()) return;
     const ge = ai(le), Se = oe(le);
     let Ue = ge.findIndex((lt) => lt[0] === Se);
     Ue = (Ue + VA + ge.length) % ge.length, xe(le, ge[Ue][0]);
@@ -60170,6 +61203,10 @@ function cJ(A) {
   function hi(yA) {
     if (!yA) return;
     const VA = yA.def;
+    if (VA.type === "link") {
+      yA.ctl.innerHTML = '<span class="od-key">OPEN \u203A</span>';
+      return;
+    }
     if (VA.type === "padbind") {
       const Se = vgPadBind.on && vgPadBind.row === yA, i = vgPadMap(e.settings)[VA.action];
       Ka(yA.el, "listen", !!Se), yA.ctl.innerHTML = Se ? '<span class="od-key">PRESS A BUTTON</span>' : `<span class="od-key">${Nn(vgPadName(e.settings, i))}</span>`;
@@ -66262,6 +67299,7 @@ function jJ(A) {
           targetId: V.rawId,
           amount: $,
           zone: tA?.zone || "torso",
+          w: String(tA?.weaponId || "").slice(0, 24) || void 0,
           // Release 1.0 anti-cheat: where the shot came from (the server checks it against where it saw you)
           ...tA?.kind === "explosion" ? { k: "x" } : tA?.sourcePosition && Number.isFinite(tA.sourcePosition.x) ? { o: { x: Math.round(tA.sourcePosition.x * 100) / 100, y: Math.round(tA.sourcePosition.y * 100) / 100, z: Math.round(tA.sourcePosition.z * 100) / 100 } } : {},
           ...vgSk.startsWith("player~") ? { streak: vgSk.slice(7, 16) } : {}
@@ -66330,6 +67368,7 @@ function jJ(A) {
           targetId: V.rawId,
           amount: $,
           zone: tA?.zone || "torso",
+          w: String(tA?.weaponId || "").slice(0, 24) || void 0,
           // Release 1.0 anti-cheat: where the shot came from (the server checks it against where it saw you)
           ...tA?.kind === "explosion" ? { k: "x" } : tA?.sourcePosition && Number.isFinite(tA.sourcePosition.x) ? { o: { x: Math.round(tA.sourcePosition.x * 100) / 100, y: Math.round(tA.sourcePosition.y * 100) / 100, z: Math.round(tA.sourcePosition.z * 100) / 100 } } : {},
           ...vgSk.startsWith("player~") ? { streak: vgSk.slice(7, 16) } : {}
@@ -80624,7 +81663,7 @@ function b6(A) {
   function bt(HA) {
     I[HA] || (HA = "rifle"), u && (C[u.id].ammo = E.ammo, C[u.id].reserve = E.reserve, C[u.id].fireMode = E.fireMode, u.root.visible = !1), u = I[HA], u.root.visible = !0;
     const OA = u.cfg, oe = C[HA];
-    E.id = HA, E.name = OA.name, E.magSize = OA.magSize, E.ammo = oe.ammo, E.reserve = oe.reserve, E.fireMode = oe.fireMode, E.variant = OA.variantId || HA, E.moveScale = OA.moveScale ?? 1, E.suppressed = !!OA.suppressed, $ = E.ammo === 0, vBurstQ = 0, JA(!0), lwLook();
+    E.id = HA, E.name = OA.name, E.magSize = OA.magSize, E.ammo = oe.ammo, E.reserve = oe.reserve, E.fireMode = oe.fireMode, E.variant = OA.variantId || HA, E.moveScale = OA.moveScale ?? 1, E.suppressed = !!OA.suppressed, E.melee = !!OA.melee, $ = E.ammo === 0 && !OA.melee, vBurstQ = 0, JA(!0), lwLook();
   }
   let vBurstQ = 0;
   const lwBase = {}, lwMatBase = /* @__PURE__ */ new Map();
@@ -80649,7 +81688,10 @@ function b6(A) {
         reloadRate: 1,
         moveScale: 1,
         finish: null,
-        magScale: null
+        magScale: null,
+        melee: !1,
+        meleeRange: 0,
+        swing: 0
       }, oe.stats || {}), atStats(HA, OA), C[HA] && (C[HA].ammo = OA.magSize, C[HA].reserve = OA.reserve, C[HA].fireMode = OA.modes[0]);
       try {
         lwModelSet(HA);
@@ -80657,7 +81699,7 @@ function b6(A) {
         A.reportError("weapons", "variantModel", xe);
       }
     }
-    E.grenadeType = q3(), vBurstQ = 0, u && (E.suppressed = !!u.cfg.suppressed), u && (E.reloading && AA(), E.name = u.cfg.name, E.magSize = u.cfg.magSize, E.ammo = C[u.id].ammo, E.reserve = C[u.id].reserve, E.fireMode = C[u.id].fireMode, E.variant = u.cfg.variantId, E.moveScale = u.cfg.moveScale ?? 1, $ = !1, JA(!0), lwLook()), i.emit("weapons:loadout", {
+    E.grenadeType = q3(), vBurstQ = 0, u && (E.suppressed = !!u.cfg.suppressed), u && (E.reloading && AA(), E.name = u.cfg.name, E.magSize = u.cfg.magSize, E.ammo = C[u.id].ammo, E.reserve = C[u.id].reserve, E.fireMode = C[u.id].fireMode, E.variant = u.cfg.variantId, E.moveScale = u.cfg.moveScale ?? 1, E.melee = !!u.cfg.melee, $ = !1, JA(!0), lwLook()), i.emit("weapons:loadout", {
       primary: sB.rifle?.variantId,
       secondary: sB.pistol?.variantId
     });
@@ -80709,7 +81751,7 @@ function b6(A) {
       if (Qi = new yt(), Qi.name = `camo-preview:${ai}`, Qi.add(hi.root), hi.root.visible = !0, Mt) {
         const Or = wvBuild(Mt, o, s, xe);
         if (Qi.userData.variant = Or || null, Or) {
-          for (const wo of hi.root.children) !/^socket:/.test(wo.name) && wo.name !== "mag" && wo.name !== "trigger" && (wo.visible = !1);
+          for (const wo of hi.root.children) !/^socket:/.test(wo.name) && (Or.spec.melee || wo.name !== "mag" && wo.name !== "trigger") && (wo.visible = !1);
           Or.body && hi.root.add(Or.body), Or.frameAdd && hi.root.add(Or.frameAdd), Or.slide && (hi.parts?.slide || hi.root).add(Or.slide);
           const wo = hi.parts?.mag;
           if (wo && Or.makeMag) {
@@ -80733,6 +81775,10 @@ function b6(A) {
     for (const Or of Object.values(lwModelCache)) Or && Or.spec.frame === HA && (Or.body && (Or.body.visible = Or === ai), Or.frameAdd && (Or.frameAdd.visible = Or === ai), Or.slide && (Or.slide.visible = Or === ai));
     const Qi = !!(ai && ai.body);
     for (const Or of oe.hide) Or.visible = !Qi;
+    // Release 1.0: a melee weapon replaces the whole pistol, magazine and trigger too
+    const vgMel = !!(ai && ai.spec.melee);
+    for (const Or of OA.root.children) (Or.name === "mag" || Or.name === "trigger") && (Or.visible = !vgMel);
+    OA.vgMelee = vgMel;
     OA.sockets.muzzle.position.copy(oe.muzzle), ai?.spec.muzzle != null && (OA.sockets.muzzle.position.z = -ai.spec.muzzle), OA.sockets.sight.position.copy(oe.sight), ai?.spec.sight && OA.sockets.sight.position.set(0, ai.spec.sight[0], -ai.spec.sight[1]);
     const hi = [OA.parts.mag, OA.handMag, ...(OA.dropMags || []).map((Or) => Or.obj)].filter(Boolean);
     for (const Or of hi) {
@@ -80747,7 +81793,8 @@ function b6(A) {
       for (const As of oe.magKids.get(Or)) As.visible = !us;
     }
     try {
-      atApply(HA, OA, ai, o, s);
+      if (vgMel) for (const Or of Object.values(OA.atCache || {})) Or.visible = !1;
+      else atApply(HA, OA, ai, o, s);
     } catch (Or) {
       A.reportError("weapons", "attachments", Or);
     }
@@ -80758,7 +81805,7 @@ function b6(A) {
     }
     // Release 1.0: the gun's charm and sticker
     try {
-      vgCosApply(OA.root, HA === "pistol" ? "secondary" : "primary", pgCos("charm", HA), pgCos("sticker", HA));
+      vgCosApply(OA.root, HA === "pistol" ? "secondary" : "primary", vgMel ? "none" : pgCos("charm", HA), vgMel ? "none" : pgCos("sticker", HA));
     } catch (Or) {
       A.reportError("weapons", "charm", Or);
     }
@@ -80797,11 +81844,11 @@ function b6(A) {
       name: HA,
       data: oe,
       onDone: OA,
-      rate: /^reload/.test(HA) ? Math.max(0.3, u.cfg.reloadRate || 1) : 1
+      rate: /^reload/.test(HA) ? Math.max(0.3, u.cfg.reloadRate || 1) : HA === "melee" && u.cfg.melee ? 0.58 / Math.max(0.3, u.cfg.swing || 0.58) : 1
     }, R = 0, k = 0, !0) : (OA?.(), !1);
   }
   function Dt() {
-    v && (u.parts.mag && (u.parts.mag.visible = !0), u.handMag.visible = !1, f.root.visible = !1, v = null);
+    v && (u.parts.mag && (u.parts.mag.visible = !u.vgMelee), u.handMag.visible = !1, f.root.visible = !1, v = null);
   }
   function Tt(HA) {
     mA.weaponId = E.id, mA.cue = HA, i.emit("weapons:cue", mA);
@@ -80913,9 +81960,11 @@ function b6(A) {
       }
   }
   function lA() {
-    e.getWorldPosition(ie), e.getWorldDirection(SA), rA.range = 2.2, rA.damage = 135, rA.weaponId = "melee", rA.spread = 0, rA.penetration = 0, rA.pellets = 1, rA.spreadApplied = !0;
+    const mc = u?.cfg?.melee ? u.cfg : null;
+    e.getWorldPosition(ie), e.getWorldDirection(SA), rA.range = mc ? mc.meleeRange || 2.2 : 2.2, rA.damage = mc ? mc.damage || 135 : 135, rA.weaponId = mc ? `melee:${mc.variantId}` : "melee", rA.team = A.services.gamemode.state?.playerTeam || "player", rA.spread = 0, rA.penetration = 0, rA.pellets = 1, rA.spreadApplied = !0;
     const HA = A.services.combat.fireHitscan(rA);
-    A.services.audio.play(HA ? "melee_hit" : "melee_swing", { bus: "sfx" }), HA && A.services.player.addShake(0.25, 0.12);
+    A.services.audio.play(HA ? "melee_hit" : "melee_swing", { bus: "sfx", pitch: mc ? mc.soundPitch || 1 : 1 }), HA && A.services.player.addShake(mc ? 0.32 : 0.25, 0.12);
+    mc && i.emit("weapon:melee", { weaponId: rA.weaponId, hit: !!HA });
   }
   function vA() {
     f.root.visible = !1;
@@ -81021,9 +82070,9 @@ function b6(A) {
       ggOn ? E.id !== ggOn && Q !== ggOn && Ae(ggOn) : t.pressed("swapWeapon") || t.pressed("weaponNext") || t.pressed("weaponPrev") ? Ae(ar) : t.pressed("weapon1") && E.id !== "rifle" ? Ae("rifle") : t.pressed("weapon2") && E.id !== "pistol" && Ae("pistol");
     }
     let Mt = A.settings.data.controls.toggleAds ? t.pressed("ads") ? !(w > 0.5) : w > 0.5 && E.ads > 0 : t.isDown("ads");
-    if ((xe || vgBF || G > 0.07 || v && !v.data.allowAds || Y >= 0 || N > u.cfg.equipTime * 0.5) && (Mt = !1), w = Math.min(1, Math.max(0, w + (Mt ? 1 : -1) * HA / oe.adsTime)), E.ads = Ed(w), t.pressed("inspect") && !vgBF && Xe() && !xe && E.ads < 0.1 && (E.action = "inspect", E.inspecting = !0, Je("inspect", () => {
+    if ((xe || vgBF || G > 0.07 || v && !v.data.allowAds || Y >= 0 || N > u.cfg.equipTime * 0.5 || oe.melee) && (Mt = !1), w = Math.min(1, Math.max(0, w + (Mt ? 1 : -1) * HA / oe.adsTime)), E.ads = Ed(w), t.pressed("inspect") && !vgBF && Xe() && !xe && E.ads < 0.1 && (E.action = "inspect", E.inspecting = !0, Je("inspect", () => {
       E.inspecting = !1, E.action = "idle";
-    })), t.pressed("ads") && v?.name === "inspect" && (Dt(), E.inspecting = !1, E.action = "idle"), xe && v?.name === "inspect" && (Dt(), E.inspecting = !1, E.action = "idle"), t.pressed("fireMode") && !vgBF && Xe() && u.cfg.modes.length > 1 && Je("fireMode"), t.pressed("reload") && !vgBF && (Xe() || v?.name === "inspect") && !xe && (Dt(), E.inspecting = !1, qe()), t.pressed("melee") && !vgBF && !vgMountPress(A, E.ads) && (Xe() || v?.name === "inspect" || E.reloading) && (E.reloading && AA(), Dt(), E.inspecting = !1, E.action = "melee", Je("melee", () => {
+    })), t.pressed("ads") && v?.name === "inspect" && (Dt(), E.inspecting = !1, E.action = "idle"), xe && v?.name === "inspect" && (Dt(), E.inspecting = !1, E.action = "idle"), t.pressed("fireMode") && !vgBF && Xe() && u.cfg.modes.length > 1 && Je("fireMode"), t.pressed("reload") && !vgBF && !oe.melee && (Xe() || v?.name === "inspect") && !xe && (Dt(), E.inspecting = !1, qe()), t.pressed("melee") && !vgBF && !vgMountPress(A, E.ads) && (Xe() || v?.name === "inspect" || E.reloading) && (E.reloading && AA(), Dt(), E.inspecting = !1, E.action = "melee", Je("melee", () => {
       E.action = "idle";
     })), t.pressed("tactical")) {
       const ar = X3(), Kr = ar[(ar.indexOf(E.grenadeType) + 1) % ar.length];
@@ -81039,7 +82088,9 @@ function b6(A) {
       E.action = "idle";
     })), y = Math.max(y - HA, -HA);
     const ai = t.isDown("fire"), Qi = t.pressed("fire"), hi = A.services.gamemode.state || {};
-    !(hi.matchType === "tdm" && !["match-live", "match-dead"].includes(hi.stage)) && !vgBF && !xe && G <= 0 && !E.reloading && (!v || v.name === "inspect" || v.name === "fireMode") && Y < 0 && N <= u.cfg.equipTime * 0.25 && (ai || Qi || vBurstQ > 0) && (v && (v.name === "inspect" || v.name === "fireMode") && Qi && (Dt(), E.inspecting = !1), (E.fireMode === "auto" ? ai : E.fireMode === "burst" ? (Qi && vBurstQ <= 0 && E.ammo > 0 && (vBurstQ = u.cfg.burst || 3), vBurstQ > 0 || Qi) : Qi) && y <= 0 && !v && (E.ammo > 0 ? (y < -HA && (y = 0), O()) : Qi && (sA.weaponId = E.id, i.emit("weapon:empty", sA), A.services.audio.play("dry_fire", { bus: "sfx" }), E.reserve > 0 && qe()))), ai || (m = 0), E.action === "fire" && a.t - D > 0.12 && (E.action = "idle"), !v && !E.reloading && Y < 0 && N <= 0 && E.action !== "fire" && (E.action = xe ? "sprint" : "idle"), E.ammo === 0 && E.reserve > 0 && !E.reloading && Xe() && a.t - D > 0.25 && !xe && j && !ai && qe(), j = ai;
+    oe.melee ? !(hi.matchType === "tdm" && !["match-live", "match-dead"].includes(hi.stage)) && !vgBF && (ai || Qi) && y <= 0 && Y < 0 && N <= u.cfg.equipTime * 0.25 && (!v || v.name === "inspect") && (v && (Dt(), E.inspecting = !1), E.action = "melee", y = 0.05, Je("melee", () => {
+      E.action = "idle";
+    })) : !(hi.matchType === "tdm" && !["match-live", "match-dead"].includes(hi.stage)) && !vgBF && !xe && G <= 0 && !E.reloading && (!v || v.name === "inspect" || v.name === "fireMode") && Y < 0 && N <= u.cfg.equipTime * 0.25 && (ai || Qi || vBurstQ > 0) && (v && (v.name === "inspect" || v.name === "fireMode") && Qi && (Dt(), E.inspecting = !1), (E.fireMode === "auto" ? ai : E.fireMode === "burst" ? (Qi && vBurstQ <= 0 && E.ammo > 0 && (vBurstQ = u.cfg.burst || 3), vBurstQ > 0 || Qi) : Qi) && y <= 0 && !v && (E.ammo > 0 ? (y < -HA && (y = 0), O()) : Qi && (sA.weaponId = E.id, i.emit("weapon:empty", sA), A.services.audio.play("dry_fire", { bus: "sfx" }), E.reserve > 0 && qe()))), ai || (m = 0), E.action === "fire" && a.t - D > 0.12 && (E.action = "idle"), !v && !E.reloading && Y < 0 && N <= 0 && E.action !== "fire" && (E.action = xe ? "sprint" : "idle"), E.ammo === 0 && E.reserve > 0 && !oe.melee && !E.reloading && Xe() && a.t - D > 0.25 && !xe && j && !ai && qe(), j = ai;
     vgMountTick(A, HA, E);
     const Oi = Math.min(1, OA.speed / 4.4);
     M = Math.max(0, M - oe.bloomRecover * HA * (a.t - D > 0.1 ? 1 : 0.2));
@@ -81118,15 +82169,15 @@ function b6(A) {
     FA.makeTranslation(-se.x, -se.y, -se.z), GA.multiply(FA), Me.copy(GA), Me.decompose(g.position, g.quaternion, g.scale), je = d || ve.orbit ? 1 : 1 - (OA.adsSquash || 0) * Ed(E.ads), tt = u.sockets.sight.position.z, je < 1 && (g.scale.z = je, iA.set(0, 0, tt * (1 - je)).applyQuaternion(g.quaternion), g.position.add(iA)), fs(HA), ni(u.gripR, we, QA), ni(u.gripL, me, uA), v && v.data.lh && (yA = v.data.lhW ? v.data.lhW.sample(R, XA)[0] : 1, yA > 0 && (v.data.lh.sample(R, ae, Ce), iA.copy(ae).applyMatrix4(Me), pe.setFromRotationMatrix(Me).multiply(Ce), me.lerp(iA, yA), uA.slerp(pe, yA))), v && v.data.rh && (VA = v.data.rhW ? v.data.rhW.sample(R, XA)[0] : 1, VA > 0 && (v.data.rh.sample(R, ae, Ce), iA.copy(ae).applyMatrix4(Me), pe.setFromRotationMatrix(Me).multiply(Ce), we.lerp(iA, VA), QA.slerp(pe, VA)));
     // Beta 1.2: tactical sprint is one-handed like CoD: the right hand holds the gun up, the left lets go of it
     // and drops out of view, pumping with the stride.
-    const vgTacL = v ? 0 : S;
+    const vgTacL = u.vgMelee ? 1 : v ? 0 : S;
     if (vgTacL > 1e-3) {
       const sw = Math.sin(X), k = Ed(Math.min(1, vgTacL));
       vgTac.p.set(LA.x - 0.05 + sw * 0.015, LA.y - 0.26 + Math.max(0, sw) * 0.05, LA.z - 0.1 - sw * 0.12), me.lerp(vgTac.p, k);
     }
     const le = E.action === "fire" || eA?.state === "fire" ? 1 : 0;
     W = vf(W, le, 30, HA);
-    const ge = Math.max(x, U, E.reloading ? 1 : 0, v && v.name !== "fireMode" ? 0.8 : 0), Se = tn[OA.poseR] || tn.gripTrigger;
-    if (SI(Be, Se, tn.gripTriggerPull, W * (1 - ge)), SI(Be, Be, tn.gripIndexOut, ge * 0.9), xf(zA, tn[OA.poseL] || tn.gripVert), v) {
+    const ge = Math.max(x, U, E.reloading ? 1 : 0, v && v.name !== "fireMode" ? 0.8 : 0), Se = u.vgMelee && tn.fist || tn[OA.poseR] || tn.gripTrigger;
+    if (SI(Be, Se, tn.gripTriggerPull, W * (1 - ge)), SI(Be, Be, tn.gripIndexOut, u.vgMelee ? 0 : ge * 0.9), xf(zA, tn[OA.poseL] || tn.gripVert), v) {
       if (v.data.lhPose) {
         const Ue = v.data.lhPose.sample(R);
         SI(re, tn[Ue.a], tn[Ue.b], Ue.w), xf(zA, re);
@@ -81304,13 +82355,13 @@ function b6(A) {
         // gun has to start from its own muzzle every time. It didn't, so each camo picked (every redraw) added
         // another barrel's length and the fitted gun got smaller and smaller.
         W?.sockets?.muzzle && (W.__mz0 ??= W.sockets.muzzle.position.z, W.sockets.muzzle.position.z = W.__mz0);
-        W && atApply(fr, W, m.userData.variant || null, o, s, k);
+        W && !m.userData.variant?.spec?.melee && atApply(fr, W, m.userData.variant || null, o, s, k);
       } catch (err) {
         A.reportError("weapons", "preview-attachments", err);
       }
       return m.traverse((h) => {
         h.layers.enableAll(), h.frustumCulled = !1;
-      }), camoPaint(m, oe, fr === "pistol"), vgCosApply(m, HA, ch || "none", st || "none"), m;
+      }), camoPaint(m, oe, fr === "pistol"), vgCosApply(m, HA, m.userData.variant?.spec?.melee ? "none" : ch || "none", m.userData.variant?.spec?.melee ? "none" : st || "none"), m;
     },
     camoInfo: () => ({ rifle: { id: I.rifle?.camoId, meshes: I.rifle?.camoMeshes }, pistol: { id: I.pistol?.camoId, meshes: I.pistol?.camoMeshes } }),
     _dev: ve

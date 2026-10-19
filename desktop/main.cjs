@@ -425,6 +425,29 @@ function createWindow() {
 const hasAppLock = app.requestSingleInstanceLock();
 if (!hasAppLock) app.quit();
 
+// Release 1.0: party voice chat needs the microphone, and gyro aiming opens PlayStation and Switch Pro controllers
+// over WebHID (the browser's Gamepad API has no motion sensors). Both are allowed for the game's own pages only.
+const GYRO_VENDORS = new Set([0x054c, 0x057e]);
+function gameUrl(url) {
+  return !!gameOrigin && String(url || '').startsWith(gameOrigin);
+}
+function setupDevicePermissions() {
+  const ses = session.defaultSession;
+  ses.setPermissionRequestHandler((wc, permission, callback, details) => {
+    if (permission === 'media') return callback(gameUrl(details?.requestingUrl || wc?.getURL?.()) && (!details?.mediaTypes || details.mediaTypes.every((t) => t === 'audio')));
+    if (permission === 'hid') return callback(gameUrl(wc?.getURL?.()));
+    callback(true);
+  });
+  ses.setPermissionCheckHandler((wc, permission, origin) => (permission === 'hid' || permission === 'media' ? gameUrl(origin) : true));
+  ses.setDevicePermissionHandler((details) => details.deviceType === 'hid' && gameUrl(details.origin) && GYRO_VENDORS.has(details.device?.vendorId));
+  ses.on('select-hid-device', (event, details, callback) => {
+    event.preventDefault();
+    const d = (details.deviceList || []).find((x) => GYRO_VENDORS.has(x.vendorId));
+    callback(d ? d.deviceId : '');
+  });
+  log('Device permissions: microphone (voice chat) and controllers (gyro) for the game only.');
+}
+
 app.whenReady().then(async () => {
   if (!hasAppLock) return;
   logFile = path.join(app.getPath('userData'), 'launch.log');
@@ -446,6 +469,7 @@ app.whenReady().then(async () => {
     } catch (error) {
       log(`Could not clear the browser cache: ${error?.message || error}`);
     }
+    setupDevicePermissions();
     splashStatus('Launching Vangaurd', 0.12);
     createWindow();
   } catch (error) {

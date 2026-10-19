@@ -25,6 +25,11 @@ const MAPS = ['vardanek', 'kessel', 'foundry', 'freighter', 'airfield', 'lindenh
 const LOS = loadLos(pathMod.join(pathMod.dirname(decodeURIComponent(new URL(import.meta.url).pathname)), 'los-maps.json'));
 // How far each gun can hit (the game's own ranges, plus a little): a hit from further away is thrown out.
 const GUN_RANGE = { ar7: 450, smg9: 220, br4: 520, lmg60: 600, dmr14: 750, sg12: 60, sr50: 1200, p9: 150, mp20: 90, hc50: 160, p3b: 120 };
+// Release 1.0 anti-cheat: each gun's damage per bullet and fire rate (from the game), and the melee weapons' reach
+const GUN_DMG = { ar7: 31, smg9: 26, br4: 36, lmg60: 34, dmr14: 54, sg12: 20, sr50: 105, p9: 34, mp20: 21, hc50: 68, p3b: 28 };
+const GUN_RPM = { ar7: 750, smg9: 920, br4: 900, lmg60: 680, dmr14: 320, sg12: 190, sr50: 70, p9: 420, mp20: 1050, hc50: 170, p3b: 1000 };
+const MELEE_DMG = { knife: 150, machete: 150, axe: 200, bat: 160 }, MELEE_REACH = 6;
+const AC_FLAG_SCORE = Math.max(3, Number(process.env.AC_FLAG_SCORE) || 8);
 const AC_WALL_MIN = Math.max(3, Number(process.env.AC_WALL_MIN) || 8), AC_WALL_SHARE = Math.min(1, Math.max(0.1, Number(process.env.AC_WALL_SHARE) || 0.4));
 const MODES = {
   tdm: { name: 'Team Deathmatch', scoreLimit: Math.max(1, Number(process.env.TDM_SCORE_LIMIT) || 50), ffa: false },
@@ -502,7 +507,8 @@ function note(key, text, extra = {}) { sendTo(key, { type: 'social_note', text, 
 function partyView(pid) {
   const pt = parties.get(pid);
   if (!pt) return null;
-  return { id: pt.id, leader: nameOf(pt.leader), members: pt.members.map((k) => ({ name: nameOf(k), status: statusOf(k), leader: k === pt.leader })) };
+  // Release 1.0: who is in the party's voice chat (and has their mic muted)
+  return { id: pt.id, leader: nameOf(pt.leader), members: pt.members.map((k) => ({ name: nameOf(k), status: statusOf(k), leader: k === pt.leader, voice: !!voiceOf.get(k)?.on, vmuted: !!voiceOf.get(k)?.muted })) };
 }
 function socialSnapshot(key) {
   const u = userOf(key);
@@ -513,7 +519,7 @@ function socialSnapshot(key) {
   return {
     type: 'social', me: u.name,
     friends: u.friends.map((k) => ({ name: nameOf(k), status: statusOf(k), inParty: partyOf.get(k) != null && partyOf.get(k) === partyOf.get(key) })).sort((a, b) => (a.status === 'offline') - (b.status === 'offline') || a.name.localeCompare(b.name)),
-    incoming: u.incoming.map(nameOf), outgoing: u.outgoing.map(nameOf), party: partyView(partyOf.get(key)), invites,
+    incoming: u.incoming.map(nameOf), outgoing: u.outgoing.map(nameOf), party: partyView(partyOf.get(key)), invites, blocked: (Array.isArray(u.blocked) ? u.blocked : []).map(nameOf),
     // players from recent matches, for "Recently played" (Add friend)
     recent: (mod?.recentWith?.(key, 12) || []).map((r) => ({ name: r.name, at: r.at, mode: r.mode, map: r.map, status: statusOf(r.key), friend: u.friends.includes(r.key), sent: u.outgoing.includes(r.key), incoming: u.incoming.includes(r.key) })),
   };
@@ -545,6 +551,7 @@ function goOffline(c) {
   set.delete(c);
   if (!set.size) {
     online.delete(key);
+    voiceOf.get(key)?.on && voiceLeave(key);
     // An offline player leaves their party after a short grace period (reconnects keep it).
     setTimeout(() => { if (!online.get(key)?.size && partyOf.has(key)) leaveParty(key); }, 60000);
     pushAround(key);
@@ -557,6 +564,8 @@ function friendAdd(c, msg) {
   if (!u) return;
   if (!t) return socialError(c, `There is no player called ${String(msg.username || '').slice(0, 16)}.`);
   if (them === me) return socialError(c, "You can't add yourself.");
+  if (blockedBy(me, them)) return socialError(c, `You blocked ${t.name}. Unblock them first.`);
+  if (blockedBy(them, me)) return socialError(c, `${t.name} isn't taking friend requests.`);
   social(u); social(t);
   if (u.friends.includes(them)) return socialError(c, `${t.name} is already your friend.`);
   if (u.incoming.includes(them)) return friendAccept(c, { username: t.name });
@@ -603,6 +612,7 @@ function friendRemove(c, msg) {
 function leaveParty(key) {
   const pid = partyOf.get(key);
   const pt = parties.get(pid);
+  voiceOf.get(key)?.on && voiceLeave(key, true);
   partyOf.delete(key);
   if (!pt) return;
   pt.members = pt.members.filter((k) => k !== key);
@@ -622,6 +632,7 @@ function partyInvite(c, msg) {
   const u = userOf(me), t = userOf(them);
   if (!u || !t) return socialError(c, 'That player does not exist.');
   social(u);
+  if (eitherBlocked(me, them)) return socialError(c, `You can't invite ${t.name}.`);
   if (!u.friends.includes(them)) return socialError(c, `Add ${t.name} as a friend first.`);
   if (statusOf(them) === 'offline') return socialError(c, `${t.name} is offline.`);
   let pid = partyOf.get(me), pt = parties.get(pid);
@@ -720,6 +731,102 @@ function partyFollow(c, mode) {
   if (!pt || pt.leader !== me) return;
   for (const k of pt.members) if (k !== me && statusOf(k) !== 'match') sendTo(k, { type: 'party_queue', mode, leader: nameOf(me) });
 }
+// ---------- Release 1.0: blocking, lobby chat (All and Party) and party voice chat ----------
+// Blocking someone hides you from each other in chat, ends any friendship or open request between you, stops friend
+// requests and party invites both ways, and drops you out of a party you share. Muting (only in the game) just
+// silences someone's chat and voice for you.
+const voiceOf = new Map(); // account key -> { on, muted }
+const blockedBy = (a, b) => !!userOf(a)?.blocked?.includes?.(b);
+const eitherBlocked = (a, b) => blockedBy(a, b) || blockedBy(b, a);
+function blockSet(c, msg) {
+  const me = keyOf(c.account), them = keyOf(msg.username), u = userOf(me), t = userOf(them);
+  if (!u) return;
+  if (!t) return socialError(c, `There is no player called ${String(msg.username || '').slice(0, 16)}.`);
+  if (them === me) return socialError(c, "You can't block yourself.");
+  u.blocked = Array.isArray(u.blocked) ? u.blocked : [];
+  if (msg.on === false) u.blocked = u.blocked.filter((k) => k !== them);
+  else if (!u.blocked.includes(them)) {
+    if (u.blocked.length >= 500) return socialError(c, 'Your block list is full (500).');
+    u.blocked.push(them);
+    social(u); social(t);
+    u.friends = u.friends.filter((k) => k !== them); t.friends = t.friends.filter((k) => k !== me);
+    u.incoming = u.incoming.filter((k) => k !== them); u.outgoing = u.outgoing.filter((k) => k !== them);
+    t.incoming = t.incoming.filter((k) => k !== me); t.outgoing = t.outgoing.filter((k) => k !== me);
+    for (const pt of parties.values()) { if (pt.invites.has(me) && pt.members.includes(them)) pt.invites.delete(me); if (pt.invites.has(them) && pt.members.includes(me)) pt.invites.delete(them); }
+    if (partyOf.get(me) && partyOf.get(me) === partyOf.get(them)) leaveParty(me);
+  }
+  saveAccounts();
+  note(me, msg.on === false ? `Unblocked ${t.name}` : `Blocked ${t.name}. You won't see each other in chat, and they can't invite you or send you friend requests.`, { kind: 'block' });
+  pushSocial(me); pushSocial(them);
+}
+// chat
+const CHAT_MAX = 200, chatLog = [], chatRate = new Map();
+const chatClean = (t) => String(t || '').replace(/[\u0000-\u001f\u007f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, CHAT_MAX);
+const chatPublic = (m) => ({ type: 'chat', ch: m.ch, id: m.id, from: m.from, text: m.text, at: m.at, dev: m.dev || undefined });
+function onChat(c, msg) {
+  const me = keyOf(c.account), u = userOf(me);
+  if (!u) return socialError(c, 'Sign in to chat.');
+  const ch = msg.ch === 'party' ? 'party' : 'all', text = chatClean(msg.text);
+  if (!text) return;
+  if ((u.chatMutedUntil || 0) > now()) {
+    const left = u.chatMutedUntil - now();
+    return send(c, { type: 'chat_error', message: `A moderator muted you in chat. You can chat again in ${left > 36e5 ? `${Math.ceil(left / 36e5)} hours` : `${Math.max(1, Math.ceil(left / 6e4))} minutes`}.` });
+  }
+  const t = now(), r = (chatRate.get(me) || []).filter((x) => t - x < 10e3);
+  if (r.length >= 5 || (r.length && t - r[r.length - 1] < 600)) return send(c, { type: 'chat_error', message: 'Slow down a little.' });
+  r.push(t), chatRate.set(me, r);
+  const m = { ch, id: newId('m'), key: me, from: u.name, text, at: t, dev: !!(mod.roleOf?.(me)) || undefined };
+  if (ch === 'party') {
+    const pt = parties.get(partyOf.get(me));
+    if (!pt) return send(c, { type: 'chat_error', message: "You're not in a party. Invite friends from the Friends panel." });
+    for (const k of pt.members) if (!eitherBlocked(k, me)) sendTo(k, chatPublic(m));
+    return;
+  }
+  chatLog.push(m), chatLog.length > 400 && chatLog.splice(0, chatLog.length - 400);
+  for (const k of online.keys()) if (!eitherBlocked(k, me)) sendTo(k, chatPublic(m));
+}
+function chatHistory(c) {
+  const me = keyOf(c.account);
+  if (!userOf(me)) return;
+  send(c, { type: 'chat_history', list: chatLog.slice(-50).filter((m) => !eitherBlocked(me, m.key)).map(chatPublic) });
+}
+const chatAdmin = {
+  list: () => chatLog.slice(-300).reverse().map((m) => ({ id: m.id, at: m.at, from: m.from, text: m.text })),
+  mutedList: () => Object.values(accounts.users).filter((u) => (u.chatMutedUntil || 0) > now()).map((u) => ({ name: u.name, until: u.chatMutedUntil })),
+  mute(key, hours) {
+    const u = userOf(key);
+    if (!u) return;
+    u.chatMutedUntil = hours ? now() + hours * 36e5 : 0, saveAccounts();
+    hours && note(key, `A moderator muted you in chat for ${hours >= 24 ? `${Math.round(hours / 24)} day${hours >= 48 ? 's' : ''}` : `${hours} hour${hours === 1 ? '' : 's'}`}.`, { kind: 'chat_mute' });
+  },
+};
+// voice: the server only passes the WebRTC set-up messages between party members (the audio goes player to player)
+function voicePush(pt) { for (const k of pt.members) pushSocial(k); }
+function voiceSet(c, msg) {
+  const me = keyOf(c.account), pt = parties.get(partyOf.get(me));
+  if (msg.on && !pt) return socialError(c, 'Join a party to use voice chat.');
+  if (!msg.on) return voiceLeave(me);
+  const was = voiceOf.get(me)?.on;
+  voiceOf.set(me, { on: true, muted: !!msg.muted });
+  if (!was) for (const k of pt.members) k !== me && voiceOf.get(k)?.on && sendTo(k, { type: 'voice_join', name: nameOf(me) });
+  voicePush(pt);
+}
+function voiceLeave(me, quiet = false) {
+  const was = voiceOf.get(me)?.on;
+  voiceOf.delete(me);
+  const pt = parties.get(partyOf.get(me));
+  if (pt && was) {
+    for (const k of pt.members) k !== me && sendTo(k, { type: 'voice_leave', name: nameOf(me) });
+    quiet || voicePush(pt);
+  }
+}
+function rtcRelay(c, msg) {
+  const me = keyOf(c.account), them = keyOf(msg.to), pt = parties.get(partyOf.get(me));
+  if (!pt || !pt.members.includes(them) || !voiceOf.get(me)?.on || !voiceOf.get(them)?.on || eitherBlocked(me, them)) return;
+  const d = msg.d && typeof msg.d === 'object' ? msg.d : null;
+  if (!d || JSON.stringify(d).length > 20000) return;
+  sendTo(them, { type: 'rtc', from: nameOf(me), d });
+}
 function handleSocial(c, msg) {
   if (!c.account) return socialError(c, 'Sign in to use friends and parties.');
   switch (msg.type) {
@@ -736,6 +843,11 @@ function handleSocial(c, msg) {
     case 'party_ready_start': readyStart(c, msg); break;
     case 'party_ready_reply': readyReply(c, msg); break;
     case 'party_ready_cancel': readyCancel(c); break;
+    case 'block': blockSet(c, msg); break;
+    case 'chat_send': onChat(c, msg); break;
+    case 'chat_history': chatHistory(c); break;
+    case 'voice': voiceSet(c, msg); break;
+    case 'rtc': rtcRelay(c, msg); break;
     default: break;
   }
 }
@@ -1056,8 +1168,9 @@ function onHit(c, msg) {
   if (now() - target.spawnedAt < SPAWN_PROTECT_MS) return; // fresh spawn
   const amount = Math.max(0, Math.min(250, num(msg.amount)));
   if (!amount) return;
-  // Release 1.0 anti-cheat: the server checks the shot's distance and line of sight (killstreaks are not shots)
-  const chk = streak ? { ok: true } : shotCheck(match, attacker, target, msg);
+  // Release 1.0 anti-cheat: the server checks the shot's distance, line of sight, damage, fire rate and aim
+  // (killstreaks are not shots)
+  const chk = streak ? { ok: true } : shotCheck(match, attacker, target, msg, amount);
   if (chk.reject) return;
   target.health = Math.max(0, target.health - amount);
   const zone = typeof msg.zone === 'string' ? msg.zone.slice(0, 16) : 'torso';
@@ -1065,6 +1178,11 @@ function onHit(c, msg) {
   recEvent(match, ['d', attacker.id, target.id, amount, zone, chk.wall ? 1 : 0, Math.round(chk.d || 0)]);
   if (target.health > 0) return;
   recEvent(match, ['k', attacker.id, target.id]);
+  if (!streak) {
+    const ac = acOf(attacker);
+    ac.kills++, zone === 'head' && ac.hsKills++;
+    !ac.once.hs && ac.kills >= 15 && ac.hsKills / ac.kills >= 0.8 && (ac.once.hs = true, acFlag(match, attacker, 'headshots', `${ac.hsKills} of ${ac.kills} kills were headshots`));
+  }
   target.alive = false;
   target.diedAt = now();
   target.deaths++;
@@ -1081,37 +1199,157 @@ function onHit(c, msg) {
     addScore(match, attacker.team, 1);
   }
 }
-// ---------- Release 1.0 anti-cheat: shot checks ----------
+// ---------- Release 1.0 anti-cheat: shot checks and cheat flags ----------
 // Every hit is checked against where the server last saw both players: too far for the gun, or claimed from somewhere
-// the shooter wasn't, and it doesn't count. Hits without a line of sight still count (bullets go through thin walls),
-// but a player who lands many of them in a match is reported to the moderators with a replay.
-function shotCheck(match, a, t, msg) {
+// the shooter wasn't, and it doesn't count. On top of that the server keeps flags on each player through the match:
+//   range / origin   hits thrown out by the checks above
+//   wall             hits with no line of sight (bullets do go through thin walls, so only many of them count)
+//   snap             the view swung far in the tenth of a second before the hit and stopped dead on the target
+//   phantom          hits with no shot fired before them
+//   rate             more shots a second than the gun can fire
+//   damage           more damage in one hit than the gun can do
+//   speed / teleport moving faster than anyone can run, or jumping across the map
+//   headshots        nearly every kill a headshot (15 kills or more)
+//   accuracy         nearly every shot a hit (60 shots or more)
+// Each flag adds to the player's suspicion score for the match; at AC_FLAG_SCORE the server files a report with the
+// match recording, and the flagged moments are marked in the console's replay so a moderator can jump straight to
+// them and decide.
+// [points per flag, flags that are free, most points] (the old rules still report on their own: 5 thrown-out hits, or
+// AC_WALL_MIN hits through walls that are AC_WALL_SHARE of all hits)
+const AC_W = { range: [AC_FLAG_SCORE / 5, 0, 9], origin: [AC_FLAG_SCORE / 5, 0, 9], wall: [AC_FLAG_SCORE / Math.max(1, AC_WALL_MIN - 1), 1, 9], snap: [1.5, 2, 7.5], phantom: [1, 2, 5], rate: [2, 0, 6], damage: [3, 0, 6], speed: [2, 0, 4], teleport: [3, 0, 6], headshots: [3, 0, 3], accuracy: [3, 0, 3] };
+const AC_NAMES = { range: 'out of range', origin: 'from the wrong place', wall: 'no line of sight', snap: 'aim snaps', phantom: 'hits without shots', rate: 'impossible fire rate', damage: 'impossible damage', speed: 'too fast', teleport: 'teleports', headshots: 'headshot rate', accuracy: 'accuracy' };
+function acOf(a) {
+  return a.ac ||= { hits: 0, wall: 0, bad: 0, reported: false, n: {}, score: 0, kills: 0, hsKills: 0, shots: [], shotCount: 0, hitShots: 0, lastShotUsed: 0, look: [], mv: [], once: {}, last: {} };
+}
+function acScore(ac) {
+  let s = 0;
+  for (const [k, n] of Object.entries(ac.n)) {
+    const w = AC_W[k] || [1, 0, 5];
+    s += k === 'wall' && ac.wall / Math.max(1, ac.hits) < AC_WALL_SHARE ? 0 : Math.min(w[2], Math.max(0, n - w[1]) * w[0]);
+  }
+  return Math.round(s * 10) / 10;
+}
+// one flagged moment: counted, marked in the recording, and maybe the report
+function acFlag(match, a, cat, detail = '', targetId = null) {
+  const ac = acOf(a);
+  ac.n[cat] = (ac.n[cat] || 0) + 1;
+  recEvent(match, ['F', a.id, cat, String(detail).slice(0, 120), targetId]);
+  ac.score = acScore(ac);
+  if (ac.score >= AC_FLAG_SCORE && !ac.reported && a.key) acReport(match, a);
+  else if (ac.flagId) {
+    mod.flagUpdate?.(ac.flagId, { score: ac.score, counts: { ...ac.n } });
+    // later flags go into the report's recording too (at most every 10 s; the whole match is saved when it ends)
+    ac.reportId && now() - (ac.savedAt || 0) > 10e3 && (ac.savedAt = now(), replaySave(ac.reportId, match.id, a.key));
+  }
+}
+function acNote(ac) {
+  return `Anti-cheat · suspicion ${ac.score}: ${Object.entries(ac.n).filter(([, n]) => n > 0).map(([k, n]) => `${AC_NAMES[k] || k} ×${n}`).join(', ')}`;
+}
+function acReport(match, a) {
+  const ac = acOf(a);
+  ac.reported = true;
+  const note = acNote(ac);
+  log(`anti-cheat: flagging ${a.name} (${note})`);
+  if (REGIONAL) return acForward(match, a, note);
+  try {
+    const rid = mod.autoReport(a.key, match, note);
+    ac.flagId = mod.flagAdd?.({ key: a.key, name: a.name, reportId: rid, score: ac.score, counts: { ...ac.n }, match: { id: match.id, mode: match.mode, map: match.mapId || null, region: REGION } }) || null;
+    ac.reportId = rid, ac.savedAt = now();
+  } catch (e) { log(`anti-cheat report error: ${e.message}`); }
+}
+// a regional server sends the flag, with its recording, to the main server (where the console is)
+async function acForward(match, a, note) {
+  try {
+    const R = match.rec;
+    const target = R ? Object.entries(R.names).find(([, n]) => n.key === a.key)?.[0] || null : null;
+    const rep = R ? zlib.gzipSync(JSON.stringify({ v: 1, at: now(), map: R.map, mode: R.mode, matchId: R.matchId, target, players: R.names, frames: R.frames, ev: R.ev, plan: LOS.plan(R.map) })).toString('base64') : null;
+    const ac = acOf(a);
+    await internalPost(MAIN_URL, '/internal/flag', { key: a.key, name: a.name, note, score: ac.score, counts: { ...ac.n }, match: { id: `${REGION}:${match.id}`, mode: match.mode, mapId: match.mapId || null, createdAt: match.createdAt, region: REGION }, replay: rep }, 15000);
+  } catch (e) { log(`anti-cheat: could not send the flag to the main server: ${e.message}`); }
+}
+// At the end of a match a flagged player's report gets the whole match in its recording.
+function acFinish(match) {
+  for (const a of match.players.values()) {
+    const ac = a.ac;
+    if (!ac?.reported || !ac.reportId || REGIONAL) continue;
+    try { replaySave(ac.reportId, match.id, a.key); mod.flagUpdate?.(ac.flagId, { score: ac.score, counts: { ...ac.n }, final: true }); } catch (e) { log(`anti-cheat finish error: ${e.message}`); }
+  }
+}
+const vdir = (yaw, pitch) => ({ x: -Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(yaw) * Math.cos(pitch) });
+const angDeg = (a, b) => Math.acos(Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y + a.z * b.z))) * 180 / Math.PI;
+const EYE_H = { prone: 0.4, crouch: 1.1, slide: 1.0, stand: 1.62 };
+function shotCheck(match, a, t, msg, amount = 0) {
   const A = a.pos, T = t.pos;
   if (!A || !T) return { ok: true };
-  const ac = a.ac ||= { hits: 0, wall: 0, bad: 0, reported: false }, d = Math.hypot(A.x - T.x, A.y - T.y, A.z - T.z);
-  const boom = msg.k === 'x', gun = a.state?.variant || '', max = boom ? 120 : (GUN_RANGE[gun] || 1200) + 25; // grenades: thrown, then a blast
+  const ac = acOf(a), d = Math.hypot(A.x - T.x, A.y - T.y, A.z - T.z), w = typeof msg.w === 'string' ? msg.w.slice(0, 24) : '';
+  const boom = msg.k === 'x', gun = a.state?.variant || '', melee = /^melee/.test(w) || (!w && MELEE_DMG[gun] != null);
+  const max = boom ? 120 : melee ? MELEE_REACH : (GUN_RANGE[gun] || 1200) + 25; // grenades: thrown, then a blast
   const o = msg.o && typeof msg.o === 'object' ? msg.o : null, od = o && [o.x, o.y, o.z].every(Number.isFinite) ? Math.hypot(o.x - A.x, o.z - A.z) : 0;
   if (d > max || od > 9) {
     ac.bad++, recEvent(match, ['x', a.id, t.id, d > max ? 'range' : 'origin', Math.round(d > max ? d : od)]);
-    log(`anti-cheat: ${a.name} hit ${t.name} ${d > max ? `from ${Math.round(d)} m (${gun || 'gun'} reaches ${max - 25} m)` : `from ${Math.round(od)} m away from where they were`} · not counted`);
-    acMaybeReport(match, a);
+    log(`anti-cheat: ${a.name} hit ${t.name} ${d > max ? `from ${Math.round(d)} m (${melee ? 'melee' : gun || 'gun'} reaches ${melee ? MELEE_REACH : max - 25} m)` : `from ${Math.round(od)} m away from where they were`} · not counted`);
+    acFlag(match, a, d > max ? 'range' : 'origin', d > max ? `${Math.round(d)} m with ${melee ? 'a melee weapon' : gun || 'a gun'}` : `${Math.round(od)} m from where they were`, t.id);
     return { reject: true, d };
   }
   if (boom) return { ok: true, d }; // a blast reaches round corners
+  // more damage than the weapon can do in one hit
+  const cap = melee ? 210 : GUN_DMG[gun] ? Math.min(250, GUN_DMG[gun] * 2.5) : 250;
+  if (amount > cap + 0.5) {
+    acFlag(match, a, 'damage', `${Math.round(amount)} damage in one hit (${melee ? 'melee' : gun || 'gun'} does at most ${Math.round(cap)})`, t.id);
+    return { reject: true, d };
+  }
   ac.hits++;
-  const see = LOS.canSee(match.mapId, A, a.state?.stance, a.state?.yaw, T, t.state?.stance);
-  see === false && (ac.wall++, acMaybeReport(match, a));
+  const tNow = now();
+  if (!melee) {
+    // every bullet hit comes after a shot: count the shot as a hit (once), or flag a hit with no shot at all
+    const sh = ac.shots.filter((x) => tNow - x < 2000);
+    if (!sh.length && ac.shotCount > 0 || !ac.shotCount) {
+      tNow - (ac.last.phantom || 0) > 400 && (ac.last.phantom = tNow, acFlag(match, a, 'phantom', 'a hit with no shot fired before it', t.id));
+    } else if (ac.lastShotUsed !== sh.at(-1)) ac.lastShotUsed = sh.at(-1), ac.hitShots++;
+    // the aim: a big swing just before the hit that stops right on the target
+    const L = ac.look.at(-1);
+    if (L && tNow - L.t < 160 && d >= 8) {
+      const S = [...ac.look].reverse().find((x) => L.t - x.t >= 70 && L.t - x.t <= 220);
+      if (S) {
+        const swing = angDeg(vdir(S.yaw, S.pitch), vdir(L.yaw, L.pitch));
+        const eye = { x: A.x, y: A.y + (EYE_H[a.state?.stance] ?? 1.62), z: A.z }, tc = { x: T.x - eye.x, y: T.y + (EYE_H[t.state?.stance] ?? 1.62) - 0.35 - eye.y, z: T.z - eye.z }, tl = Math.hypot(tc.x, tc.y, tc.z) || 1;
+        const err = angDeg(vdir(L.yaw, L.pitch), { x: tc.x / tl, y: tc.y / tl, z: tc.z / tl });
+        swing >= 35 && err <= 3 && tNow - (ac.last.snap || 0) > 300 && (ac.last.snap = tNow, acFlag(match, a, 'snap', `${Math.round(swing)}° in ${L.t - S.t} ms, then ${err.toFixed(1)}° off the target at ${Math.round(d)} m`, t.id));
+      }
+    }
+    // nearly every shot a hit (not shotguns)
+    gun !== 'sg12' && !ac.once.acc && ac.shotCount >= 60 && ac.hitShots / ac.shotCount >= 0.85 && (ac.once.acc = true, acFlag(match, a, 'accuracy', `${ac.hitShots} of ${ac.shotCount} shots hit`));
+  }
+  const see = melee ? true : LOS.canSee(match.mapId, A, a.state?.stance, a.state?.yaw, T, t.state?.stance);
+  see === false && (ac.wall++, acFlag(match, a, 'wall', `hit ${t.name} at ${Math.round(d)} m`, t.id));
   return { ok: true, wall: see === false, d };
 }
-function acMaybeReport(match, a) {
-  const ac = a.ac;
-  if (!ac || ac.reported || !a.key) return;
-  const wallBad = ac.wall >= AC_WALL_MIN && ac.wall / Math.max(1, ac.hits) >= AC_WALL_SHARE, farBad = ac.bad >= 5;
-  if (!wallBad && !farBad) return;
-  ac.reported = true;
-  const note = wallBad ? `Anti-cheat: ${ac.wall} of ${ac.hits} hits in this match had no line of sight (through walls).` : `Anti-cheat: ${ac.bad} hits were thrown out (too far for the gun, or from a place the player wasn't).`;
-  log(`anti-cheat: reporting ${a.name} (${note})`);
-  try { mod.autoReport(a.key, match, note); } catch (e) { log(`anti-cheat report error: ${e.message}`); }
+// a shot: fire rate against the gun's
+function acShot(match, a) {
+  const ac = acOf(a), t = now(), gun = a.state?.variant || '';
+  ac.shotCount++, ac.shots.push(t);
+  while (ac.shots.length && t - ac.shots[0] > 2000) ac.shots.shift();
+  const rpm = GUN_RPM[gun];
+  if (rpm && ac.shots.length > rpm / 30 * 1.35 + 3 && t - (ac.last.rate || 0) > 5000) ac.last.rate = t, acFlag(match, a, 'rate', `${ac.shots.length} shots in 2 s (${gun} fires ${Math.round(rpm / 30)})`);
+}
+// movement: faster than anyone can run, or a jump across the map
+function acMove(match, a, x, z, yaw, pitch) {
+  const ac = acOf(a), t = now();
+  ac.look.push({ t, yaw, pitch });
+  ac.look.length > 8 && ac.look.shift();
+  if (!a.alive || t - (a.spawnedAt || 0) < 1500) { ac.mv.length = 0; return; }
+  const prev = ac.mv.at(-1);
+  if (prev && t - prev.t < 500) {
+    const jump = Math.hypot(x - prev.x, z - prev.z);
+    jump > 25 && t - (ac.last.tp || 0) > 3000 && (ac.last.tp = t, acFlag(match, a, 'teleport', `${Math.round(jump)} m in ${t - prev.t} ms`));
+  }
+  ac.mv.push({ t, x, z });
+  while (ac.mv.length > 2 && t - ac.mv[0].t > 1500) ac.mv.shift();
+  const first = ac.mv[0], span = t - first.t;
+  if (span >= 900) {
+    const v = Math.hypot(x - first.x, z - first.z) / (span / 1000);
+    v > 14 && v < 400 && t - (ac.last.speed || 0) > 5000 && (ac.last.speed = t, acFlag(match, a, 'speed', `${v.toFixed(1)} m/s for ${(span / 1000).toFixed(1)} s`));
+  }
 }
 // ---------- Release 1.0: match recordings ----------
 // Five times a second, where every player is and looks, plus shots, hits and kills, for the last five minutes of
@@ -1138,6 +1376,7 @@ function recEvent(match, e) {
 }
 function recKeep(match) {
   if (!match?.rec) return;
+  acFinish(match);
   recentRecs.set(match.id, { ...match.rec, closed: now() });
   for (const [id, r] of recentRecs) if (recentRecs.size > 12 || now() - r.closed > 3 * 3600e3) recentRecs.delete(id);
 }
@@ -1226,6 +1465,7 @@ function onState(c, msg) {
     alive: s.alive !== false && p.alive,
   };
   recFrame(match, p);
+  try { acMove(match, p, x, z, p.state.yaw, p.state.pitch); } catch (e) { log(`anti-cheat move error: ${e.message}`); }
   broadcast(match, { type: 'player_state', matchId: match.id, playerId: p.id, state: p.state }, c.id);
 }
 function onRespawn(c, msg) {
@@ -1236,6 +1476,7 @@ function onRespawn(c, msg) {
   p.health = 100;
   p.alive = true;
   p.spawnedAt = now();
+  p.ac && (p.ac.mv.length = 0);
   const pos = msg.position || {};
   const x = num(pos.x, NaN), y = num(pos.y, NaN), z = num(pos.z, NaN);
   if ([x, y, z].every(Number.isFinite)) p.pos = { x, y, z };
@@ -1428,7 +1669,7 @@ function kickClient(c, msg) {
 }
 const mod = createModeration({
   DATA_DIR, accounts, saveAccounts, online, clients, statusOf, keyOf, userOf, nameOf, scrypt, now, log, send,
-  kick: kickClient, kickKey: (key, msg) => (REGIONS.length ? regionKick(key, msg) : Promise.resolve(0)), saveOf: (key) => saves[key]?.blob || null, spectateOffer, replaySave, replayLoad, sendTo: (key, msg) => sendTo(key, msg),
+  chat: chatAdmin, kick: kickClient, kickKey: (key, msg) => (REGIONS.length ? regionKick(key, msg) : Promise.resolve(0)), saveOf: (key) => saves[key]?.blob || null, spectateOffer, replaySave, replayLoad, sendTo: (key, msg) => sendTo(key, msg),
   putSave(key, blob) {
     const cur = saves[key] || { rev: 0 };
     saves[key] = { rev: cur.rev + 1, at: now(), blob };
@@ -1607,7 +1848,7 @@ function handle(c, raw) {
     case 'vote_map': onVote(c, msg); break;
     case 'weapon_fired': {
       const match = matches.get(c.matchId);
-      if (match) broadcast(match, { type: 'weapon_fired', matchId: match.id, playerId: c.id, weaponId: typeof msg.weaponId === 'string' ? msg.weaponId.slice(0, 24) : null }, c.id), match.players.has(c.id) && recEvent(match, ['f', c.id]);
+      if (match) broadcast(match, { type: 'weapon_fired', matchId: match.id, playerId: c.id, weaponId: typeof msg.weaponId === 'string' ? msg.weaponId.slice(0, 24) : null }, c.id), match.players.has(c.id) && (recEvent(match, ['f', c.id]), acShot(match, match.players.get(c.id)));
       break;
     }
     case 'player_ready': {
@@ -1631,6 +1872,7 @@ function handle(c, raw) {
     case 'social_state': case 'friend_add': case 'friend_accept': case 'friend_decline': case 'friend_remove':
     case 'party_invite': case 'party_accept': case 'party_decline': case 'party_leave': case 'party_kick':
     case 'party_ready_start': case 'party_ready_reply': case 'party_ready_cancel':
+    case 'block': case 'chat_send': case 'chat_history': case 'voice': case 'rtc':
       handleSocial(c, msg); break;
     case 'bug_report': mod.onBug(c, msg); break;
     case 'spectate_join': msg.drone ? droneJoin(c, msg) : spectateJoin(c, msg); break;
@@ -1679,7 +1921,8 @@ const server = http.createServer((req, res) => {
   if (path.startsWith('/internal/') && req.method === 'POST') {
     if (!internalOk(req)) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('not found'); return; }
     let body = '';
-    req.on('data', (b) => { body += b; if (body.length > 64 * 1024) req.destroy(); });
+    const limit = path === '/internal/flag' ? 8 * 1024 * 1024 : 64 * 1024;
+    req.on('data', (b) => { body += b; if (body.length > limit) req.destroy(); });
     req.on('end', async () => {
       let v = null, out = { error: 'Unknown.' };
       try { v = JSON.parse(body); } catch { /* bad */ }
@@ -1690,6 +1933,15 @@ const server = http.createServer((req, res) => {
           const m = v.match;
           mod.matchSeen({ id: String(m.id).slice(0, 40), mode: m.mode, mapId: m.mapId, createdAt: m.createdAt, ended: !!m.ended, players: new Map((Array.isArray(m.players) ? m.players : []).slice(0, 24).map((p) => [String(p.key), { key: String(p.key), name: String(p.name || p.key).slice(0, 20), team: p.team, kills: p.kills | 0, deaths: p.deaths | 0, score: p.score | 0 }])) });
           out = { ok: true };
+        } else if (path === '/internal/flag' && !REGIONAL && v.key) {
+          // Release 1.0: a regional server flagged a player: file the report (with its recording) and the flag here
+          const key = String(v.key).slice(0, 40), m = v.match || {}, match = { id: String(m.id || '').slice(0, 40), mode: m.mode, mapId: m.mapId || null, createdAt: m.createdAt, ended: false, players: new Map() };
+          const rid = userOf(key) ? mod.autoReport(key, match, String(v.note || '').slice(0, 300)) : null;
+          if (rid && typeof v.replay === 'string' && v.replay.length < 8 * 1024 * 1024) {
+            try { fs.mkdirSync(REPLAY_DIR, { recursive: true }); fs.writeFileSync(pathMod.join(REPLAY_DIR, `${rid}.json.gz`), Buffer.from(v.replay, 'base64')); mod.markReplay(rid); } catch (e) { log(`flag replay save error: ${e.message}`); }
+          }
+          rid && mod.flagAdd({ key, name: String(v.name || '').slice(0, 20), reportId: rid, score: +v.score || 0, counts: v.counts && typeof v.counts === 'object' ? v.counts : {}, match: { id: match.id, mode: match.mode, map: match.mapId, region: String(m.region || '').slice(0, 16) } });
+          out = { ok: true, reportId: rid };
         } else if (path === '/internal/kick' && REGIONAL) {
           let n = 0;
           const msg = v.msg && typeof v.msg === 'object' ? v.msg : { type: 'kicked', message: 'A moderator disconnected you from the server.' };
