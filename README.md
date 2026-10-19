@@ -10,7 +10,7 @@ The current game (Release 1.0: the Halloween Pack DLC with the Skeleton and Pump
 Halloween camo, an Operators screen on the main menu, Blackout (a pitch-dark Team Deathmatch lit only by pumpkins,
 cauldrons and a few dim streetlights), detailed graphics settings with a Custom preset, a copyable
 user ID, an Action taken screen for reports, a new Loadouts screen with a Gunsmith and gun charms and stickers, weapon inspect, killcam tracers and
-hitmarkers, controller remapping, the Season Pass page (opens later), server-side shot checks and
+hitmarkers, controller remapping, the Season Pass (free, follows your level, with three new operators), server-side shot checks and
 replays of reported players, a weekly online mode next to Team Deathmatch, North American and
 European servers, enemies on the minimap only with a UAV, Halloween decorations and a purple sky on the maps, easier
 daily challenges, controller support in Drone mode; Beta 1.32: Replays in the menu for developers; Beta 1.31: the start-up

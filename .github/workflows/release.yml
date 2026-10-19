@@ -158,9 +158,10 @@ jobs:
           - The killcam shows your killer's bullets and hitmarkers.
           - Controller buttons can be changed, with Xbox, PlayStation and Switch layouts (Settings > Keybinds).
           - Your ping to North America and Europe in Settings > Account.
-          - The Season Pass page (Season 1, a free track of 100 levels; it opens later).
+          - The Season 1 Pass is open: unlock it for free and it follows your level (everything up to your level unlocks straight away), with three new operators (Frostline, Nightshade and Ember), camos, charms, stickers, XP and double XP.
           - Stronger anti-cheat: the server checks the distance and line of sight of every hit, and moderators can watch a replay of a reported player.
           - When a player you reported gets banned, an Action taken screen tells you.
+          - Fixed: the gun got smaller every time you picked a camo (with a barrel or suppressor on).
           - New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing; changing one on its own sets the preset to Custom. 3D resolution goes down to 25%.
           - Copy your user ID in Settings > Account.
           - Progression is now Challenges; the game mode list scrolls, one row per category.

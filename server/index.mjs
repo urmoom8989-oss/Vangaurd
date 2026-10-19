@@ -223,6 +223,7 @@ function recentVersions() {
 // Release 1.0: every account has a permanent user ID (shown in Settings > Account, used by support).
 // It is given out the first time the account signs in, so older accounts get one too.
 const UID_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+const PRIVATE_OPS = new Set(['spectre']);
 function newUid() {
   const taken = new Set(Object.values(accounts.users).map((x) => x?.uid).filter(Boolean));
   for (;;) {
@@ -1219,7 +1220,8 @@ function onState(c, msg) {
     moving: !!s.moving, sprinting: !!s.sprinting, sliding: !!s.sliding, quiet: !!s.quiet, ghost: !!s.ghost,
     weaponId: typeof s.weaponId === 'string' ? s.weaponId.slice(0, 24) : null,
     variant: typeof s.variant === 'string' ? s.variant.slice(0, 24) : null,
-    op: typeof s.op === 'string' && /^[a-z0-9_-]{1,24}$/.test(s.op) ? s.op : null, // Release 1.0: the player's operator
+    // Release 1.0: the player's operator (the developer-only one is never shown to anyone else)
+    op: typeof s.op === 'string' && /^[a-z0-9_-]{1,24}$/.test(s.op) && !PRIVATE_OPS.has(s.op) ? s.op : null,
     inspect: !!s.inspect, // Release 1.0: looking at their gun
     alive: s.alive !== false && p.alive,
   };

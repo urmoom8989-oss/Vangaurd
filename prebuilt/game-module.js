@@ -49074,7 +49074,7 @@ function vgKillDist(k) {
   return null;
 }
 function camoUnlocked(d, level = pgLevel().level) {
-  return d?.dlc ? vgDlcOwned(d.dlc) : d?.ch ? camoChallenge(d).done : level >= (d?.lv || 0);
+  return d?.dlc ? vgDlcOwned(d.dlc) : d?.ch ? camoChallenge(d).done : level >= (d?.lv || 0) || !!d && vgPassHas("camo", d.id);
 }
 function camoDef(A) {
   return camoDefs.find((e) => e.id === A) || camoDefs[0];
@@ -49506,7 +49506,7 @@ function cosDef(kind, id) {
   return L.find((d) => d.id === id) || L[0];
 }
 function cosUnlocked(d, level = pgLevel().level) {
-  return !d || d.id === "none" || level >= (d.lv || 1);
+  return !d || d.id === "none" || level >= (d.lv || 1) || vgPassHas(d.kind || (VG_CHARMS.includes(d) ? "charm" : "sticker"), d.id);
 }
 function pgCos(kind, role, k = pgActive()) {
   const r = role === "pistol" || role === "secondary" ? "secondary" : "primary", s = pgSlots()[k], d = cosDef(kind, s?.[kind]?.[r]);
@@ -49944,6 +49944,8 @@ function pgUnlocksAt(A) {
 }
 function pgAddXp(A, e = "", t = !0) {
   if (!(A > 0)) return;
+  // Season Pass double XP (not on the pass's own XP)
+  e !== "Season Pass" && typeof vgBoostLeft == "function" && vgBoostLeft() > 0 && (A *= 2);
   const i = pgLevel().level;
   Za.xp = Math.max(0, (Za.xp || 0) + Math.round(A)), om();
   const a = pgLevel().level;
@@ -49968,6 +49970,13 @@ function pgAddXp(A, e = "", t = !0) {
       pgCtx?.events.emit("progress:level", { level: a, from: i, unlocked: s });
     } catch {
     }
+    // the Season Pass follows your level
+    typeof vgPassSync == "function" && setTimeout(() => {
+      try {
+        vgPassSync(!0);
+      } catch {
+      }
+    }, 0);
   }
 }
 function Z3() {
@@ -51059,7 +51068,7 @@ function vgReplaySystem(A) {
   }
   function meta(id) {
     const ps = S.player?.state;
-    if (id === "me") return { name: vgAuth.user || Uc(), team: gm().playerTeam || "player", kind: "me", op: vgOpCurrent() };
+    if (id === "me") return { name: vgAuth.user || Uc(), team: gm().playerTeam || "player", kind: "me", op: vgOpPublic() };
     if (id.startsWith("n:")) {
       const p = net()?.pose(id.slice(2));
       return { name: p?.name || "Player", team: p?.team || "", kind: "net", op: p?.op || "default" };
@@ -55594,7 +55603,7 @@ typeof window < "u" && vgNet.listeners.push((m) => vgReadyMsg(m));
 /* ------------------------------------------------------------------ Beta 1.2: news & patch notes */
 // Only the current version's notes are shown (Beta 1.21: older versions are no longer listed).
 var VG_PATCH_NOTES = [
-  { v: "Release 1.0", items: ["New: the Halloween Pack DLC ($2.99 on Steam) with two new operators, Skeleton and Pumpkin Head, and the animated Halloween camo.", "New: an Operators screen on the main menu to choose who you play as. You see your operator's arms in first person, and other players see your operator in matches.", "New: a weekly game mode online next to Team Deathmatch. This week it's Kill Confirmed; it changes every Monday (Gun Game is next).", "New: North American and European servers. Pick yours in Settings > Account (or leave it on Automatic).", "Enemies only show on your minimap while your team has a UAV up. Ghost now keeps you off enemy UAVs.", "Halloween on every map until 10 November: pumpkin patches, graveyards, witches' cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky. Listen out in the main menu...", "A new level-up sound.", "Daily challenges are easier.", "Drone mode now works with a controller.", "New: Blackout, team deathmatch in the dark. Only pumpkins, cauldrons and (on Vardanek, Lindenhof and Kessel) dim streetlights light the map. It joins the weekly rotation.", "New: Loadouts, the Season Pass page, weapon charms and stickers, inspecting your gun (I), switching fire mode (B), and tracers and hitmarkers in the killcam.", "New: remap your controller buttons, with Xbox, PlayStation and Switch layouts. Settings > Account shows your ping to each server region and lets you copy your user ID.", "New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing. Changing one on its own sets the preset to Custom. 3D resolution now goes down to 25%.", "Progression is now called Challenges. When a player you reported gets banned, you see an Action taken screen.", "The FPS counter and network stats are now off by default, and the news shows every time you sign in.", "Fixed: the rifle went through operators on the Operators screen. The Skeleton now carries its rifle too."] },
+  { v: "Release 1.0", items: ["New: the Halloween Pack DLC ($2.99 on Steam) with two new operators, Skeleton and Pumpkin Head, and the animated Halloween camo.", "New: an Operators screen on the main menu to choose who you play as. You see your operator's arms in first person, and other players see your operator in matches.", "New: a weekly game mode online next to Team Deathmatch. This week it's Kill Confirmed; it changes every Monday (Gun Game is next).", "New: North American and European servers. Pick yours in Settings > Account (or leave it on Automatic).", "Enemies only show on your minimap while your team has a UAV up. Ghost now keeps you off enemy UAVs.", "Halloween on every map until 10 November: pumpkin patches, graveyards, witches' cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky. Listen out in the main menu...", "A new level-up sound.", "Daily challenges are easier.", "Drone mode now works with a controller.", "New: Blackout, team deathmatch in the dark. Only pumpkins, cauldrons and (on Vardanek, Lindenhof and Kessel) dim streetlights light the map. It joins the weekly rotation.", "New: Loadouts, weapon charms and stickers, inspecting your gun (I), switching fire mode (B), and tracers and hitmarkers in the killcam.", "New: remap your controller buttons, with Xbox, PlayStation and Switch layouts. Settings > Account shows your ping to each server region and lets you copy your user ID.", "New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing. Changing one on its own sets the preset to Custom. 3D resolution now goes down to 25%.", "Progression is now called Challenges. When a player you reported gets banned, you see an Action taken screen.", "The FPS counter and network stats are now off by default, and the news shows every time you sign in.", "Fixed: the rifle went through operators on the Operators screen. The Skeleton now carries its rifle too.", "The Season Pass is open: unlock it for free and it follows your level, with three new operators (Frostline, Nightshade and Ember), camos, charms, stickers, XP and double XP. Everything up to your level unlocks straight away.", "Streetlights in Blackout are a little brighter.", "Fixed: the gun got smaller every time you picked a camo (with a barrel or suppressor on)."] },
   { v: "Beta 1.32", items: ["Small fixes and improvements."] },
   { v: "Beta 1.31", items: ["The game now shows when the servers are offline or under maintenance, even if you are not signed in.", "The sign-in page now tells you on its own when the servers go down."] },
   { v: "Beta 1.3", items: ["Fixed Matchmaking", "Many QoL Fixes", "You can now see on the report page who the last player who killed you was.", "Switched from NA West Servers to NA East Servers", "Fixed a Bug where if you would Slide or go Prone it would not show it on another players screen", "Weapon Leveling", "Weapon Mounting", "Kill Streaks", "Daily and Weekly Challenges and more!"] },
@@ -56343,7 +56352,12 @@ function vgMaintenance(message) {
 var VG_OPS = [
   { id: "default", name: "Standard", tag: "Vangaurd", desc: "The standard Vangaurd operator in field fatigues, plate carrier and helmet.", dlc: null },
   { id: "skeleton", name: "Skeleton", tag: "Halloween Pack", desc: "Nothing left but bones, a grin and two glowing eyes. Still carries a rifle.", dlc: "halloween" },
-  { id: "pumpkin", name: "Pumpkin Head", tag: "Halloween Pack", desc: "A carved jack-o'-lantern for a head, a long torn coat and ripped trousers with green zombie skin showing through.", dlc: "halloween" }
+  { id: "pumpkin", name: "Pumpkin Head", tag: "Halloween Pack", desc: "A carved jack-o'-lantern for a head, a long torn coat and ripped trousers with green zombie skin showing through.", dlc: "halloween" },
+  // Release 1.0: the Season 1 pass operators, and a developer-only operator nobody else can see
+  { id: "frostline", name: "Frostline", tag: "Season 1 Pass", desc: "Winter whites, a frosted visor and ice-blue trim.", dlc: null, pass: !0 },
+  { id: "nightshade", name: "Nightshade", tag: "Season 1 Pass", desc: "Black tactical kit with violet trim and glowing night-vision goggles.", dlc: null, pass: !0 },
+  { id: "ember", name: "Ember", tag: "Season 1 Pass", desc: "Scorched armour with glowing seams that smoulder as you move.", dlc: null, pass: !0 },
+  { id: "spectre", name: "Spectre", tag: "Developer", desc: "Obsidian armour wired with living gold and cyan light, and a glowing visor. Developers only.", dlc: null, dev: !0 }
 ];
 var vgOps = { geos: {}, mats: {}, head: null, listeners: [] };
 function vgOpDef(id) {
@@ -56351,7 +56365,12 @@ function vgOpDef(id) {
 }
 function vgOpOwned(id) {
   const d = vgOpDef(id);
-  return d.id === id && (!d.dlc || vgDlcOwned(d.dlc));
+  return d.id === id && (d.dev ? typeof vgAuth == "object" && !!vgAuth.dev : d.pass ? vgPassHas("op", d.id) : !d.dlc || vgDlcOwned(d.dlc));
+}
+// what other players are told you look like: the developer operator stays private (they see the Standard one)
+function vgOpPublic() {
+  const id = vgOpCurrent();
+  return vgOpDef(id).dev ? "default" : id;
 }
 // The operator you play as (only one you own).
 function vgOpCurrent() {
@@ -56518,7 +56537,7 @@ function vgCoatParts(t, q) {
 function vgOpGeos(id) {
   if (vgOps.geos[id]) return vgOps.geos[id];
   const out = [];
-  for (const q of [1, 0.5, 0.25]) out.push(vgFinish(id === "skeleton" ? vgSkeletonGeo(q) : vgBodyGeo(q, dd[1], vgCoatParts)));
+  for (const q of [1, 0.5, 0.25]) out.push(vgFinish(id === "skeleton" ? vgSkeletonGeo(q) : id === "pumpkin" ? vgBodyGeo(q, dd[1], vgCoatParts) : vgBodyGeo(q, dd[1])));
   return vgOps.geos[id] = out;
 }
 
@@ -56527,10 +56546,78 @@ function vgOpMatColors(m, cols) {
   const U = m.userData.uniforms;
   for (const [k, c] of Object.entries(cols)) U.uMatA.value[+k]?.set(c[0], c[1], c[2], c[3] ?? U.uMatA.value[+k].w);
 }
+// Release 1.0: the pass operators and the developer one are the standard soldier in new colours, with light added
+// in the shader: Frostline's ice-blue trim and visor, Nightshade's violet trim and goggles, Ember's smouldering
+// cracks, and Spectre's circuit lines of gold and cyan light that run up the body.
+var vgOpTimeU = { value: 0 }, vgOpTimeOn = !1;
+function vgOpTimeStart() {
+  if (vgOpTimeOn || typeof requestAnimationFrame != "function") return;
+  vgOpTimeOn = !0;
+  const f = () => {
+    vgOpTimeU.value = performance.now() / 1e3, requestAnimationFrame(f);
+  };
+  requestAnimationFrame(f);
+}
+var VG_OP_STYLE = {
+  frostline: { dirt: 0.25, cols: { 0: [0.62, 0.65, 0.68, 0.86], 1: [0.5, 0.54, 0.58, 0.8], 2: [0.42, 0.46, 0.5, 0.85], 3: [0.78, 0.8, 0.83, 0.95], 5: [0.36, 0.39, 0.43, 0.8], 6: [0.3, 0.32, 0.35, 0.75], 10: [0.3, 0.6, 0.85, 0.5], 11: [0.72, 0.75, 0.78, 0.55], 14: [0.5, 0.55, 0.6, 0.4], 15: [0.55, 0.58, 0.62, 0.85] } },
+  nightshade: { dirt: 0.35, cols: { 0: [0.035, 0.032, 0.045, 0.86], 1: [0.05, 0.042, 0.068, 0.62], 2: [0.04, 0.032, 0.058, 0.8], 3: [0.03, 0.028, 0.038, 0.92], 5: [0.032, 0.03, 0.04, 0.8], 6: [0.02, 0.019, 0.026, 0.7], 10: [0.32, 0.12, 0.7, 0.45], 11: [0.045, 0.04, 0.058, 0.45], 14: [0.18, 0.1, 0.32, 0.4], 15: [0.05, 0.042, 0.066, 0.8] } },
+  ember: { dirt: 1.4, cols: { 0: [0.05, 0.035, 0.03, 0.92], 1: [0.13, 0.055, 0.032, 0.62], 2: [0.06, 0.035, 0.025, 0.85], 3: [0.04, 0.03, 0.026, 0.92], 5: [0.05, 0.03, 0.022, 0.85], 6: [0.03, 0.02, 0.016, 0.75], 10: [0.6, 0.2, 0.05, 0.5], 11: [0.08, 0.045, 0.035, 0.5], 14: [0.3, 0.15, 0.08, 0.4], 15: [0.1, 0.045, 0.03, 0.75] } },
+  spectre: { dirt: 0.05, cols: { 0: [0.012, 0.013, 0.017, 0.5], 1: [0.016, 0.017, 0.022, 0.22], 2: [0.35, 0.24, 0.07, 0.35], 3: [0.01, 0.011, 0.014, 0.85], 5: [0.012, 0.013, 0.016, 0.45], 6: [0.012, 0.012, 0.015, 0.4], 10: [0.9, 0.62, 0.15, 0.3], 11: [0.014, 0.015, 0.02, 0.18], 14: [0.9, 0.62, 0.15, 0.25], 15: [0.016, 0.017, 0.022, 0.25] } }
+};
+var VG_OP_GLOW = {
+  frostline: `if ( m == 10 || m == 12 ) e += vec3( 0.35, 0.75, 1.0 ) * ( m == 12 ? 2.2 : 0.55 );`,
+  nightshade: `if ( m == 10 ) e += vec3( 0.55, 0.2, 1.0 ) * ( 0.7 + 0.25 * sin( t * 2.0 ) );
+      if ( m == 2 || m == 14 ) e += vec3( 0.45, 0.18, 0.95 ) * ( 0.16 + 0.06 * sin( t * 2.0 + p.y * 4.0 ) );
+      if ( m == 12 || m == 13 ) e += vec3( 0.65, 0.35, 1.0 ) * 3.0;`,
+  ember: `if ( m == 0 || m == 1 || m == 2 || m == 11 || m == 15 ) {
+        float c = vgON( p * 34.0 ) * 0.7 + vgON( p * 83.0 + 3.1 ) * 0.3;
+        float crack = ( 1.0 - smoothstep( 0.0, 0.024, abs( c - 0.5 ) ) ) * smoothstep( 0.4, 0.66, vgON( p * 5.0 + 7.3 ) );
+        float heat = 0.65 + 0.35 * sin( t * 1.7 + p.y * 7.0 ) * sin( t * 2.9 + p.x * 11.0 );
+        e += vec3( 1.0, 0.36, 0.08 ) * crack * heat * 2.2;
+      }
+      if ( m == 10 || m == 12 ) e += vec3( 1.0, 0.55, 0.15 ) * 1.6;`,
+  spectre: `if ( m != 4 && m != 7 && m != 8 && m != 9 && m != 13 ) {
+        float a = atan( p.x, p.z );
+        float rings = 1.0 - smoothstep( 0.0, 0.03, abs( fract( p.y * 7.0 + 0.35 * sin( a * 3.0 ) ) - 0.5 ) );
+        float ribs = ( 1.0 - smoothstep( 0.0, 0.035, abs( fract( a * 1.909859 ) - 0.5 ) ) ) * step( 0.55, fract( p.y * 3.5 + 0.2 ) );
+        float pulse = pow( 0.5 + 0.5 * sin( p.y * 5.0 - t * 3.2 ), 8.0 );
+        vec3 col = mix( vec3( 0.15, 0.95, 1.0 ), vec3( 1.0, 0.72, 0.18 ), 0.5 + 0.5 * sin( t * 0.8 + p.y * 2.5 + a ) );
+        e += col * max( rings, ribs ) * ( 0.35 + 2.6 * pulse );
+      }
+      if ( m == 10 || m == 14 ) e += vec3( 1.0, 0.72, 0.2 ) * 0.9;
+      if ( m == 12 ) e += vec3( 0.3, 1.0, 1.0 ) * ( 2.6 + 0.6 * sin( t * 4.0 ) );`
+};
+function vgOpStyled(id) {
+  const S = VG_OP_STYLE[id], m = KY({ dirt: S.dirt });
+  vgOpMatColors(m, S.cols), m.name = `op_${id}`, vgOpTimeStart();
+  const prev = m.onBeforeCompile;
+  return m.onBeforeCompile = (c, r) => {
+    prev.call(m, c, r), c.uniforms.uOpTime = vgOpTimeU, c.vertexShader = c.vertexShader.replace("#include <common>", `#include <common>
+varying vec3 vOpP;`).replace("#include <uv_vertex>", `#include <uv_vertex>
+  vOpP = position;`), c.fragmentShader = c.fragmentShader.replace("#include <common>", `#include <common>
+varying vec3 vOpP;
+uniform float uOpTime;
+float vgOH( vec3 p ) { return fract( sin( dot( p, vec3( 127.1, 311.7, 74.7 ) ) ) * 43758.5453 ); }
+float vgON( vec3 p ) {
+  vec3 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
+  return mix( mix( mix( vgOH( i ), vgOH( i + vec3( 1, 0, 0 ) ), f.x ), mix( vgOH( i + vec3( 0, 1, 0 ) ), vgOH( i + vec3( 1, 1, 0 ) ), f.x ), f.y ),
+              mix( mix( vgOH( i + vec3( 0, 0, 1 ) ), vgOH( i + vec3( 1, 0, 1 ) ), f.x ), mix( vgOH( i + vec3( 0, 1, 1 ) ), vgOH( i + vec3( 1, 1, 1 ) ), f.x ), f.y ), f.z );
+}`).replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+    {
+      int m = int( vData.x * 255.0 + 0.5 );
+      vec3 p = vOpP, e = vec3( 0.0 );
+      float t = uOpTime;
+      ${VG_OP_GLOW[id]}
+      totalEmissiveRadiance += e;
+    }`);
+  }, m.customProgramCacheKey = () => `vg_op_${id}_v1`, m;
+}
 function vgOpMaterial(id) {
   if (vgOps.mats[id]) return vgOps.mats[id];
   let m;
-  if (id === "skeleton") {
+  if (VG_OP_STYLE[id]) {
+    m = vgOpStyled(id);
+  } else if (id === "skeleton") {
     m = KY({ dirt: 0.6 }), vgOpMatColors(m, { [ce.HELMET]: [0.62, 0.56, 0.44, 0.72], [ce.RUBBER]: [0.012, 0.01, 0.01, 0.9] }), m.name = "op_skeleton";
   } else {
     // Pumpkin Head: a dark coat torn at the hem, dark trousers with two small tears, zombie-green skin
@@ -56651,6 +56738,48 @@ function vgSkullEyes() {
   return g.name = "skull_eyes", g;
 }
 
+// Release 1.0: a glowing visor across the eyes (Spectre, Frostline) or night-vision goggles (Nightshade), on the
+// head bone
+// where the eyes are, in the head bone's space (from the standard soldier's eye vertices), so visors and goggles
+// sit on the face
+function vgOpEyes(body) {
+  if (vgOps.eyes) return vgOps.eyes;
+  try {
+    const geo = vgOpGeos("frostline")[0], P = geo.attributes.position, D = geo.attributes.aData, inv = body.skeleton.boneInverses[ZA.head], c = new b();
+    let n = 0;
+    for (let i = 0; i < P.count; i++) Math.round(D.getX(i) * 255) === ce.EYE && (c.x += P.getX(i), c.y += P.getY(i), c.z += P.getZ(i), n++);
+    if (n) return vgOps.eyes = c.multiplyScalar(1 / n).applyMatrix4(inv);
+  } catch {
+  }
+  return new b(0, 0.075, 0.09);
+}
+function vgOpVisor(id, body) {
+  const g = new yt(), E = vgOpEyes(body);
+  g.name = `op_visor_${id}`;
+  if (id === "nightshade") {
+    vgOps.nvMat || (vgOps.nvMat = new Vt({ color: 1052688, roughness: 0.45, metalness: 0.6 }), vgOps.nvGlow = new ha({ color: new ue(0.75, 0.4, 1).multiplyScalar(2.2) }), vgOps.nvGeo = new ta(0.017, 0.019, 0.05, 14), vgOps.nvLens = new Kn(0.0145, 12, 8));
+    for (const sx of [1, -1]) {
+      const tube = new Le(vgOps.nvGeo, vgOps.nvMat), lens = new Le(vgOps.nvLens, vgOps.nvGlow);
+      tube.rotation.x = Math.PI / 2, tube.position.set(E.x + sx * 0.032, E.y + 6e-3, E.z + 0.03), lens.scale.set(1, 1, 0.35), lens.position.set(E.x + sx * 0.032, E.y + 6e-3, E.z + 0.056), g.add(tube, lens);
+    }
+    const strap = new Le(vgOps.nvStrap || (vgOps.nvStrap = new wi(0.1, 0.014, 0.02)), vgOps.nvMat);
+    return strap.position.set(E.x, E.y + 0.028, E.z + 0.022), g.add(strap), g;
+  }
+  const col = id === "spectre" ? new ue(0.25, 1.4, 1.8) : new ue(0.75, 1.15, 1.45);
+  vgOps.visGeo || (vgOps.visGeo = new ta(0.118, 0.118, 0.032, 28, 1, !0, -1.15, 2.3)), vgOps.visMat ||= {};
+  const M = vgOps.visMat[id] || (vgOps.visMat[id] = new ha({ color: col, side: 2, transparent: id === "frostline", opacity: 0.85 }));
+  const v = new Le(vgOps.visGeo, M), cz = E.z + 0.022 - 0.118;
+  v.position.set(E.x, E.y + 3e-3, cz), g.add(v);
+  if (id === "spectre") {
+    // a thin gold rim above and below the visor
+    vgOps.rimGeo || (vgOps.rimGeo = new ta(0.121, 0.121, 4e-3, 28, 1, !0, -1.2, 2.4)), vgOps.rimMat || (vgOps.rimMat = new ha({ color: new ue(1, 0.7, 0.2).multiplyScalar(1.6), side: 2 }));
+    for (const dy of [0.019, -0.019]) {
+      const r = new Le(vgOps.rimGeo, vgOps.rimMat);
+      r.position.set(E.x, E.y + 3e-3 + dy, cz), g.add(r);
+    }
+  }
+  return g;
+}
 // ---------- put an operator on a soldier (netSoldier / vH body): other players, replays, the preview
 function vgOpApply(sol, id) {
   const body = sol?.body || sol;
@@ -56670,6 +56799,9 @@ function vgOpApply(sol, id) {
     } else if (id === "skeleton") {
       const e = vgSkullEyes();
       head.add(e), body.__opExtra = e;
+    } else if (id === "spectre" || id === "frostline" || id === "nightshade") {
+      const e = vgOpVisor(id, body);
+      head.add(e), body.__opExtra = e;
     }
   }
   const lod = body.lod;
@@ -56686,7 +56818,7 @@ function vgFPTex(kind) {
   const N = 256, cv = document.createElement("canvas");
   cv.width = cv.height = N;
   const g = cv.getContext("2d"), r = camoRng(kind === "bone" ? 77 : 41), img = g.createImageData(N, N), d = img.data;
-  const base = kind === "bone" ? [227, 217, 193] : [46, 36, 27];
+  const base = { bone: [227, 217, 193], frost: [196, 204, 212], night: [16, 14, 20], ember: [34, 22, 17], spectre: [10, 11, 14] }[kind] || [46, 36, 27];
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const i = (y * N + x) * 4;
     let v = (r() - 0.5) * (kind === "bone" ? 14 : 18);
@@ -56697,7 +56829,7 @@ function vgFPTex(kind) {
   g.putImageData(img, 0, 0);
   for (let k = 0; k < (kind === "bone" ? 14 : 18); k++) {
     const x = r() * N, y = r() * N, rad = 10 + r() * 34, gr = g.createRadialGradient(x, y, 0, x, y, rad);
-    const c = kind === "bone" ? "150,132,98" : r() < 0.5 ? "12,8,5" : "70,58,40";
+    const c = kind === "bone" ? "150,132,98" : kind === "frost" ? r() < 0.5 ? "150,160,172" : "236,240,244" : kind === "ember" && r() < 0.3 ? "150,55,20" : r() < 0.5 ? "12,8,5" : "70,58,40";
     gr.addColorStop(0, `rgba(${c},${kind === "bone" ? 0.28 : 0.45})`), gr.addColorStop(1, `rgba(${c},0)`), g.fillStyle = gr, g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
   }
   const t = new _u(cv);
@@ -56791,9 +56923,12 @@ function vgOpHands(force = !1) {
     const B = m?.userData?.vgBase;
     if (B) {
       if (sleeve) {
-        m.color.setHex(16777215), U.uCamo && (U.uCamo.value = op === "skeleton" ? vgFPTex("bone") : op === "pumpkin" ? vgFPTex("coat") : B.camo), op === "default" && m.color.setHex(B.color), m.sheen = op === "skeleton" ? 0.05 : B.sheen;
+        const tex = { skeleton: "bone", pumpkin: "coat", frostline: "frost", nightshade: "night", ember: "ember", spectre: "spectre" }[op];
+        m.color.setHex(16777215), U.uCamo && (U.uCamo.value = tex ? vgFPTex(tex) : B.camo), op === "default" && m.color.setHex(B.color), m.sheen = op === "skeleton" ? 0.05 : B.sheen;
       } else {
-        m.color.setHex(op === "skeleton" ? 14866624 : op === "pumpkin" ? 6195251 : B.color), U.uLeather?.value?.setHex?.(op === "skeleton" ? 13353893 : op === "pumpkin" ? 4285226 : B.leather), U.uWear && (U.uWear.value = op === "default" ? B.wear : 0), m.sheen = op === "skeleton" ? 0.1 : B.sheen;
+        // gloves (and their leather parts) per operator
+        const gc = { skeleton: [14866624, 13353893], pumpkin: [6195251, 4285226], frostline: [12370128, 9541793], nightshade: [1710623, 4859024], ember: [2759700, 6889502], spectre: [1053720, 9468962] }[op];
+        m.color.setHex(gc ? gc[0] : B.color), U.uLeather?.value?.setHex?.(gc ? gc[1] : B.leather), U.uWear && (U.uWear.value = op === "default" ? B.wear : 0), m.sheen = op === "skeleton" ? 0.1 : B.sheen;
       }
     }
     // the Skeleton's arms and hands are bones
@@ -56802,7 +56937,7 @@ function vgOpHands(force = !1) {
     alt && (o.geometry = alt);
     // tactical extras on this arm
     o.parent?.traverse((x) => {
-      x.isMesh && !x.isSkinnedMesh && x.layers.mask === o.layers.mask && (x.userData.vgVis ??= x.visible, x.visible = op === "default" ? x.userData.vgVis : !1);
+      x.isMesh && !x.isSkinnedMesh && x.layers.mask === o.layers.mask && (x.userData.vgVis ??= x.visible, x.visible = op === "skeleton" || op === "pumpkin" ? !1 : x.userData.vgVis);
     });
   });
 }
@@ -56813,7 +56948,7 @@ typeof window < "u" && setInterval(() => {
     console.error("[operators] first-person arms", err);
   }
 }, 500);
-typeof window < "u" && (window.__VG10__ = { ops: VG_OPS, current: () => vgOpCurrent(), set: (id) => vgOpSet(id), get deco() { return vgDeco; }, get blackout() { return vgBlackout; }, get lamps() { return vgLamps; }, halloween: () => vgHalloweenOn(), camo: (id, role = "primary") => pgSetCamo(role, id), screen: () => vgOpsScreen(), geos: (id) => id === "default" ? vgPreviewBase()?.geos : vgOpGeos(id), get state() { return vgOps; }, bones: () => ({ names: Wb, weapon: ZA.weapon, hand: ZA.handR ?? ZA.hand_r ?? null, ZA }) });
+typeof window < "u" && (window.__VG10__ = { ops: VG_OPS, current: () => vgOpCurrent(), set: (id) => vgOpSet(id), get deco() { return vgDeco; }, get blackout() { return vgBlackout; }, get lamps() { return vgLamps; }, halloween: () => vgHalloweenOn(), camo: (id, role = "primary") => pgSetCamo(role, id), screen: () => vgOpsScreen(), geos: (id) => id === "default" ? vgPreviewBase()?.geos : vgOpGeos(id), get state() { return vgOps; }, preview: (c) => vgOpPreview(c), bones: () => ({ names: Wb, weapon: ZA.weapon, hand: ZA.handR ?? ZA.hand_r ?? null, ZA }) });
 /* ------------------------------------------------------------------ Release 1.0: Operators screen */
 // Main menu -> Operators: pick who you play as. A turning 3D preview of each operator; DLC operators show what pack
 // they come in, with "Buy on Steam" (or "Equip" once you own it).
@@ -56854,6 +56989,10 @@ var vgOpsCss = `
 @media (max-width: 760px) { .vg-ops { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } .vg-ops .side { border-right: 0; } .vg-ops .info { flex-direction: column; align-items: stretch; } .vg-ops .act .note { text-align: left; } }
 `;
 var VG_OP_ICON = {
+  frostline: '<svg viewBox="0 0 32 32"><path fill="#e9eef2" d="M16 3.5c-5.6 0-9.5 3.8-9.5 8.8V15h19v-2.7c0-5-3.9-8.8-9.5-8.8z"/><path fill="#c8d3dc" d="M9.5 15h13v4c0 3.6-2.9 6.4-6.5 6.4S9.5 22.6 9.5 19z"/><path fill="#bfe6ff" d="M9 13.6h14v3.4H9z"/><path fill="#9fb3c4" d="M6 29c1.4-3.4 5.3-5 10-5s8.6 1.6 10 5z"/></svg>',
+  nightshade: '<svg viewBox="0 0 32 32"><path fill="#24212c" d="M16 3.5c-5.6 0-9.5 3.8-9.5 8.8V15h19v-2.7c0-5-3.9-8.8-9.5-8.8z"/><path fill="#1a1622" d="M9.5 15h13v4c0 3.6-2.9 6.4-6.5 6.4S9.5 22.6 9.5 19z"/><circle cx="12.4" cy="14.4" r="2.6" fill="#c4a7ff"/><circle cx="19.6" cy="14.4" r="2.6" fill="#c4a7ff"/><path fill="#3c3350" d="M6 29c1.4-3.4 5.3-5 10-5s8.6 1.6 10 5z"/><path fill="#8b5cf6" d="M13 26.4h6v1.2h-6z"/></svg>',
+  ember: '<svg viewBox="0 0 32 32"><path fill="#2a1d17" d="M16 3.5c-5.6 0-9.5 3.8-9.5 8.8V15h19v-2.7c0-5-3.9-8.8-9.5-8.8z"/><path fill="#3a2318" d="M9.5 15h13v4c0 3.6-2.9 6.4-6.5 6.4S9.5 22.6 9.5 19z"/><path fill="none" stroke="#ff6a2a" stroke-width="1.3" d="M11 8l3 3-1 3M21 7l-2 4 2 3M12 19l3 2M20 19l-3 2"/><path fill="#ffc46b" d="M10.5 14.2h11v1.6h-11z"/><path fill="#6b2f1b" d="M6 29c1.4-3.4 5.3-5 10-5s8.6 1.6 10 5z"/></svg>',
+  spectre: '<svg viewBox="0 0 32 32"><defs><linearGradient id="spx" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4ef0ff"/><stop offset="1" stop-color="#ffc24e"/></linearGradient></defs><path fill="#0b0d12" d="M16 3.5c-5.6 0-9.5 3.8-9.5 8.8V15h19v-2.7c0-5-3.9-8.8-9.5-8.8z"/><path fill="#11141b" d="M9.5 15h13v4c0 3.6-2.9 6.4-6.5 6.4S9.5 22.6 9.5 19z"/><path fill="url(#spx)" d="M8.6 13.2h14.8l-1.2 2.6H9.8z"/><path fill="none" stroke="url(#spx)" stroke-width=".9" d="M16 4.5v6M11 6.5l2 4M21 6.5l-2 4M12 21.5l4 2 4-2"/><path fill="#0b0d12" d="M6 29c1.4-3.4 5.3-5 10-5s8.6 1.6 10 5z"/><path fill="none" stroke="url(#spx)" stroke-width=".9" d="M9 28.4l3-2.6h8l3 2.6"/></svg>',
   default: '<svg viewBox="0 0 32 32"><path fill="#9aa48f" d="M16 4c-5 0-8.5 3.2-8.5 7.6V14h17v-2.4C24.5 7.2 21 4 16 4z"/><path fill="#c7a98a" d="M10 14h12v4.5c0 3.4-2.7 6-6 6s-6-2.6-6-6z"/><path fill="#55603f" d="M6 28c1.5-3.5 5.2-5 10-5s8.5 1.5 10 5z"/></svg>',
   skeleton: '<svg viewBox="0 0 32 32"><path fill="#e8dcc0" d="M16 3c-6 0-10 4-10 9.5 0 3 1.3 5.4 3.3 6.8V23h13.4v-3.7c2-1.4 3.3-3.8 3.3-6.8C26 7 22 3 16 3z"/><circle cx="11.6" cy="12.6" r="2.6" fill="#140c08"/><circle cx="20.4" cy="12.6" r="2.6" fill="#140c08"/><circle cx="11.6" cy="12.6" r=".9" fill="#ff7a1a"/><circle cx="20.4" cy="12.6" r=".9" fill="#ff7a1a"/><path fill="#140c08" d="M16 15.4l-1.6 2.7h3.2zM11 21h10v1.2H11z"/><path fill="#e8dcc0" d="M11 23h10v3.5H11z"/><path stroke="#140c08" stroke-width=".8" d="M13 23v3.5M15 23v3.5M17 23v3.5M19 23v3.5"/></svg>',
   pumpkin: '<svg viewBox="0 0 32 32"><path fill="#4b5a1e" d="M15 3.5l2.4.6-.8 3.5h-1.8z"/><ellipse cx="16" cy="17.5" rx="12.5" ry="10" fill="#e8790f"/><path fill="none" stroke="#a24a08" stroke-width="1.1" d="M16 7.7c-3 3-3 16.6 0 19.6M16 7.7c3 3 3 16.6 0 19.6M10 9.4c-2.6 3.5-2.6 13 0 16.4M22 9.4c2.6 3.5 2.6 13 0 16.4"/><path fill="#ffd25a" d="M9 14l4 .6-2.3 3.4zM23 14l-4 .6 2.3 3.4zM15 18h2l-1 2zM8.5 21l2.4 2 2-1.6 2 1.7 2.2-1.7 2 1.6 2.4-2-1.6 4.2-5 1.4-5-1.4z"/></svg>'
@@ -56871,7 +57010,9 @@ function vgOpsScreen() {
   const root = document.createElement("div");
   root.className = "vg-ops", root.setAttribute("role", "dialog"), root.setAttribute("aria-label", "Operators"), root.innerHTML = '<div class="side"><div class="kk">Vangaurd</div><h2>Operators</h2><div class="list" role="listbox"></div><div class="foot"><span><kbd>↑</kbd><kbd>↓</kbd>Choose</span><span><kbd>Enter</kbd>Equip</span><span><kbd>Esc</kbd>Back</span></div></div><div class="stage"><canvas aria-hidden="true"></canvas><button type="button" class="back">Back</button><div class="info"><div class="tx"><b></b><div class="tg"></div><p></p><ul hidden></ul></div><div class="act"><button type="button" data-go></button><button type="button" class="ghost" data-pack hidden></button><div class="note"></div></div></div></div>', document.body.appendChild(root);
   const $ = (q) => root.querySelector(q), list = $(".list"), go = $("[data-go]"), note = $(".note");
-  let sel = Math.max(0, VG_OPS.findIndex((o) => o.id === vgOpCurrent())), prev = null;
+  // the developer operator is only listed for developers
+  const OPS = VG_OPS.filter((o) => !o.dev || vgAuth.dev);
+  let sel = Math.max(0, OPS.findIndex((o) => o.id === vgOpCurrent())), prev = null;
   try {
     prev = vgOpPreview($("canvas"));
   } catch (err) {
@@ -56879,23 +57020,23 @@ function vgOpsScreen() {
   }
   const render = () => {
     const cur = vgOpCurrent();
-    list.innerHTML = VG_OPS.map((o, i) => {
+    list.innerHTML = OPS.map((o, i) => {
       const own = vgOpOwned(o.id), st = o.id === cur ? '<span class="st on">Equipped</span>' : own ? '<span class="st">Owned</span>' : '<span class="st lock">Locked</span>';
-      return `<button type="button" class="op${i === sel ? " sel" : ""}" role="option" aria-selected="${i === sel}" data-i="${i}"><span class="ic">${VG_OP_ICON[o.id] || ""}</span><span><b>${vgEsc(o.name)}</b><small class="${o.dlc ? "dlc" : ""}">${vgEsc(o.dlc ? `${VG_DLC[o.dlc]?.name || "DLC"} · DLC` : o.tag)}</small></span>${st}</button>`;
+      return `<button type="button" class="op${i === sel ? " sel" : ""}" role="option" aria-selected="${i === sel}" data-i="${i}"><span class="ic">${VG_OP_ICON[o.id] || ""}</span><span><b>${vgEsc(o.name)}</b><small class="${o.dlc ? "dlc" : o.pass ? "pass" : o.dev ? "dev" : ""}">${vgEsc(o.dlc ? `${VG_DLC[o.dlc]?.name || "DLC"} · DLC` : o.tag)}</small></span>${st}</button>`;
     }).join(""), list.querySelectorAll("[data-i]").forEach((b2) => b2.addEventListener("click", () => {
       sel = +b2.dataset.i, render();
     }));
-    const o = VG_OPS[sel], own = vgOpOwned(o.id), pack = o.dlc ? VG_DLC[o.dlc] : null;
+    const o = OPS[sel], own = vgOpOwned(o.id), pack = o.dlc ? VG_DLC[o.dlc] : null;
     $(".tx b").textContent = o.name, $(".tx .tg").textContent = pack ? `${pack.name} · DLC` : o.tag, $(".tx p").textContent = o.desc;
     const ul = $(".tx ul");
     ul.hidden = !pack || own, ul.innerHTML = pack ? `<li>${pack.items.map(vgEsc).join("</li><li>")}</li>` : "";
-    go.classList.toggle("buy", !own), go.disabled = own && o.id === cur, go.textContent = !own ? `Buy on Steam · ${pack?.price || ""}` : o.id === cur ? "Equipped" : "Equip";
-    note.textContent = !own ? `Part of the ${pack?.name || "DLC"}: ${pack?.items?.length || 0} items. It unlocks here as soon as Steam says you own it.` : o.id === cur ? "Other players see you as this operator." : "";
+    go.classList.toggle("buy", !own), go.disabled = own && o.id === cur, go.textContent = !own ? o.pass ? "Open the Season Pass" : `Buy on Steam · ${pack?.price || ""}` : o.id === cur ? "Equipped" : "Equip";
+    note.textContent = !own ? o.pass ? `A Season ${VG_PASS.season} reward. Unlock the Season Pass and keep levelling up to get it.` : `Part of the ${pack?.name || "DLC"}: ${pack?.items?.length || 0} items. It unlocks here as soon as Steam says you own it.` : o.dev ? "Only you see this operator. Everyone else sees you as the Standard operator." : o.id === cur ? "Other players see you as this operator." : "";
     prev?.show(o.id);
   };
   const act = () => {
-    const o = VG_OPS[sel];
-    vgOpOwned(o.id) ? vgOpSet(o.id) && (vgToast(`Operator: ${o.name}`), render()) : vgDlcBuy(o.dlc);
+    const o = OPS[sel];
+    vgOpOwned(o.id) ? vgOpSet(o.id) && (vgToast(`Operator: ${o.name}`), render()) : o.pass ? (close(), vgPassScreen()) : vgDlcBuy(o.dlc);
   }, close = () => {
     root.remove(), prev?.dispose(), window.removeEventListener("keydown", key, !0), window.removeEventListener("keyup", stop, !0);
     const i = vgDlc.listeners.indexOf(render);
@@ -56903,21 +57044,21 @@ function vgOpsScreen() {
   }, stop = (ev) => ev.stopImmediatePropagation(), key = (ev) => {
     ev.stopImmediatePropagation();
     const k = ev.code;
-    k === "Escape" || k === "Backspace" ? (ev.preventDefault(), close()) : k === "ArrowDown" || k === "KeyS" ? (ev.preventDefault(), sel = (sel + 1) % VG_OPS.length, render(), list.querySelector(".sel")?.focus()) : k === "ArrowUp" || k === "KeyW" ? (ev.preventDefault(), sel = (sel + VG_OPS.length - 1) % VG_OPS.length, render(), list.querySelector(".sel")?.focus()) : (k === "Enter" || k === "NumpadEnter" || k === "Space") && (ev.preventDefault(), act());
+    k === "Escape" || k === "Backspace" ? (ev.preventDefault(), close()) : k === "ArrowDown" || k === "KeyS" ? (ev.preventDefault(), sel = (sel + 1) % OPS.length, render(), list.querySelector(".sel")?.focus()) : k === "ArrowUp" || k === "KeyW" ? (ev.preventDefault(), sel = (sel + OPS.length - 1) % OPS.length, render(), list.querySelector(".sel")?.focus()) : (k === "Enter" || k === "NumpadEnter" || k === "Space") && (ev.preventDefault(), act());
   };
   go.addEventListener("click", act), $(".back").addEventListener("click", close), window.addEventListener("keydown", key, !0), window.addEventListener("keyup", stop, !0), root.addEventListener("mousedown", (ev) => ev.stopPropagation()), vgDlc.listeners.push(render), render(), setTimeout(() => list.querySelector(".sel")?.focus(), 30), vgDlcCheckSteam();
   return { close, root };
 }
 /* ------------------------------------------------------------------ Release 1.0: Season Pass */
-// A free track of 100 levels that changes every season: three new operators, camos, charms, stickers and XP. The
-// page is here, but the pass is not open yet (VG_PASS.open): nothing can be earned or claimed. When it opens, pass
-// levels come from playing and every reward is only yours once you press its Claim button.
+// A free pass that changes every season: three new operators, camos, charms, stickers, XP and double XP. It follows
+// your player level: once you unlock it, every reward up to your level is yours straight away, and the rest arrive
+// as you level up (no Claim buttons, and the pass has no levels of its own).
 var VG_PASS_OPS = [
-  { id: "frostline", name: "Frostline", tier: 20, desc: "Winter whites, a fur-lined hood and a frosted visor.", pal: ["#e9eef2", "#9fb3c4", "#4d6d86", "#bfe6ff"] },
+  { id: "frostline", name: "Frostline", tier: 20, desc: "Winter whites, ice-blue trim and a frosted visor.", pal: ["#e9eef2", "#9fb3c4", "#4d6d86", "#bfe6ff"] },
   { id: "nightshade", name: "Nightshade", tier: 55, desc: "Black tactical kit with violet trim and night-vision goggles.", pal: ["#24212c", "#3c3350", "#8b5cf6", "#c4a7ff"] },
-  { id: "ember", name: "Ember", tier: 100, desc: "Scorched armour with glowing seams. The reward for reaching level 100.", pal: ["#2a1d17", "#6b2f1b", "#ff6a2a", "#ffc46b"] }
+  { id: "ember", name: "Ember", tier: 100, desc: "Scorched armour with glowing seams. The last reward of the season.", pal: ["#2a1d17", "#6b2f1b", "#ff6a2a", "#ffc46b"] }
 ];
-var VG_PASS = { season: 1, name: "Blackout", open: !1, levels: 100, perPage: 10, tiers: null };
+var VG_PASS = { season: 1, name: "Blackout", open: !0, levels: 100, perPage: 10, tiers: null, busy: !1 };
 function vgPassTiers() {
   if (VG_PASS.tiers) return VG_PASS.tiers;
   const T = [], camos = camoDefs.filter((c) => c.id !== "none" && !c.dlc && !c.ch && c.lv > 0).sort((a, b2) => a.lv - b2.lv), charms = VG_CHARMS.filter((c) => c.id !== "none"), stickers = VG_STICKERS.filter((c) => c.id !== "none");
@@ -56930,21 +57071,70 @@ function vgPassTiers() {
     else if (t % 4 === 2 && si < stickers.length) r = { type: "sticker", id: stickers[si].id, name: stickers[si++].name };
     else if (t % 4 === 3 && hi < charms.length) r = { type: "charm", id: charms[hi].id, name: charms[hi++].name };
     else if (t % 10 === 5) r = { type: "boost", id: "2xp", name: "Double XP · 30 min" };
-    else r = { type: "xp", id: "xp", name: `${(1500 + t * 50).toLocaleString()} XP` };
+    else r = { type: "xp", id: "xp", amount: 1500 + t * 50, name: `${(1500 + t * 50).toLocaleString()} XP` };
     T.push({ tier: t, ...r });
   }
   return VG_PASS.tiers = T;
 }
-// your pass progress (kept with the rest of your progression, so it syncs to your account)
+// your pass (kept with the rest of your progression, so it syncs to your account): unlocked or not, and the rewards
+// it has given you
 function vgPassState() {
-  const P = typeof Za == "object" && Za ? Za.pass ||= { season: VG_PASS.season, level: 0, claimed: [] } : { level: 0, claimed: [] };
-  return P.season !== VG_PASS.season && (P.season = VG_PASS.season, P.level = 0, P.claimed = []), P;
+  const P = typeof Za == "object" && Za ? Za.pass ||= { season: VG_PASS.season, unlocked: !1, got: [] } : { unlocked: !1, got: [] };
+  return P.season !== VG_PASS.season && (P.season = VG_PASS.season, P.unlocked = !1, P.got = []), Array.isArray(P.got) || (P.got = []), delete P.level, delete P.claimed, P;
 }
-// the only way a reward becomes yours: its Claim button, once the pass is open and you have reached that level
-function vgPassClaim(tier) {
-  const P = vgPassState(), t = vgPassTiers()[tier - 1];
-  if (!VG_PASS.open || !t || tier > (P.level | 0) || P.claimed.includes(tier)) return !1;
-  return P.claimed.push(tier), typeof om == "function" && om(), !0;
+function vgPassHas(type, id) {
+  const P = vgPassState();
+  return !!P.unlocked && P.got.some((n) => {
+    const t = vgPassTiers()[n - 1];
+    return t && t.type === type && t.id === id;
+  });
+}
+// give every reward up to your player level that you don't have yet (unlocking the pass, and after each level up)
+function vgPassSync(notify = !1) {
+  const P = vgPassState();
+  if (!VG_PASS.open || !P.unlocked || VG_PASS.busy) return [];
+  VG_PASS.busy = !0;
+  const out = [];
+  try {
+    for (let guard = 0; guard < 200; guard++) {
+      const lvl = typeof pgLevel == "function" ? pgLevel().level : 1, add = vgPassTiers().filter((t) => t.tier <= lvl && !P.got.includes(t.tier));
+      if (!add.length) break;
+      let xp = 0;
+      for (const t of add) {
+        P.got.push(t.tier), out.push(t);
+        t.type === "xp" ? xp += t.amount : t.type === "boost" && (Za.boostUntil = Math.max(Date.now(), Za.boostUntil || 0) + 30 * 60e3);
+      }
+      typeof om == "function" && om();
+      // pass XP can level you up again, which gives the next rewards (the loop picks them up)
+      xp > 0 && pgAddXp(xp, "Season Pass", !1);
+    }
+  } finally {
+    VG_PASS.busy = !1;
+  }
+  if (notify && out.length) {
+    const names = out.filter((t) => t.type !== "xp").map((t) => t.name), xp = out.reduce((n, t) => n + (t.type === "xp" ? t.amount : 0), 0);
+    xp && names.push(`${xp.toLocaleString()} XP`);
+    try {
+      vgToast(`Season Pass · ${out.length === 1 ? "new reward" : `${out.length} new rewards`}: ${names.slice(0, 4).join(", ")}${names.length > 4 ? ` and ${names.length - 4} more` : ""}`);
+    } catch {
+    }
+    try {
+      vgOpHands(!0);
+    } catch {
+    }
+  }
+  return out;
+}
+function vgPassUnlock() {
+  const P = vgPassState();
+  if (!VG_PASS.open || P.unlocked) return [];
+  P.unlocked = !0, P.at = Date.now(), typeof om == "function" && om();
+  return vgPassSync(!0);
+}
+// double XP from the pass, as minutes left (0 when none is running)
+function vgBoostLeft() {
+  const u = typeof Za == "object" && Za ? Za.boostUntil || 0 : 0;
+  return Math.max(0, Math.ceil((u - Date.now()) / 60e3));
 }
 function vgPassOpSvg(o, big = !1) {
   const [a, b2, c, d] = o.pal;
@@ -56990,6 +57180,19 @@ var vgPassCss = `
 .vg-pass .pager button:disabled { opacity: .35; cursor: default; }
 .vg-pass .pager .rng { margin: 0 8px; font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: #a9b0a8; }
 .vg-pass button:focus-visible { outline: 2px solid #f2c14e; outline-offset: 2px; }
+.vg-pass .lvl .unlock { display: block; width: 100%; padding: 14px 18px; margin-bottom: 6px; background: #f2c14e; border: 0; color: #121212; font: inherit; font-size: 14px; font-weight: 900; letter-spacing: .22em; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 28px rgba(242,193,78,.25); }
+.vg-pass .lvl .unlock:hover { background: #ffd36a; }
+.vg-pass .soon.on { background: rgba(111,208,140,.08); border-color: rgba(111,208,140,.3); border-left-color: #6fd08c; }
+.vg-pass .soon.on svg { color: #6fd08c; }
+.vg-pass .tier .st { margin-top: 8px; padding: 7px 8px; display: flex; align-items: center; justify-content: center; gap: 6px; background: rgba(255,255,255,.05); border: 1px solid rgba(236,240,234,.14); color: #8d948c; font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+.vg-pass .tier .st svg { width: 12px; height: 12px; }
+.vg-pass .tier.got { border-color: rgba(111,208,140,.45); }
+.vg-pass .tier.got .st { background: rgba(111,208,140,.14); border-color: rgba(111,208,140,.45); color: #8fe0a6; }
+.vg-pass .tier:not(.got) .art { filter: saturate(.55) brightness(.8); }
+.vg-pass .opc em { display: flex; align-items: center; gap: 5px; margin-top: 4px; font-style: normal; font-size: 10.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #8d948c; }
+.vg-pass .opc em svg { width: 11px; height: 11px; }
+.vg-pass .opc.got em { color: #8fe0a6; }
+.vg-pass .ops { display: flex; flex-direction: column; gap: 10px; }
 @media (max-width: 900px) { .vg-pass .body { grid-template-columns: 1fr; } .vg-pass .side { display: none; } .vg-pass .tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; overflow-y: auto; } }
 `;
 function vgPassScreen() {
@@ -57002,41 +57205,67 @@ function vgPassScreen() {
     document.pointerLockElement && document.exitPointerLock();
   } catch {
   }
-  const T = vgPassTiers(), P = vgPassState(), per = VG_PASS.perPage, pages = Math.ceil(T.length / per), lock = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 10V7a5 5 0 0 1 10 0v3h1.5A1.5 1.5 0 0 1 20 11.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5v-9A1.5 1.5 0 0 1 5.5 10zm2 0h6V7a3 3 0 0 0-6 0z"/></svg>';
-  let page = Math.min(pages - 1, Math.floor(Math.max(0, (P.level | 0) - 1) / per));
+  vgPassSync(!0);
+  const T = vgPassTiers(), per = VG_PASS.perPage, pages = Math.ceil(T.length / per), lock = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 10V7a5 5 0 0 1 10 0v3h1.5A1.5 1.5 0 0 1 20 11.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5v-9A1.5 1.5 0 0 1 5.5 10zm2 0h6V7a3 3 0 0 0-6 0z"/></svg>', tick = '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  // open on the page with your next reward
+  const firstOpen = () => {
+    const S = vgPassState(), t = T.find((x) => !S.unlocked || !S.got.includes(x.tier));
+    return t ? Math.floor((t.tier - 1) / per) : pages - 1;
+  };
+  let page = vgPassState().unlocked ? firstOpen() : 0;
   const root = document.createElement("div");
   root.className = "vg-pass", root.setAttribute("role", "dialog"), root.setAttribute("aria-label", "Season Pass");
-  root.innerHTML = `<div class="top"><div><div class="kk">Season ${VG_PASS.season} · ${vgEsc(VG_PASS.name)} · Free track</div><h2>Season Pass</h2></div><div class="lvl"><b>Pass level ${P.level | 0} / ${VG_PASS.levels}</b><div class="bar"><i style="width:${((P.level | 0) / VG_PASS.levels * 100).toFixed(1)}%"></i></div><small>${VG_PASS.open ? "Play matches to earn pass levels." : "Pass levels can't be earned yet."}</small></div></div><div class="soon">${lock}<span>${VG_PASS.open ? "Reach a level and press its <b>Claim</b> button to unlock the reward." : "<b>Coming soon.</b> The Season Pass isn't open yet, so nothing can be unlocked. When it opens you earn pass levels by playing, and each reward is yours once you press its <b>Claim</b> button."}</span></div><div class="body"><div class="tiers"></div><div class="side"><h3>Season ${VG_PASS.season} operators</h3>${VG_PASS_OPS.map((o) => `<div class="opc">${vgPassOpSvg(o)}<span><b>${vgEsc(o.name)}</b><small>Level ${o.tier} · ${vgEsc(o.desc)}</small></span></div>`).join("")}</div></div><div class="foot"><div class="pager"></div><button type="button" class="back">Back · Esc</button></div>`;
+  root.innerHTML = `<div class="top"><div><div class="kk">Season ${VG_PASS.season} · ${vgEsc(VG_PASS.name)} · Free</div><h2>Season Pass</h2></div><div class="lvl"></div></div><div class="soon"></div><div class="body"><div class="tiers"></div><div class="side"><h3>Season ${VG_PASS.season} operators</h3><div class="ops"></div></div></div><div class="foot"><div class="pager"></div><button type="button" class="back">Back · Esc</button></div>`;
   const $ = (q2) => root.querySelector(q2), grid = $(".tiers"), pager = $(".pager");
   const art = (t) => t.type === "op" ? vgPassOpSvg(VG_PASS_OPS.find((o) => o.id === t.id)) : t.type === "xp" ? `<span class="xp">+XP</span>` : t.type === "boost" ? `<span class="xp">2× XP</span>` : "";
   const style = (t) => t.type === "camo" ? ` style="background-image:url(${camoSwatch(t.id)})"` : t.type === "charm" || t.type === "sticker" ? ` style="background-image:url(${vgCosIcon(t.type, t.id)})"` : "";
   const kind = { op: "Operator", camo: "Weapon camo", charm: "Gun charm", sticker: "Gun sticker", xp: "Player XP", boost: "XP boost" };
   const render = () => {
-    const S = vgPassState(), list = T.slice(page * per, page * per + per);
+    const S = vgPassState(), list = T.slice(page * per, page * per + per), n = S.unlocked ? S.got.length : 0, next = S.unlocked ? T.find((x) => !S.got.includes(x.tier)) : null, boost = vgBoostLeft();
+    $(".lvl").innerHTML = S.unlocked ? `<b>${n} of ${T.length} rewards unlocked</b><div class="bar"><i style="width:${(n / T.length * 100).toFixed(1)}%"></i></div><small>${next ? `Next: ${vgEsc(next.name)}, at your next level up.` : "Every reward is yours."}${boost ? ` Double XP: ${boost} min left.` : ""}</small>` : `<button type="button" class="unlock" data-unlock>Unlock Season Pass</button><small>Free. Everything up to your current level unlocks straight away.</small>`;
+    $(".soon").innerHTML = S.unlocked ? `${tick}<span><b>The pass follows your level.</b> Every level up unlocks the next reward on its own, so keep playing.</span>` : `${lock}<span><b>Unlock the pass to start levelling it up.</b> It follows your player level: the rewards up to your level are yours right away, and the rest unlock as you level up.</span>`;
+    $(".soon").classList.toggle("on", !!S.unlocked);
+    $(".ops").innerHTML = VG_PASS_OPS.map((o) => `<div class="opc${vgPassHas("op", o.id) ? " got" : ""}">${vgPassOpSvg(o)}<span><b>${vgEsc(o.name)}</b><small>${vgEsc(o.desc)}</small><em>${vgPassHas("op", o.id) ? `${tick}Unlocked · Operators` : `${lock}Locked`}</em></span></div>`).join("");
     grid.innerHTML = list.map((t) => {
-      const got = S.claimed.includes(t.tier), ready = VG_PASS.open && t.tier <= (S.level | 0) && !got;
-      return `<div class="tier${t.type === "op" ? " op" : ""}"><div class="n"><span>LEVEL ${t.tier}</span>${t.type === "op" ? "<em>OPERATOR</em>" : ""}</div><div class="art${t.type === "charm" || t.type === "sticker" ? " icon" : ""}"${style(t)}>${art(t)}</div><b title="${vgEsc(t.name)}">${vgEsc(t.name)}</b><small>${kind[t.type]}</small><button type="button" class="claim${ready ? " ready" : ""}" data-claim="${t.tier}" ${ready ? "" : "disabled"}>${got ? "Claimed" : ready ? "Claim" : `${lock}Claim`}</button></div>`;
+      const got = S.unlocked && S.got.includes(t.tier);
+      return `<div class="tier${t.type === "op" ? " op" : ""}${got ? " got" : ""}">${t.type === "op" ? '<div class="n"><em>OPERATOR</em></div>' : ""}<div class="art${t.type === "charm" || t.type === "sticker" ? " icon" : ""}"${style(t)}>${art(t)}</div><b title="${vgEsc(t.name)}">${vgEsc(t.name)}</b><small>${kind[t.type]}</small><div class="st">${got ? `${tick}Unlocked` : `${lock}Locked`}</div></div>`;
     }).join("");
-    pager.innerHTML = `<button type="button" data-pg="prev" ${page ? "" : "disabled"} aria-label="Previous levels">‹</button>${Array.from({ length: pages }, (_, i) => `<button type="button" data-pg="${i}" class="${i === page ? "on" : ""}">${i + 1}</button>`).join("")}<button type="button" data-pg="next" ${page < pages - 1 ? "" : "disabled"} aria-label="Next levels">›</button><span class="rng">Levels ${page * per + 1}–${Math.min(T.length, page * per + per)}</span>`;
+    pager.innerHTML = `<button type="button" data-pg="prev" ${page ? "" : "disabled"} aria-label="Previous page">‹</button>${Array.from({ length: pages }, (_, i) => `<button type="button" data-pg="${i}" class="${i === page ? "on" : ""}">${i + 1}</button>`).join("")}<button type="button" data-pg="next" ${page < pages - 1 ? "" : "disabled"} aria-label="Next page">›</button>`;
     pager.querySelectorAll("[data-pg]").forEach((b2) => b2.addEventListener("click", () => go(b2.dataset.pg === "prev" ? page - 1 : b2.dataset.pg === "next" ? page + 1 : +b2.dataset.pg)));
-    grid.querySelectorAll("[data-claim]").forEach((b2) => b2.addEventListener("click", () => {
-      vgPassClaim(+b2.dataset.claim) && (vgToast(`Claimed: ${T[+b2.dataset.claim - 1].name}`), render());
-    }));
+    $("[data-unlock]")?.addEventListener("click", () => {
+      const got = vgPassUnlock();
+      got.length || vgToast("Season Pass unlocked. Your first reward comes with your next level up."), page = firstOpen(), render(), pager.querySelector(".on")?.focus();
+    });
   };
   const go = (n) => {
     n = Math.max(0, Math.min(pages - 1, n)), n !== page && (page = n, render(), pager.querySelector(".on")?.focus());
   };
   const close = () => {
-    root.remove(), window.removeEventListener("keydown", key, !0), window.removeEventListener("keyup", stop, !0);
+    root.remove(), window.removeEventListener("keydown", key, !0), window.removeEventListener("keyup", stop, !0), clearInterval(live);
   }, stop = (ev) => ev.stopImmediatePropagation(), key = (ev) => {
     ev.stopImmediatePropagation();
     const k = ev.code;
-    k === "Escape" || k === "Backspace" ? (ev.preventDefault(), close()) : k === "ArrowRight" || k === "KeyE" || k === "PageDown" ? (ev.preventDefault(), go(page + 1)) : k === "ArrowLeft" || k === "KeyQ" || k === "PageUp" ? (ev.preventDefault(), go(page - 1)) : k === "Home" ? (ev.preventDefault(), go(0)) : k === "End" ? (ev.preventDefault(), go(pages - 1)) : k === "Enter" && root.contains(document.activeElement) && document.activeElement.tagName === "BUTTON" && (ev.preventDefault(), document.activeElement.click());
+    k === "Escape" || k === "Backspace" ? (ev.preventDefault(), close()) : k === "ArrowRight" || k === "KeyE" || k === "PageDown" ? (ev.preventDefault(), go(page + 1)) : k === "ArrowLeft" || k === "KeyQ" || k === "PageUp" ? (ev.preventDefault(), go(page - 1)) : k === "Home" ? (ev.preventDefault(), go(0)) : k === "End" ? (ev.preventDefault(), go(pages - 1)) : (k === "Enter" || k === "Space") && document.activeElement?.closest?.(".vg-pass") && (ev.preventDefault(), document.activeElement.click());
   };
-  $(".back").addEventListener("click", close), window.addEventListener("keydown", key, !0), window.addEventListener("keyup", stop, !0), root.addEventListener("mousedown", (ev) => ev.stopPropagation()), document.body.appendChild(root), render(), setTimeout(() => pager.querySelector(".on")?.focus(), 30);
+  // rewards that arrive while the page is open (a level up from the account sync, say)
+  let seen = vgPassState().got.length;
+  const live = setInterval(() => {
+    if (!root.isConnected) return clearInterval(live);
+    const n = vgPassState().got.length;
+    n !== seen && (seen = n, render());
+  }, 1e3);
+  $(".back").addEventListener("click", close), window.addEventListener("keydown", key, !0), window.addEventListener("keyup", stop, !0), root.addEventListener("mousedown", (ev) => ev.stopPropagation()), document.body.appendChild(root), render(), setTimeout(() => ($("[data-unlock]") || pager.querySelector(".on"))?.focus(), 30);
   return { close, root, go: (n) => go(n), page: () => page };
 }
-typeof window < "u" && (window.__VGPASS__ = { pass: VG_PASS, tiers: () => vgPassTiers(), state: () => vgPassState(), claim: (t) => vgPassClaim(t), open: () => vgPassScreen() });
+// catch up on rewards whenever your level got ahead of the pass some other way (progress synced from your account)
+typeof window < "u" && setInterval(() => {
+  try {
+    const P = typeof Za == "object" && Za ? Za.pass : null;
+    P?.unlocked && P.season === VG_PASS.season && (P.got?.length || 0) < Math.min(VG_PASS.levels, pgLevel().level) && vgPassSync(!0);
+  } catch {
+  }
+}, 5e3);
+typeof window < "u" && (window.__VGPASS__ = { pass: VG_PASS, tiers: () => vgPassTiers(), state: () => vgPassState(), unlock: () => vgPassUnlock(), sync: () => vgPassSync(), has: (t, id) => vgPassHas(t, id), boost: () => vgBoostLeft(), opOwned: (id) => vgOpOwned(id), open: () => vgPassScreen() });
 // The turning preview: its own small renderer with the operator in its rest pose.
 function vgOpPreview(canvas) {
   const R = new dM({ canvas, antialias: !0, alpha: !0, powerPreference: "high-performance" });
@@ -57503,7 +57732,7 @@ function vgBlackoutTick() {
     for (const p of free) {
       const s = pick.shift();
       if (!s) break;
-      p.src = s, p.L.position.set(s.x, s.y - (s.k === 2 ? 0.25 : 0), s.z), p.L.color.setHex(s.k === 2 ? 16756848 : s.k ? 7208778 : 16747056), p.L.distance = s.k === 2 ? 17 : s.k ? 8.5 : 8.5 + 1.5 * Math.min(1.6, s.s);
+      p.src = s, p.L.position.set(s.x, s.y - (s.k === 2 ? 0.25 : 0), s.z), p.L.color.setHex(s.k === 2 ? 16756848 : s.k ? 7208778 : 16747056), p.L.distance = s.k === 2 ? 22 : s.k ? 8.5 : 8.5 + 1.5 * Math.min(1.6, s.s);
     }
   }
   for (const p of P.pool) {
@@ -57514,7 +57743,7 @@ function vgBlackoutTick() {
     }
     // a candle's flicker for the pumpkins, a slow bubbling pulse for the cauldrons, a steady (dim) streetlight
     if (s.k === 2) {
-      p.L.intensity = 10 * (0.97 + 0.03 * Math.sin(t * 50 + p.ph));
+      p.L.intensity = 32 * (0.97 + 0.03 * Math.sin(t * 50 + p.ph));
       continue;
     }
     const f = s.k ? 0.9 + 0.1 * Math.sin(t * 2.1 + p.ph) * Math.sin(t * 3.3 + p.ph * 2) : 0.84 + 0.12 * Math.sin(t * 9.1 + p.ph) * Math.sin(t * 5.3 + 1.2 + p.ph) + 0.04 * Math.sin(t * 23.7 + p.ph);
@@ -58479,7 +58708,7 @@ function cJ(A) {
       F.sessionType === "multiplayer" ? ye() : Pi();
     }),
     de(d, "Operators", "Choose who you play as · new Halloween operators", () => vgOpsScreen()),
-    de(d, "Season Pass", "Season 1 · free track of 100 levels · coming soon", () => vgPassScreen()),
+    de(d, "Season Pass", "Season 1 · free · operators, camos, charms and stickers as you level up", () => vgPassScreen()),
     de(d, "Loadouts", "Build, name and equip your five loadouts", () => {
       F.loFrom = "main", loOpen();
     }),
@@ -66275,7 +66504,7 @@ function jJ(A) {
         sprinting: !!M.sprinting,
         weaponId: A.services.weapons.state?.id,
         variant: A.services.weapons.state?.variant,
-        op: vgOpCurrent(),
+        op: vgOpPublic(),
         alive: M.alive !== !1,
         quiet: perkHas("deadsilence"),
         ghost: perkHas("ghost"),
@@ -80983,6 +81212,10 @@ function b6(A) {
     gunPreview: (HA, OA, oe, ch, st, k) => {
       const fr = HA === "secondary" || HA === "pistol" ? "pistol" : "rifle", m = camoPreview(HA, OA, "none"), W = m.userData.wpn;
       try {
+        // Release 1.0: atApply lengthens the muzzle from where it is now (for a barrel or suppressor), so the preview
+        // gun has to start from its own muzzle every time. It didn't, so each camo picked (every redraw) added
+        // another barrel's length and the fitted gun got smaller and smaller.
+        W?.sockets?.muzzle && (W.__mz0 ??= W.sockets.muzzle.position.z, W.sockets.muzzle.position.z = W.__mz0);
         W && atApply(fr, W, m.userData.variant || null, o, s, k);
       } catch (err) {
         A.reportError("weapons", "preview-attachments", err);
