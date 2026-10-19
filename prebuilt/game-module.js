@@ -23279,6 +23279,7 @@ var QP = {
     fpsCap: 0,
     displayMode: "windowed",
     resolution: "native",
+    viewDistance: "near",
     shadowQuality: "low",
     aa: "off",
     textureQuality: "low",
@@ -23334,7 +23335,35 @@ function vgGfxLv() {
   return ["low", "medium", "high", "ultra"];
 }
 function vgGfxKeys() {
-  return ["graphics.shadowQuality", "graphics.aa", "graphics.textureQuality", "graphics.effectsQuality", "graphics.postQuality"];
+  return ["graphics.viewDistance", "graphics.shadowQuality", "graphics.aa", "graphics.textureQuality", "graphics.effectsQuality", "graphics.postQuality"];
+}
+// Release 1.0: view distance (Near, Medium, Far, Epic): how far the camera draws, how far out sun shadows reach and how
+// far away soldiers keep their full detail
+function vgViewOf(q) {
+  return { low: "near", medium: "medium", high: "far", ultra: "epic" }[q] || "far";
+}
+function vgViewQ(v) {
+  return {
+    near: { far: 220, lod: 0.75, splits: [0.05, 5, 15, 38, 90] },
+    medium: { far: 380, lod: 1, splits: [0.05, 6, 18, 46, 120] },
+    far: { far: 650, lod: 1.35, splits: [0.05, 6, 20, 55, 150] },
+    epic: { far: 1500, lod: 1.8, splits: [0.05, 7, 24, 70, 220] }
+  }[v] || { far: 650, lod: 1.35, splits: [0.05, 6, 20, 55, 150] };
+}
+var vgLodBase = null;
+function vgViewApply(cam, S) {
+  const Q = vgViewQ(S?.get?.("graphics.viewDistance", "far"));
+  try {
+    cam && cam.far !== Q.far && (cam.far = Q.far, cam.updateProjectionMatrix());
+  } catch {
+  }
+  try {
+    typeof wt == "object" && wt && (vgLodBase ||= { lod1: wt.lod1, lod2: wt.lod2 }, wt.lod1 = vgLodBase.lod1 * Q.lod, wt.lod2 = vgLodBase.lod2 * Q.lod);
+  } catch {
+  }
+}
+function vgGfxVal(k, q) {
+  return k === "graphics.aa" ? vgGfxAaOf(q) : k === "graphics.viewDistance" ? vgViewOf(q) : q;
 }
 function vgGfxAaOf(q) {
   return { low: "off", medium: "fxaa", high: "taa", ultra: "tsr_high" }[q] || "taa";
@@ -23355,12 +23384,18 @@ function vgAaMode(m) {
 }
 function vgGfxMigrate(d) {
   const g = d.graphics || (d.graphics = {});
+  // version 2: view distance, from the preset (or from post-processing on a Custom one)
+  if (g.gfxV === 1) {
+    const q = vgGfxLv().includes(g.quality) ? g.quality : vgGfxLv().includes(g.postQuality) ? g.postQuality : "low";
+    g.viewDistance = vgViewOf(q), g.gfxV = 2;
+    return;
+  }
   if (g.gfxV) return;
   const q = vgGfxLv().includes(g.quality) ? g.quality : "low";
   g.textureQuality = q, g.effectsQuality = q, g.postQuality = q, g.aa = vgGfxAaOf(q);
   g.shadowQuality = g.shadows === !0 ? q === "low" ? "medium" : q : "low";
   g.shadows = g.shadowQuality !== "low", g.quality = g.shadowQuality === q ? q : "custom";
-  g.showFps = !1, (d.hud || (d.hud = {})).netStats = !1, g.gfxV = 1;
+  g.viewDistance = vgViewOf(q), g.showFps = !1, (d.hud || (d.hud = {})).netStats = !1, g.gfxV = 2;
 }
 function vgGfxLink(s, p, v) {
   if (s._gfxLock) return;
@@ -23370,7 +23405,7 @@ function vgGfxLink(s, p, v) {
   try {
     if (p === "graphics.quality") {
       if (!vgGfxLv().includes(v)) return;
-      for (const k of K) s.get(k) !== (k === "graphics.aa" ? vgGfxAaOf(v) : v) && s.set(k, k === "graphics.aa" ? vgGfxAaOf(v) : v);
+      for (const k of K) s.get(k) !== vgGfxVal(k, v) && s.set(k, vgGfxVal(k, v));
       s.set("graphics.shadows", v !== "low");
     } else
       p === "graphics.shadowQuality" && s.set("graphics.shadows", v !== "low"), s.get("graphics.quality") !== "custom" && s.set("graphics.quality", "custom");
@@ -32357,7 +32392,7 @@ var sa, Mo, vh, Cs, vn, xo, Us, Sh, _S, dy, rE, cE, JS, lE, VS, LH, n_ = YA((() 
     position: new b()
   }, VS = [], LH = class {
     constructor(A, e, t) {
-      this.sys = A, this.ctx = A.ctx, this.id = e, this.key = `ai:${e}`, this.name = `Vanguard ${e}`, this.team = "enemy", this.targetAgent = null, this.targetIsPlayer = !1, this.body = t, this.object = t.group, this.object.userData.agent = this, this.object.userData.muzzle = t.muzzle, this.object.userData.ejection = t.eject, this.position = new b(), this.velocity = new b(), this.prevPos = new b(), this.alive = !1, this.active = !1, this.state = "idle", this.anim = new kH(t, e * 1.618), this.anim.groundY = (i, a, s) => A.wq.groundFast(i, a, s), this.anim.onFootstep = (i, a) => this.footstep(i, a), this.prevPose = new IC(), this.ragdoll = new NH(), this.damageable = null, this.goal = new b(), this.hasGoal = !1, this.path = null, this.pathI = 0, this.repath = !1, this.moveSpeed = 0, this.stuckT = 0, this.stuckRef = new b(), this.stuckCount = 0, this.relocating = !1, this.bodyYaw = 0, this.aimYaw = 0, this.aimPitch = 0, this.crouch = 0, this.lean = 0, this.weaponMode = "patrol", this.lookPos = new b(), this.hasLook = !1, this.mode = "relaxed", this.tac = "idle", this.awareness = 0, this.tgtVisible = !1, this.visTime = 0, this.knowPos = new b(), this.knowT = -1e9, this.seenT = -1e9, this.reactT = 0, this.heardPos = new b(), this.heardT = -1e9, this.suppression = 0, this.lastDamageT = -1e9, this.cover = null, this.peek = null, this.phase = "hide", this.phaseT = 0, this.coverSince = 0, this.coverCheckT = 0, this.strafeT = 0, this.ammo = 30, this.burstLeft = 0, this.nextShotT = 0, this.pauseUntil = 0, this.reloadEndT = -1, this.grenades = 1, this.fireMode = "none", this.lastShotT = -1e9, this.shots = 0, this.perceiveAt = 0, this.thinkAt = 0, this.deathT = 0, this.lodFrame = 0, this.animDt = 0, this.puppet = null, this.phase0 = 0;
+      this.sys = A, this.ctx = A.ctx, this.id = e, this.key = `ai:${e}`, this.name = `Vanguard ${e}`, this.team = "enemy", this.targetAgent = null, this.targetIsPlayer = !1, this.body = t, this.object = t.group, this.object.userData.agent = this, this.object.userData.muzzle = t.muzzle, this.object.userData.ejection = t.eject, this.position = new b(), this.velocity = new b(), this.prevPos = new b(), this.alive = !1, this.active = !1, this.state = "idle", this.anim = vgAnimGuard(new kH(t, e * 1.618)), this.anim.groundY = (i, a, s) => A.wq.groundFast(i, a, s), this.anim.onFootstep = (i, a) => this.footstep(i, a), this.prevPose = new IC(), this.ragdoll = new NH(), this.damageable = null, this.goal = new b(), this.hasGoal = !1, this.path = null, this.pathI = 0, this.repath = !1, this.moveSpeed = 0, this.stuckT = 0, this.stuckRef = new b(), this.stuckCount = 0, this.relocating = !1, this.bodyYaw = 0, this.aimYaw = 0, this.aimPitch = 0, this.crouch = 0, this.lean = 0, this.weaponMode = "patrol", this.lookPos = new b(), this.hasLook = !1, this.mode = "relaxed", this.tac = "idle", this.awareness = 0, this.tgtVisible = !1, this.visTime = 0, this.knowPos = new b(), this.knowT = -1e9, this.seenT = -1e9, this.reactT = 0, this.heardPos = new b(), this.heardT = -1e9, this.suppression = 0, this.lastDamageT = -1e9, this.cover = null, this.peek = null, this.phase = "hide", this.phaseT = 0, this.coverSince = 0, this.coverCheckT = 0, this.strafeT = 0, this.ammo = 30, this.burstLeft = 0, this.nextShotT = 0, this.pauseUntil = 0, this.reloadEndT = -1, this.grenades = 1, this.fireMode = "none", this.lastShotT = -1e9, this.shots = 0, this.perceiveAt = 0, this.thinkAt = 0, this.deathT = 0, this.lodFrame = 0, this.animDt = 0, this.puppet = null, this.phase0 = 0;
     }
     spawn({ position: A, yaw: e = 0, loadout: t = "rifle", behavior: i = {}, team: a = "enemy", t: s = 0 }) {
       const n = this.sys;
@@ -32391,7 +32426,7 @@ var sa, Mo, vh, Cs, vn, xo, Us, Sh, _S, dy, rE, cE, JS, lE, VS, LH, n_ = YA((() 
     }
     chest(A) {
       const e = this.body.pose.p[ZA.chest];
-      return A.set(e.x, e.y + 0.08, e.z);
+      return vgFinite(e) ? A.set(e.x, e.y + 0.08, e.z) : A.set(this.position.x, this.position.y + 1.3, this.position.z);
     }
     get playerState() {
       return this.ctx.services.player.state;
@@ -32665,10 +32700,12 @@ var sa, Mo, vh, Cs, vn, xo, Us, Sh, _S, dy, rE, cE, JS, lE, VS, LH, n_ = YA((() 
       this.reloadEndT > 0 && e >= this.reloadEndT && (this.reloadEndT = -1, this.ammo = this.loadout.mag), this.move(A, e);
       let i = !1;
       this.mode === "combat" ? this.tgtVisible ? (this.combatAimPoint(Us), i = !0) : (Us.copy(this.knowPos), Us.y += 1.25, i = !0) : this.hasLook && (Us.copy(this.lookPos), i = !0);
+      vgFinite(this.velocity) || this.velocity.set(0, 0, 0), Number.isFinite(this.bodyYaw) || (this.bodyYaw = 0), Number.isFinite(this.aimYaw) || (this.aimYaw = this.bodyYaw), Number.isFinite(this.aimPitch) || (this.aimPitch = 0);
       const a = Math.hypot(this.velocity.x, this.velocity.z), s = Math.atan2(this.velocity.x, this.velocity.z);
       this.chest(Cs);
       let n = this.aimYaw, o = 0;
       i ? (n = tf(Cs, Us), o = Math.atan2(Us.y - Cs.y, Math.hypot(Us.x - Cs.x, Us.z - Cs.z))) : a > 0.3 && (n = s);
+      Number.isFinite(n) || (n = this.aimYaw), Number.isFinite(o) || (o = 0);
       const r = a > wt.run * 0.8 && this.fireMode === "none";
       r && (n = s, o = -0.05);
       const c = wt.aimTurn * (this.mode === "combat" ? 1 : 0.5) * A;
@@ -32968,7 +33005,7 @@ varying vec3 vCamoN;`).replace("base *= 1.0 + ( sWr.b - 0.5 ) * 1.6 * sMatC.y;",
   }
   function rpMake(id, seed = 0) {
     if (!t.geometries.length) return null;
-    const sd = Math.abs(seed | 0), body = new vH({ geometries: t.geometries[sd % dd.length], material: rpMat(), name: `net_soldier_${id}` }), an = new kH(body, sd % 997 * 1.618), R = {
+    const sd = Math.abs(seed | 0), body = new vH({ geometries: t.geometries[sd % dd.length], material: rpMat(), name: `net_soldier_${id}` }), an = vgAnimGuard(new kH(body, sd % 997 * 1.618)), R = {
       body,
       anim: an,
       group: body.group,
@@ -33317,7 +33354,7 @@ varying vec3 vCamoN;`).replace("base *= 1.0 + ( sWr.b - 0.5 ) * 1.6 * sMatC.y;",
         cover: a,
         squads: r
       };
-      A.services.provide("ai", v), await A.services.world.ready, a.ensure(), x();
+      A.services.provide("ai", v), await A.services.world.ready, a.ensure(), x(), vgViewApply(null, A.settings);
     },
     fixedUpdate(v, R) {
       const k = performance.now();
@@ -41226,7 +41263,7 @@ function i9(A, e) {
     for (let p = i.length - 1; p >= 0; p--) i[p].userData.damageable === d && (delete i[p].userData.damageable, i.splice(p, 1));
   }
   function l(d, f, p = {}) {
-    if (!d || !d.alive || !(f > 0) || d.invulnerable) return 0;
+    if (!d || !d.alive || !(f > 0) || !Number.isFinite(f) || d.invulnerable) return 0;
     let E = f;
     if (d.armor > 0 && d.armorHealth > 0 && p.kind !== "explosion" && p.zone !== "head") {
       const w = Math.min(d.armorHealth, E * d.armor);
@@ -41547,7 +41584,7 @@ function s9(A, e, t, i) {
       ...mA,
       head: PA
     }, Be = T.impactFx !== !1, zA = IA(H, T.team), re = zA.team, we = zA.damageable, me = zA.name, QA = zA.object;
-    r.copy(T.direction).normalize(), Z(r, qA(T, H, J)), c.copy(T.origin);
+    if (r.copy(T.direction).normalize(), Z(r, qA(T, H, J)), c.copy(T.origin), !vgFinite(r) || !vgFinite(c) || r.lengthSq() < 0.5) return null;
     const uA = V[$];
     $ = ($ + 1) % I2, uA.hits.length = 0, uA.target = null, uA.zone = null, uA.damage = 0, uA.headshot = !1, uA.killed = !1, uA.penetrations = 0, uA.surface = "default", uA.distance = 0, uA.direction.copy(r), o.clear();
     let XA = 0, ae = 1, Ce = null, Me = !1, ve = !1;
@@ -41561,6 +41598,7 @@ function s9(A, e, t, i) {
         s.set(et, r), s.near = 0, s.far = Dt, n.length = 0, s.intersectObjects(e.hitboxes, !1, n);
         for (let TA = 0; TA < n.length; TA++) {
           const _A = n[TA], JA = _A.object.userData.damageable;
+          if (!Number.isFinite(_A.distance) || !vgFinite(_A.point)) continue;
           if (!(!JA || !JA.alive || o.has(JA)) && JA !== we && !(QA && pe(_A.object, QA)) && !BA(re, JA.team)) {
             Tt = _A, Pe = _A.distance;
             break;
@@ -55603,7 +55641,7 @@ typeof window < "u" && vgNet.listeners.push((m) => vgReadyMsg(m));
 /* ------------------------------------------------------------------ Beta 1.2: news & patch notes */
 // Only the current version's notes are shown (Beta 1.21: older versions are no longer listed).
 var VG_PATCH_NOTES = [
-  { v: "Release 1.0", items: ["New: the Halloween Pack DLC ($2.99 on Steam) with two new operators, Skeleton and Pumpkin Head, and the animated Halloween camo.", "New: an Operators screen on the main menu to choose who you play as. You see your operator's arms in first person, and other players see your operator in matches.", "New: a weekly game mode online next to Team Deathmatch. This week it's Kill Confirmed; it changes every Monday (Gun Game is next).", "New: North American and European servers. Pick yours in Settings > Account (or leave it on Automatic).", "Enemies only show on your minimap while your team has a UAV up. Ghost now keeps you off enemy UAVs.", "Halloween on every map until 10 November: pumpkin patches, graveyards, witches' cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky. Listen out in the main menu...", "A new level-up sound.", "Daily challenges are easier.", "Drone mode now works with a controller.", "New: Blackout, team deathmatch in the dark. Only pumpkins, cauldrons and (on Vardanek, Lindenhof and Kessel) dim streetlights light the map. It joins the weekly rotation.", "New: Loadouts, weapon charms and stickers, inspecting your gun (I), switching fire mode (B), and tracers and hitmarkers in the killcam.", "New: remap your controller buttons, with Xbox, PlayStation and Switch layouts. Settings > Account shows your ping to each server region and lets you copy your user ID.", "New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing. Changing one on its own sets the preset to Custom. 3D resolution now goes down to 25%.", "Progression is now called Challenges. When a player you reported gets banned, you see an Action taken screen.", "The FPS counter and network stats are now off by default, and the news shows every time you sign in.", "Fixed: the rifle went through operators on the Operators screen. The Skeleton now carries its rifle too.", "The Season Pass is open: unlock it for free and it follows your level, with three new operators (Frostline, Nightshade and Ember), camos, charms, stickers, XP and double XP. Everything up to your level unlocks straight away.", "Streetlights in Blackout are a little brighter.", "Fixed: the gun got smaller every time you picked a camo (with a barrel or suppressor on)."] },
+  { v: "Release 1.0", items: ["New: the Halloween Pack DLC ($2.99 on Steam) with two new operators, Skeleton and Pumpkin Head, and the animated Halloween camo.", "New: an Operators screen on the main menu to choose who you play as. You see your operator's arms in first person, and other players see your operator in matches.", "New: a weekly game mode online next to Team Deathmatch. This week it's Kill Confirmed; it changes every Monday (Gun Game is next).", "New: North American and European servers. Pick yours in Settings > Account (or leave it on Automatic).", "Enemies only show on your minimap while your team has a UAV up. Ghost now keeps you off enemy UAVs.", "Halloween on every map until 10 November: pumpkin patches, graveyards, witches' cauldrons, scarecrows, hay bales, candles and bats under a purple, foggy sky. Listen out in the main menu...", "A new level-up sound.", "Daily challenges are easier.", "Drone mode now works with a controller.", "New: Blackout, team deathmatch in the dark. Only pumpkins, cauldrons and (on Vardanek, Lindenhof and Kessel) dim streetlights light the map. It joins the weekly rotation.", "New: Loadouts, weapon charms and stickers, inspecting your gun (I), switching fire mode (B), and tracers and hitmarkers in the killcam.", "New: remap your controller buttons, with Xbox, PlayStation and Switch layouts. Settings > Account shows your ping to each server region and lets you copy your user ID.", "New graphics settings under the quality preset: Shadows, Anti-aliasing (Off, FXAA, TAA, TSR Low to Epic), Textures, Effects and Post-processing. Changing one on its own sets the preset to Custom. 3D resolution now goes down to 25%.", "Progression is now called Challenges. When a player you reported gets banned, you see an Action taken screen.", "The FPS counter and network stats are now off by default, and the news shows every time you sign in.", "Fixed: the rifle went through operators on the Operators screen. The Skeleton now carries its rifle too.", "The Season Pass is open: unlock it for free and it follows your level, with three new operators (Frostline, Nightshade and Ember), camos, charms, stickers, XP and double XP. Everything up to your level unlocks straight away.", "Streetlights in Blackout are a little brighter.", "Fixed: the gun got smaller every time you picked a camo (with a barrel or suppressor on).", "New graphics setting: View distance (Near, Medium, Far, Epic), under the quality preset.", "Fixed: shooting the ground could kill enemies. A glitch in a soldier's animation could break its hitboxes so every bullet counted as a headshot on it."] },
   { v: "Beta 1.32", items: ["Small fixes and improvements."] },
   { v: "Beta 1.31", items: ["The game now shows when the servers are offline or under maintenance, even if you are not signed in.", "The sign-in page now tells you on its own when the servers go down."] },
   { v: "Beta 1.3", items: ["Fixed Matchmaking", "Many QoL Fixes", "You can now see on the report page who the last player who killed you was.", "Switched from NA West Servers to NA East Servers", "Fixed a Bug where if you would Slide or go Prone it would not show it on another players screen", "Weapon Leveling", "Weapon Mounting", "Kill Streaks", "Daily and Weekly Challenges and more!"] },
@@ -56359,6 +56397,44 @@ var VG_OPS = [
   { id: "ember", name: "Ember", tag: "Season 1 Pass", desc: "Scorched armour with glowing seams that smoulder as you move.", dlc: null, pass: !0 },
   { id: "spectre", name: "Spectre", tag: "Developer", desc: "Obsidian armour wired with living gold and cyan light, and a glowing visor. Developers only.", dlc: null, dev: !0 }
 ];
+// Release 1.0: a soldier's pose must never become NaN. One bad number (a hit reaction with a NaN direction, say)
+// spread to the whole skeleton: the soldier vanished, and its hitboxes, now NaN too, counted as hit by every bullet
+// fired anywhere on the map, so shooting the ground killed enemies. The animator now ignores bad input and rebuilds
+// a pose that went bad.
+var vgAnimPatched = !1, vgAnimFixes = 0;
+function vgFinite(v) {
+  return !!v && Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z) && (v.w === void 0 || Number.isFinite(v.w));
+}
+function vgPoseOk(P) {
+  for (let i = 0; i < P.p.length; i++) if (!vgFinite(P.p[i]) || !vgFinite(P.q[i])) return !1;
+  return !0;
+}
+function vgAnimGuard(an) {
+  if (vgAnimPatched || !an) return an;
+  vgAnimPatched = !0;
+  const P = Object.getPrototypeOf(an), up = P.update, hit = P.hit;
+  hit && (P.hit = function (A, e, t = 1) {
+    if (!vgFinite(A)) return;
+    return hit.call(this, A, e, Number.isFinite(t) ? t : 1);
+  });
+  P.update = function (A, e) {
+    const I = this.in;
+    Number.isFinite(I.bodyYaw) || (I.bodyYaw = 0), Number.isFinite(I.aimYaw) || (I.aimYaw = I.bodyYaw), Number.isFinite(I.aimPitch) || (I.aimPitch = 0), Number.isFinite(I.crouch) || (I.crouch = 0), Number.isFinite(I.lean) || (I.lean = 0), I.headYaw != null && !Number.isFinite(I.headYaw) && (I.headYaw = null), Number.isFinite(I.headPitch) || (I.headPitch = 0), vgFinite(I.vel) || I.vel.set(0, 0, 0);
+    Number.isFinite(A) || (A = 1 / 60);
+    const r = up.call(this, A, e), pose = this.body?.pose;
+    if (pose && !vgPoseOk(pose)) {
+      vgAnimFixes++, this.initialized = !1;
+      try {
+        up.call(this, 1 / 60, e);
+      } catch {
+      }
+      if (!vgPoseOk(pose)) for (let i = 0; i < pose.p.length; i++) pose.p[i].copy(PB[i]).add(vgFinite(I.pos) ? I.pos : pose.p[i].set(0, 0, 0)), pose.q[i].identity();
+    }
+    return r;
+  };
+  return an;
+}
+typeof window < "u" && (window.__VGANIM__ = { fixes: () => vgAnimFixes });
 var vgOps = { geos: {}, mats: {}, head: null, listeners: [] };
 function vgOpDef(id) {
   return VG_OPS.find((o) => o.id === id) || VG_OPS[0];
@@ -58148,7 +58224,14 @@ function rJ(A) {
         label: "Quality preset",
         type: "cycle",
         options: [["low", "LOW"], ["medium", "MEDIUM"], ["high", "HIGH"], ["ultra", "EPIC"]],
-        desc: "Sets Shadows, Anti-aliasing, Textures, Effects and Post-processing below to the same level. Changing one of them on its own switches the preset to Custom."
+        desc: "Sets View distance, Shadows, Anti-aliasing, Textures, Effects and Post-processing below to the same level. Changing one of them on its own switches the preset to Custom."
+      },
+      {
+        path: "graphics.viewDistance",
+        label: "View distance",
+        type: "cycle",
+        options: [["near", "NEAR"], ["medium", "MEDIUM"], ["far", "FAR"], ["epic", "EPIC"]],
+        desc: "How far away the world is drawn, how far sun shadows reach and how far away soldiers keep their full detail. Near is the fastest; Epic draws everything."
       },
       {
         path: "graphics.shadowQuality",
@@ -63273,6 +63356,11 @@ function kJ(A) {
     const W = A.settings.get("graphics.shadowQuality", A.settings.get("graphics.quality", "high")), V = J2[W] || J2.high;
     D.quality = W;
     const $ = A.settings.get("graphics.shadowMapSize", 4096), tA = Math.min(V.cascadeSize, Math.max(512, Math.floor($ / 2) * (W === "ultra" ? 1.5 : 1)));
+    try {
+      const sp = vgViewQ(A.settings.get("graphics.viewDistance", "far")).splits, cur = a?.shadow?.splits;
+      cur && cur.length === sp.length && cur.some((x, i) => x !== sp[i]) && sp.forEach((x, i) => cur[i] = x);
+    } catch {
+    }
     a && a.shadow.mapSize.x !== tA && (a.shadow.mapSize.set(tA, tA), a.shadow.map?.dispose(), a.shadow.map = null), D.steps = V.steps, Si[24] = D.steps, t.shadowMap.enabled = W !== "low" && A.settings.get("graphics.shadows", !0) !== !1, a && (a.castShadow = t.shadowMap.enabled);
   }
   const _ = {
@@ -63368,7 +63456,7 @@ function kJ(A) {
       }), P(), t.shadowMap.autoUpdate = !1, t.shadowMap.needsUpdate = !0;
       const V = vgHalloweenOn() ? "halloween" : A.settings.get("lighting.preset", "golden_hour");
       if (_.ready = G(Id[V] ? V : "golden_hour"), A.services.provide("lighting", _), await _.ready, A.events.on("settings:changed", ({ path: $, value: tA }) => {
-        $ === "lighting.preset" ? G(vgBlackout.on ? "blackout" : vgHalloweenOn() ? "halloween" : tA) : $.startsWith("graphics.quality") || $.startsWith("graphics.shadow") ? P() : $ === "lighting.volumetrics" && f ? S(d, f) : $ === "graphics.exposure" && (D.baseExposure = tA * D.exposure, t.toneMappingExposure = D.baseExposure * D.adapt);
+        $ === "lighting.preset" ? G(vgBlackout.on ? "blackout" : vgHalloweenOn() ? "halloween" : tA) : $.startsWith("graphics.quality") || $.startsWith("graphics.shadow") || $ === "graphics.viewDistance" ? P() : $ === "lighting.volumetrics" && f ? S(d, f) : $ === "graphics.exposure" && (D.baseExposure = tA * D.exposure, t.toneMappingExposure = D.baseExposure * D.adapt);
       }), A.debug.gui) {
         const $ = A.debug.gui.addFolder("lighting"), tA = {
           preset: Q,
@@ -98787,8 +98875,10 @@ async function Pz() {
     pixelRatio: _
   })), vgBright = Number(c.get("graphics.brightness", 1)) || 1, r.on("settings:changed", ({ path: G }) => {
     G === "graphics.brightness" && (vgBright = Number(c.get("graphics.brightness", 1)) || 1, vgCalDraw());
+    G === "graphics.viewDistance" && vgViewApply(g.camera, c);
     (G === "graphics.renderScale" || G === "graphics.maxPixelRatio" || G === "graphics.resolution") && g.resize(), G === "graphics.displayMode" && (dmApply(), g.resize()), G === "graphics.fpsCap" && dmVsync();
   });
+  vgViewApply(g.camera, c), setTimeout(() => vgViewApply(g.camera, c), 0);
   const dmVsync = () => {
     try {
       window.vangaurdDesktop?.setVsync?.(Number(c.get("graphics.fpsCap", 0)) === -1)?.catch?.(() => {
