@@ -56628,38 +56628,83 @@ var VG_PATCH_NOTES = [
   { v: "Beta 1.21", items: ["Dive to prone from mid-air: press prone while jumping or falling.", "Fixed being able to mantle through some windows into buildings."] }
 ];
 var vgNewsUI = { open: !1, shown: !1, el: null };
+// Release 1.0: the news screen is a full-screen page with this version's three headline features and a Close
+// button (the full patch notes are on Steam). The newest post from the console's News tab shows as a strip above them.
+function vgNewsCards() {
+  let hw = !1;
+  try {
+    hw = vgHalloweenOn();
+  } catch {
+  }
+  return [
+    hw ? { tag: "Limited time", title: "Halloween Pack", art: "halloween", body: "Play as the Skeleton or Pumpkin Head with the animated Halloween camo. Halloween is on every map until 10 November." } : { tag: "New operators", title: "Halloween Pack", art: "halloween", body: "Play as the Skeleton or Pumpkin Head with the animated Halloween camo. Get the Halloween Pack on Steam." },
+    { tag: "New weapons", title: "Melee secondaries", art: "melee", body: "Take the Viper Knife, Jackal Machete, Bison Axe or Slugger Bat as your secondary. One hit puts an enemy down." },
+    { tag: "Progression", title: "Prestige & Career", art: "prestige", body: "Keep levelling past 100 and earn a new prestige badge as you climb. Career shows your lifetime eliminations, deaths, K/D and wins." }
+  ];
+}
 var vgNewsCss = `
-.vg-news { position: fixed; inset: 0; z-index: 405; display: grid; place-items: center; padding: 16px; background: rgba(4,6,8,.78); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #e9ece6; }
-.vg-news .card { width: min(820px, 96vw); max-height: 92vh; display: flex; flex-direction: column; box-sizing: border-box; background: rgba(12,15,17,.98); border: 1px solid rgba(236,240,234,.14); border-top: 3px solid #f2c14e; box-shadow: 0 30px 90px rgba(0,0,0,.65); }
-.vg-news header { padding: 20px 26px 14px; border-bottom: 1px solid rgba(236,240,234,.1); }
-.vg-news header .kk { color: #f2c14e; font-size: 11px; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; }
-.vg-news header h3 { margin: 4px 0 0; font-size: 26px; letter-spacing: .12em; text-transform: uppercase; }
-.vg-news .body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; overflow-y: auto; min-height: 0; }
-.vg-news section { padding: 16px 26px 18px; }
-.vg-news section + section { border-left: 1px solid rgba(236,240,234,.08); }
-.vg-news h4 { margin: 0 0 10px; color: #949c95; font-size: 11px; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; }
-.vg-news article { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(236,240,234,.07); }
-.vg-news article b { display: block; font-size: 15.5px; }
-.vg-news article time { display: block; margin: 2px 0 6px; color: #858d86; font-size: 11.5px; letter-spacing: .06em; }
-.vg-news article p { margin: 0; color: #c9cec8; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; }
-.vg-news .empty { color: #858d86; font-size: 13px; line-height: 1.5; }
-.vg-news details { margin-bottom: 10px; }
-.vg-news summary { cursor: pointer; font-weight: 700; font-size: 14px; letter-spacing: .06em; padding: 4px 0; }
-.vg-news ul { margin: 6px 0 0; padding-left: 18px; }
-.vg-news li { margin: 0 0 6px; color: #c9cec8; font-size: 13.5px; line-height: 1.45; }
-.vg-news footer { display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 14px 26px 18px; border-top: 1px solid rgba(236,240,234,.1); }
-.vg-news footer label { flex: 1; display: flex; align-items: center; gap: 9px; color: #b9bfb8; font-size: 13px; cursor: pointer; }
-.vg-news footer input { accent-color: #f2c14e; width: 15px; height: 15px; }
-.vg-news footer button { min-width: 180px; padding: 13px 18px; background: #f2c14e; border: 0; color: #121212; font: 800 13px/1 inherit; font-family: inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
-.vg-news footer button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-@media (max-width: 640px) { .vg-news .body { grid-template-columns: 1fr; } .vg-news section + section { border-left: 0; border-top: 1px solid rgba(236,240,234,.08); } }
+.vg-news { position: fixed; inset: 0; z-index: 405; overflow-x: hidden; overflow-y: auto; display: flex; color: #e9ece6; font-family: inherit; background: radial-gradient(ellipse 70% 50% at 50% -8%, rgba(242,193,78,.13), transparent 70%), radial-gradient(ellipse 60% 40% at 50% 108%, rgba(242,193,78,.07), transparent 70%), linear-gradient(180deg, #0c0e11, #060708); animation: vgNwIn .25s ease-out; }
+@keyframes vgNwIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes vgNwCard { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+.vg-news .fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.vg-news .fx i { position: absolute; display: block; height: 2px; background: linear-gradient(90deg, transparent, rgba(242,193,78,.6), transparent); transform: rotate(-28deg); transform-origin: center; }
+.vg-news .fx i:nth-child(1) { width: 34vw; left: -6vw; top: 14vh; }
+.vg-news .fx i:nth-child(2) { width: 20vw; left: 2vw; top: 22vh; opacity: .5; }
+.vg-news .fx i:nth-child(3) { width: 30vw; right: -5vw; top: 80vh; }
+.vg-news .fx i:nth-child(4) { width: 18vw; right: 4vw; top: 72vh; opacity: .5; }
+.vg-news .fx i:nth-child(5) { width: 22vw; right: -4vw; top: 9vh; opacity: .35; }
+.vg-news .fx i:nth-child(6) { width: 16vw; left: -3vw; top: 88vh; opacity: .35; }
+.vg-news .in { position: relative; width: min(1720px, 100%); margin: auto; box-sizing: border-box; padding: clamp(16px, 4vh, 44px) clamp(16px, 4vw, 64px) clamp(16px, 3.6vh, 40px); display: flex; flex-direction: column; align-items: center; }
+.vg-news .kk { color: #f2c14e; font-size: clamp(11px, 1.55vh, 14px); font-weight: 800; letter-spacing: .42em; text-transform: uppercase; padding-left: .42em; }
+.vg-news h2 { margin: .06em 0 0; padding-left: .16em; font-size: clamp(52px, 12.5vh, 156px); line-height: 1; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; text-shadow: 0 8px 40px rgba(0,0,0,.55); }
+.vg-news .bar { display: block; width: clamp(60px, 8vh, 100px); height: 4px; margin-top: clamp(8px, 1.4vh, 14px); background: #f2c14e; }
+.vg-news .post { display: flex; align-items: baseline; gap: 16px; width: 100%; box-sizing: border-box; margin-top: clamp(14px, 3vh, 30px); padding: 11px 18px; background: rgba(242,193,78,.07); border: 1px solid rgba(242,193,78,.24); border-left: 3px solid #f2c14e; }
+.vg-news .post b { flex: none; color: #f2c14e; font-size: 11px; font-weight: 900; letter-spacing: .26em; text-transform: uppercase; }
+.vg-news .post span { min-width: 0; color: #c9cfc7; font-size: clamp(13px, 1.8vh, 15px); line-height: 1.45; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.vg-news .post strong { color: #fff; margin-right: .5em; }
+.vg-news .cards { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(16px, 2.2vw, 34px); margin-top: clamp(22px, 5vh, 54px); }
+.vg-news .post + .cards { margin-top: clamp(20px, 3.6vh, 38px); }
+.vg-news .c { position: relative; display: flex; flex-direction: column; min-width: 0; background: linear-gradient(180deg, #121519, #0d1013); border: 1px solid rgba(236,240,234,.12); box-shadow: 0 26px 70px rgba(0,0,0,.5); animation: vgNwCard .5s cubic-bezier(.2,.8,.2,1) backwards; }
+.vg-news .c:nth-child(2) { animation-delay: .08s; }
+.vg-news .c:nth-child(3) { animation-delay: .16s; }
+.vg-news .tag { position: absolute; z-index: 3; left: -9px; top: -13px; height: 30px; padding: 0 12px 0 14px; display: flex; align-items: center; background: #f2c14e; color: #111; font-size: 12px; font-weight: 900; letter-spacing: .2em; text-transform: uppercase; white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+.vg-news .tag::after { content: ""; position: absolute; top: 0; right: -13px; border-top: 30px solid #f2c14e; border-right: 13px solid transparent; }
+.vg-news .tag::before { content: ""; position: absolute; left: 0; bottom: -8px; border-top: 8px solid #8a6a1e; border-left: 9px solid transparent; }
+.vg-news .art { position: relative; aspect-ratio: 16 / 9; overflow: hidden; container-type: inline-size; background: #15181c; }
+.vg-news .art::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(118deg, transparent 0 9%, rgba(255,255,255,.14) 9% 10.2%, transparent 10.2% 15%, rgba(255,255,255,.07) 15% 15.6%, transparent 15.6% 86%, rgba(255,255,255,.12) 86% 87.2%, transparent 87.2%); }
+.vg-news .art::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, transparent 62%, rgba(13,16,19,.75)); }
+.vg-news .art canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.vg-news .art.halloween { background: radial-gradient(circle at 56% 17%, #ffe9b8 0 4%, rgba(255,226,160,.32) 4.4%, transparent 12%), radial-gradient(ellipse 70% 60% at 50% 108%, rgba(255,124,28,.7), transparent 70%), radial-gradient(ellipse 50% 40% at 20% 30%, rgba(168,96,255,.28), transparent 70%), linear-gradient(180deg, #2b1442, #170b25 66%, #0e0817); }
+.vg-news .art.melee { background: radial-gradient(ellipse 60% 70% at 50% 65%, rgba(232,86,46,.62), transparent 70%), radial-gradient(ellipse 40% 40% at 85% 10%, rgba(255,190,120,.18), transparent 70%), linear-gradient(160deg, #3b1210, #13090a); }
+.vg-news .art.prestige { background: radial-gradient(ellipse 55% 65% at 70% 60%, rgba(255,90,78,.32), transparent 70%), radial-gradient(ellipse 60% 70% at 40% 60%, rgba(242,193,78,.36), transparent 72%), linear-gradient(160deg, #2b2410, #0c0b08); }
+.vg-news .pr { position: absolute; inset: 0; display: grid; place-items: center; }
+.vg-news .pr em { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-54%); text-align: center; font-style: normal; font-weight: 900; font-size: 27cqw; line-height: 1; letter-spacing: .02em; color: rgba(242,193,78,.1); }
+.vg-news .pr .row { position: relative; display: flex; align-items: flex-end; gap: 2.4cqw; padding-top: 6cqw; }
+.vg-news .pr .vg-prb { margin: 0; height: auto; filter: drop-shadow(0 .8cqw 1.6cqw rgba(0,0,0,.55)); }
+.vg-news .pr .vg-prb:nth-child(1) { width: 7cqw; }
+.vg-news .pr .vg-prb:nth-child(2) { width: 8.6cqw; }
+.vg-news .pr .vg-prb:nth-child(3) { width: 10.5cqw; }
+.vg-news .pr .vg-prb:nth-child(4) { width: 12.8cqw; }
+.vg-news .pr .vg-prb:nth-child(5) { width: 15.6cqw; }
+.vg-news .pr .vg-prb:nth-child(6) { width: 19.5cqw; filter: drop-shadow(0 0 3cqw rgba(255,90,78,.55)) drop-shadow(0 .8cqw 1.6cqw rgba(0,0,0,.55)); }
+.vg-news .bd { flex: 1; padding: clamp(14px, 2.5vh, 26px) clamp(16px, 1.8vw, 28px) clamp(16px, 2.8vh, 28px); border-top: 3px solid #f2c14e; }
+.vg-news .bd h3 { margin: 0 0 .45em; font-size: clamp(18px, 3.1vh, 30px); line-height: 1.1; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.vg-news .bd p { margin: 0; color: #aeb5ad; font-size: clamp(13px, 2vh, 17px); line-height: 1.5; }
+.vg-news .ft { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: clamp(20px, 4.6vh, 48px); }
+.vg-news .ft button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; height: clamp(44px, 6.6vh, 58px); padding: 0 26px; border: 1px solid rgba(236,240,234,.26); background: rgba(255,255,255,.05); color: #e9ece6; font-family: inherit; font-size: clamp(12px, 1.8vh, 15px); font-weight: 800; line-height: 1; letter-spacing: .22em; text-transform: uppercase; cursor: pointer; }
+.vg-news .ft button:hover, .vg-news .ft button:focus-visible { border-color: #f2c14e; color: #fff; outline: none; }
+.vg-news .ft .close { min-width: clamp(190px, 26vh, 260px); background: #f2c14e; border-color: #f2c14e; color: #111; }
+.vg-news .ft .close:hover, .vg-news .ft .close:focus-visible { background: #ffd469; border-color: #fff; color: #111; outline: 2px solid rgba(255,255,255,.9); outline-offset: 3px; }
+.vg-news .ft kbd { display: inline-grid; place-items: center; min-width: 1.9em; height: 1.9em; padding: 0 .45em; box-sizing: border-box; border: 1.5px solid rgba(17,17,17,.55); color: #111; font: inherit; font-size: .82em; letter-spacing: .06em; }
+.vg-news .ft kbd.pad { border-radius: 50%; padding: 0; width: 1.9em; background: #111; border-color: #111; color: #f2c14e; letter-spacing: 0; }
+@media (max-width: 860px) { .vg-news .cards { grid-template-columns: minmax(0, 1fr); max-width: 520px; } .vg-news h2 { font-size: clamp(44px, 16vw, 96px); } }
 `;
 async function vgNewsFetch() {
   try {
     const u = new URL(vgServerWs().replace(/^ws(s?):/, "http$1:"));
     u.pathname = "/news", u.search = "";
     const r = await fetch(u.href, { cache: "no-store", signal: AbortSignal.timeout ? AbortSignal.timeout(6e3) : void 0 }), j = await r.json();
-    return Array.isArray(j.news) ? j.news : [];
+    return { list: Array.isArray(j.news) ? j.news : [] };
   } catch {
     return null;
   }
@@ -56670,6 +56715,93 @@ function vgNewsSkip() {
   } catch {
     return null;
   }
+}
+// The art at the top of each card. Returns something with dispose() for the 3D ones.
+function vgNewsArt(kind, box) {
+  try {
+    if (kind === "halloween") {
+      if (!pgCtx) return null;
+      const cv = document.createElement("canvas");
+      box.appendChild(cv);
+      const pv = vgOpPreview(cv, { hero: !0, spin: !1, sway: 0.16, ang: 0, fov: 30 });
+      return pv.pair(["pumpkin", "skeleton"], [-0.45, 0.45], [0.24, -0.24]), pv;
+    }
+    if (kind === "melee") return vgNewsMelee(box);
+    if (kind === "prestige") box.insertAdjacentHTML("beforeend", `<div class="pr"><em>100+</em><div class="row">${[101, 111, 126, 151, 176, 200].map((l) => vgPrestigeBadge(l, 64)).join("")}</div></div>`);
+  } catch (err) {
+    pgCtx?.reportError?.("hud", "news-art", err);
+  }
+  return null;
+}
+// The four melee weapons fanned out like a hand of cards, in the Gunsmith's studio light. The preview models are
+// the Gunsmith's own (cached per weapon), so they go back where they were when the news closes.
+function vgNewsMelee(box) {
+  const W = pgCtx?.services?.weapons;
+  if (!W?.gunPreview) return null;
+  const cv = document.createElement("canvas");
+  box.appendChild(cv);
+  const R = new dM({ canvas: cv, antialias: !0, alpha: !0, powerPreference: "high-performance" });
+  R.outputColorSpace = Ii, R.toneMapping = 6, R.toneMappingExposure = 1.35, R.setClearColor(0, 0);
+  const sc = new KB(), cam = new ca(30, 16 / 9, 0.05, 50), room = new KB();
+  cam.position.set(0, 0, 5.2), cam.lookAt(0, 0, 0);
+  room.add(new Le(new wi(8, 5, 8), new ha({ color: new ue(1315860), side: 1 })));
+  for (const [w, h, x, y, z, c, k] of [[4, 1.6, 0, 2.4, 2.5, 16777215, 5], [2.4, 3, -3.8, 0.6, 0, 16750950, 3], [2.4, 3, 3.8, 0.4, -0.5, 16772300, 2.5], [6, 0.6, 0, -2.4, 0, 6710886, 1.2]]) {
+    const u = new Le(new zs(w, h), new ha({ color: new ue(c).multiplyScalar(k), side: 2 }));
+    u.position.set(x, y, z), u.lookAt(0, 0, 0), room.add(u);
+  }
+  const pm = new Ru(R);
+  sc.environment = pm.fromScene(room, 0.04, 0.1, 50).texture, pm.dispose();
+  const key = new BC(16777215, 2.6), warm = new BC(16742221, 2.2), top = new BC(16774630, 1.6);
+  key.position.set(1.5, 2.5, 2.5), warm.position.set(-2.5, -1, 1.5), top.position.set(0.5, 4, 3), sc.add(new Qb(14675952, 2763306, 1), key, warm, top);
+  const fan = new yt(), kept = [];
+  sc.add(fan), fan.position.y = -1.22;
+  [["axe", 55], ["knife", 78], ["machete", 102], ["bat", 125]].forEach(([id, deg]) => {
+    const m = W.gunPreview("secondary", id, "none");
+    if (!m) return;
+    kept.push({ m, parent: m.parent, p: m.position.clone(), r: m.rotation.clone(), s: m.scale.clone() });
+    m.parent?.remove(m), m.position.set(0, 0, 0), m.rotation.set(0, 0, 0), m.scale.setScalar(1), m.updateMatrixWorld(!0);
+    const bb = new ct(), tmp = new ct();
+    m.traverse((n) => {
+      if (!n.isMesh || !n.geometry) return;
+      for (let o = n; o; o = o.parent) if (!o.visible) return;
+      n.geometry.boundingBox || n.geometry.computeBoundingBox(), tmp.copy(n.geometry.boundingBox).applyMatrix4(n.matrixWorld), bb.union(tmp);
+    });
+    if (bb.isEmpty()) return;
+    const ctr = bb.getCenter(new b()), sz = bb.getSize(new b()), k = 2.1 / Math.max(sz.x, sz.y, sz.z, 1e-3);
+    const fit = new yt(), side = new yt(), arm = new yt();
+    fit.scale.setScalar(k), fit.position.copy(ctr).multiplyScalar(-k), fit.add(m);
+    // side on, the blade pointing out from the pivot
+    side.rotation.y = -Math.PI / 2, side.position.x = 1.25, side.add(fit);
+    arm.rotation.z = deg * Math.PI / 180, arm.add(side), fan.add(arm);
+  });
+  let raf = 0, alive = !0, w0 = 0, h0 = 0;
+  const t0 = performance.now(), frame = (now) => {
+    if (!alive) return;
+    raf = requestAnimationFrame(frame);
+    const w = cv.clientWidth, h = cv.clientHeight;
+    if (!w || !h) return;
+    (w !== w0 || h !== h0) && (w0 = w, h0 = h, R.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)), R.setSize(w, h, !1), cam.aspect = w / h, cam.updateProjectionMatrix());
+    const t = ((now || performance.now()) - t0) / 1e3;
+    fan.rotation.y = Math.sin(t * 0.5) * 0.18;
+    try {
+      R.render(sc, cam);
+    } catch {
+    }
+  };
+  raf = requestAnimationFrame(frame);
+  return {
+    dispose() {
+      alive = !1, cancelAnimationFrame(raf);
+      for (const x of kept) try {
+        x.m.parent?.remove(x.m), x.parent && x.parent.add(x.m), x.m.position.copy(x.p), x.m.rotation.copy(x.r), x.m.scale.copy(x.s);
+      } catch {
+      }
+      try {
+        sc.environment?.dispose?.(), R.dispose(), R.forceContextLoss?.();
+      } catch {
+      }
+    }
+  };
 }
 typeof window < "u" && (window.__VGNEWS__ = { show: (auto) => vgNewsShow(!!auto), ui: vgNewsUI });
 // After sign-in (auto): always shown (Release 1.0: the "don't show again" option was removed).
@@ -56694,22 +56826,49 @@ async function vgNewsShow(auto) {
   } catch {
   }
   const d = vgNewsUI.el = document.createElement("div");
-  vgNewsUI.open = !0, d.className = "vg-news";
-  const date = (t) => new Date(t).toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
-  d.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="vg-news-h"><header><div class="kk">Vangaurd · ${vgEsc(VGD.label)}</div><h3 id="vg-news-h">News &amp; patch notes</h3></header><div class="body"><section class="nw"><h4>News</h4><div class="empty">Loading news…</div></section><section><h4>Patch notes</h4>${VG_PATCH_NOTES.slice(0, 1).map((n, i) => `<details${i === 0 ? " open" : ""}><summary>${vgEsc(n.v)}</summary><ul>${n.items.map((x) => `<li>${vgEsc(x)}</li>`).join("")}</ul></details>`).join("")}</section></div><footer><button type="button" data-ok>Continue</button></footer></div>`;
+  vgNewsUI.open = !0, d.className = "vg-news", d.setAttribute("role", "dialog"), d.setAttribute("aria-modal", "true"), d.setAttribute("aria-labelledby", "vg-news-h");
+  // Close shows ESC, or the controller's back button when a controller is plugged in
+  let pad = "";
+  try {
+    [...navigator.getGamepads?.() || []].some((g) => g && g.connected) && (pad = vgPadName(pgCtx?.settings, 1));
+  } catch {
+  }
+  const cards = vgNewsCards();
+  d.innerHTML = `<div class="fx" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="in"><div class="kk">Vangaurd · ${vgEsc(VGD.label)}</div><h2 id="vg-news-h">News</h2><i class="bar"></i>
+    <div class="cards">${cards.map((c) => `<article class="c"><span class="tag">${vgEsc(c.tag)}</span><div class="art ${c.art}" data-art="${c.art}"></div><div class="bd"><h3>${vgEsc(c.title)}</h3><p>${vgEsc(c.body)}</p></div></article>`).join("")}</div>
+    <div class="ft"><button type="button" class="close" data-ok>${pad ? `<kbd class="pad">${vgEsc(pad)}</kbd>` : "<kbd>Esc</kbd>"}Close</button></div></div>`;
   document.body.appendChild(d);
+  // the 3D art is built one card at a time after the page is up, so the page shows at once
+  const arts = [], pend = [...d.querySelectorAll("[data-art]")], next = () => {
+    if (vgNewsUI.el !== d || !pend.length) return;
+    const el = pend.shift(), a = vgNewsArt(el.dataset.art, el);
+    a && arts.push(a), setTimeout(next, 30);
+  };
+  setTimeout(next, 30);
+  const btns = () => [...d.querySelectorAll(".ft button")];
   const close = () => {
+    if (!vgNewsUI.open || vgNewsUI.el !== d) return;
+    for (const a of arts) try {
+      a.dispose();
+    } catch {
+    }
     d.remove(), vgNewsUI.open = !1, vgNewsUI.el = null;
     for (const t of ["keydown", "keyup"]) window.removeEventListener(t, key, !0);
   }, key = (ev) => {
-    ev.stopImmediatePropagation(), ev.type === "keydown" && (ev.key === "Escape" || ev.key === "Enter") && (ev.preventDefault(), close());
+    if (ev.stopImmediatePropagation(), ev.type !== "keydown") return;
+    const k = ev.key, B = btns(), i = B.indexOf(document.activeElement);
+    if (k === "Escape" || k === "Backspace") return ev.preventDefault(), close();
+    if (k === "ArrowLeft" || k === "ArrowRight" || k === "Tab") return ev.preventDefault(), B[((i < 0 ? B.length - 1 : i) + (k === "ArrowLeft" || ev.shiftKey ? -1 : 1) + B.length) % B.length]?.focus();
+    (k === "Enter" || k === " ") && (ev.preventDefault(), (i >= 0 ? B[i] : d.querySelector("[data-ok]"))?.click());
   };
   for (const t of ["keydown", "keyup"]) window.addEventListener(t, key, !0);
-  d.querySelector("[data-ok]").addEventListener("click", close), d.addEventListener("mousedown", (ev) => {
-    ev.stopPropagation(), ev.target === d && close();
+  d.addEventListener("mousedown", (ev) => ev.stopPropagation()), d.addEventListener("click", (ev) => {
+    ev.target.closest("[data-ok]") && close();
   }), setTimeout(() => d.querySelector("[data-ok]")?.focus(), 40);
-  const list = await posts, box = d.querySelector(".nw");
-  box && (box.innerHTML = "<h4>News</h4>" + (list == null ? '<div class="empty">Can\'t reach the Vangaurd server for news right now.</div>' : list.length ? list.map((p) => `<article><b>${vgEsc(p.title)}</b><time>${date(p.at)}</time><p>${vgEsc(p.body)}</p></article>`).join("") : '<div class="empty">No news right now. Check back after updates.</div>'));
+  const got = await posts;
+  if (vgNewsUI.el !== d) return;
+  const top = got?.list?.[0];
+  top && d.querySelector(".cards")?.insertAdjacentHTML("beforebegin", `<div class="post"><b>From the team</b><span><strong>${vgEsc(top.title)}</strong>${vgEsc(top.body)}</span></div>`);
 }
 /* ------------------------------------------------------------------ update required */
 // Shown when the Vangaurd server says this build is too old: when the game connects (launch, sign-in) or
@@ -58323,15 +58482,17 @@ typeof window < "u" && setInterval(() => {
 }, 5e3);
 typeof window < "u" && (window.__VGPASS__ = { pass: VG_PASS, tiers: () => vgPassTiers(), state: () => vgPassState(), unlock: () => vgPassUnlock(), sync: () => vgPassSync(), has: (t, id) => vgPassHas(t, id), boost: () => vgBoostLeft(), opOwned: (id) => vgOpOwned(id), open: () => vgPassScreen() });
 // The turning preview: its own small renderer with the operator in its rest pose.
-function vgOpPreview(canvas) {
+// opt (Release 1.0 news screen): hero = a close, waist-up framing; spin: false = no turntable (sway = a small
+// side-to-side turn instead); fov; ang = the starting angle. pair(ids, xs) shows several operators side by side.
+function vgOpPreview(canvas, opt = {}) {
   const R = new dM({ canvas, antialias: !0, alpha: !0, powerPreference: "high-performance" });
   R.outputColorSpace = Ii, R.toneMapping = 4, R.toneMappingExposure = 1.05, R.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)), R.shadowMap.enabled = !1;
   const sc = new KB(), cam = new ca(36, 1, 0.05, 30), turn = new yt(), hemi = new Qb(14016766, 1709850, 1.3), key = new BC(16774630, 2.6), rim = new BC(12619007, 1.2), fill = new Eb(16777215, 0.25);
-  key.position.set(2.2, 3.2, 3.5), rim.position.set(-3, 2.4, -2.6), sc.add(hemi, key, rim, fill, turn), cam.position.set(0, 0.95, 4.6), cam.lookAt(0, 0.72, 0);
+  key.position.set(2.2, 3.2, 3.5), rim.position.set(-3, 2.4, -2.6), sc.add(hemi, key, rim, fill, turn), opt.hero ? (cam.position.set(0, 1.36, 3.4), cam.lookAt(0, 1.2, 0)) : (cam.position.set(0, 0.95, 4.6), cam.lookAt(0, 0.72, 0));
   const floor = new Le(new Kn(1, 32, 8), new ha({ color: 0, transparent: !0, opacity: 0.38, depthWrite: !1 }));
   floor.scale.set(0.62, 4e-3, 0.62), turn.add(floor);
   const bodies = {};
-  let cur = null, raf = 0, ang = -0.5, last = performance.now(), alive = !0;
+  let cur = null, shown = [], raf = 0, ang = opt.ang ?? -0.5, last = performance.now(), alive = !0;
   const make = (id) => {
     if (bodies[id]) return bodies[id];
     const base = vgPreviewBase();
@@ -58359,18 +58520,18 @@ function vgOpPreview(canvas) {
   const size = () => {
     const w = canvas.clientWidth || 640, h = canvas.clientHeight || 480;
     if (w === sw && h === sh) return;
-    sw = w, sh = h, R.setSize(w, h, !1), cam.aspect = w / Math.max(1, h), cam.fov = cam.aspect < 0.9 ? 44 : 36, cam.updateProjectionMatrix();
+    sw = w, sh = h, R.setSize(w, h, !1), cam.aspect = w / Math.max(1, h), cam.fov = opt.fov || (cam.aspect < 0.9 ? 44 : 36), cam.updateProjectionMatrix();
   };
   const frame = () => {
     if (!alive) return;
     raf = requestAnimationFrame(frame);
     const now = performance.now(), dt = Math.min(0.1, (now - last) / 1e3);
-    last = now, ang += dt * 0.45, turn.rotation.y = ang, size();
-    try {
-      if (cur?.__an) {
+    last = now, ang += opt.spin === !1 ? 0 : dt * 0.45, turn.rotation.y = ang + (opt.sway ? Math.sin(now / 1e3 * 0.6) * opt.sway : 0), size();
+    for (const bd of shown) try {
+      if (bd?.__an) {
         // small fixed steps: the animator's springs are tuned for frame rates of 60 and up
-        for (let k = dt; k > 1e-4; k -= 1 / 60) cur.__an.update(Math.min(1 / 60, k), cur.__anT += Math.min(1 / 60, k));
-        poseIn(cur);
+        for (let k = dt; k > 1e-4; k -= 1 / 60) bd.__an.update(Math.min(1 / 60, k), bd.__anT += Math.min(1 / 60, k));
+        poseIn(bd);
       }
     } catch {
     }
@@ -58382,9 +58543,20 @@ function vgOpPreview(canvas) {
   frame();
   return {
     show(id) {
-      cur && (cur.group.visible = !1);
+      for (const bd of shown) bd.group.visible = !1;
       const b2 = make(id) || make("default");
-      b2 && (b2.group.visible = !0), cur = b2;
+      b2 && (b2.group.visible = !0), cur = b2, shown = b2 ? [b2] : [];
+    },
+    pair(ids, xs, yaws = []) {
+      for (const bd of shown) bd.group.visible = !1;
+      shown = [];
+      ids.forEach((id, i) => {
+        const bd = make(id);
+        if (!bd) return;
+        bd.__an ? (bd.__an.in.pos.set(xs[i] || 0, 0, 0), bd.__an.in.bodyYaw = bd.__an.in.aimYaw = yaws[i] || 0) : bd.group.position.x = xs[i] || 0;
+        bd.group.visible = !0, shown.push(bd);
+      });
+      cur = shown[0] || null;
     },
     dispose() {
       alive = !1, cancelAnimationFrame(raf);
