@@ -28,6 +28,8 @@ const STATIC = {
   '/admin/': ['index.html', 'text/html; charset=utf-8'],
   '/admin/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/admin/app.css': ['app.css', 'text/css; charset=utf-8'],
+  // the tournament poster art (the Tournament Creator)
+  ...Object.fromEntries(['vanguard', 'frostline', 'nightshade', 'ember', 'duo', 'duo2', 'squad'].map((n) => [`/admin/posters/${n}.webp`, [`posters/${n}.webp`, 'image/webp']])),
 };
 const SECURITY_HEADERS = {
   'cache-control': 'no-store',
@@ -634,6 +636,24 @@ export function createModeration(d) {
         return true;
       }
       case 'news': send(res, 200, { news: newsPublic() }); return true;
+      // ----- Release 1.0: tournaments. Everyone on the console can see them; only the owner creates, edits and
+      // deletes them or removes a team.
+      case 'tourneys': {
+        if (need(tourneys, 'Tournaments are on the main server.', 404)) return true;
+        send(res, 200, { ...tourneys.adminView(), owner: s.role === 'owner' });
+        return true;
+      }
+      case 'tourneys/save': case 'tourneys/delete': case 'tourneys/team/remove': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(tourneys, 'Tournaments are on the main server.', 404)) return true;
+        if (need(s.role === 'owner', 'Only the owner can change tournaments.', 403)) return true;
+        const r = action === 'tourneys/save' ? tourneys.upsert(by, body) : action === 'tourneys/delete' ? tourneys.remove(body.id) : tourneys.removeTeam(body.id, String(body.teamId || ''));
+        if (need(!r.error, r.error)) return true;
+        addLog(by, action === 'tourneys/save' ? (body.id ? 'tourney_edit' : 'tourney_add') : action === 'tourneys/delete' ? 'tourney_delete' : 'tourney_team_remove', null, `${r.tournament.name}${r.team ? `: ${r.team.members.map(d.nameOf).join(', ')}` : ''}`); save(false);
+        tourneys.changed?.(r.team ? r.team.members : null);
+        send(res, 200, { ok: true, id: r.tournament.id, ...tourneys.adminView(), owner: true });
+        return true;
+      }
       case 'news/add': {
         if (need(post, 'Use POST.', 405)) return true;
         const clean = (v, n) => String(v || '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]+/g, ' ').trim().slice(0, n);
@@ -780,6 +800,6 @@ export function createModeration(d) {
     }
   }
 
-  let ops = null;
-  return { attachOps: (o) => { ops = o; }, ownerKey: () => mod.owner, checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, autoReport, flagAdd, flagUpdate, markReplay, takeNotices, onBug, recentWith, newsPublic, roleOf, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
+  let ops = null, tourneys = null;
+  return { attachOps: (o) => { ops = o; }, attachTourneys: (t) => { tourneys = t; }, ownerKey: () => mod.owner, checkDevice, checkAccount, bannedMsg, banMessage, noteDevice, matchSeen, onReport, autoReport, flagAdd, flagUpdate, markReplay, takeNotices, onBug, recentWith, newsPublic, roleOf, http, flush: () => timer && write(), stats: () => ({ setUp: !!mod.owner, bans: Object.keys(mod.bans).length, openReports: mod.reports.filter((r) => r.status === 'open').length }) };
 }

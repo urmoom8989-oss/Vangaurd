@@ -5,6 +5,7 @@ import http from 'node:http';
 import { createModeration, cleanDevice } from './moderation.mjs';
 import { createMailer, codeEmail } from './mailer.mjs';
 import { createOps } from './ops.mjs';
+import { createTourneys, T_FFA_MAX } from './tourneys.mjs';
 import { loadLos } from './los.mjs';
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
@@ -848,6 +849,7 @@ function handleSocial(c, msg) {
     case 'chat_history': chatHistory(c); break;
     case 'voice': voiceSet(c, msg); break;
     case 'rtc': rtcRelay(c, msg); break;
+    case 'tourney_list': case 'tourney_register': case 'tourney_unregister': case 'tourney_play': case 'tourney_board': tourneyMsg(c, msg); break;
     default: break;
   }
 }
@@ -949,10 +951,11 @@ function queueStatus(mode) {
 // and then the next match starts with the players who waited.
 function modeMatch(mode) {
   let best = null;
-  for (const m of matches.values()) if (m.mode === mode && !m.ended && m.players.size > 0 && (!best || m.players.size > best.players.size)) best = m;
+  for (const m of matches.values()) if (m.mode === mode && !m.tourney && !m.ended && m.players.size > 0 && (!best || m.players.size > best.players.size)) best = m;
   return best;
 }
 function removeFromQueue(c) {
+  if (c.tourneyQ) tqLeave(c);
   for (const mode of Object.keys(queues)) {
     const i = queues[mode].indexOf(c.id);
     if (i >= 0) {
@@ -1002,7 +1005,7 @@ function openMatchFor(mode, c = null) {
     for (const k of parties.get(pid)?.members || []) {
       for (const pc of online.get(k) || []) {
         const m = pc.matchId && matches.get(pc.matchId);
-        if (m && !m.ended && m.mode === mode && m.players.size < MAX_PLAYERS) return m;
+        if (m && !m.ended && !m.tourney && m.mode === mode && m.players.size < MAX_PLAYERS) return m;
       }
     }
   }
@@ -1032,6 +1035,7 @@ async function joinQueue(c, msg) {
   if (c.matchId) leaveMatch(c, false);
   removeFromQueue(c);
   c.name = c.account;
+  if (msg.tourney) return tourneyJoin(c, msg);
   const mode = modeOf(msg.mode);
   // Release 1.0: Team Deathmatch or this week's mode (a regional server takes any mode in the rotation)
   if (mode !== 'tdm' && (REGIONAL ? !WEEKLY_POOL.includes(mode) : mode !== weekly().mode)) {
@@ -1051,6 +1055,7 @@ async function joinQueue(c, msg) {
 
 // ---------- matches ----------
 function pickTeam(match, c = null) {
+  if (match.tourney) return match.tourney.side.get(c?.accountKey || keyOf(c?.account)) || (match.ffa ? 'ffa' : 'alpha');
   if (match.ffa) return 'ffa';
   const pid = c?.accountKey ? partyOf.get(c.accountKey) : null;
   if (pid) {
@@ -1094,6 +1099,7 @@ function sendMatchFound(match, c) {
     type: 'match_found', matchId: match.id, mode: match.mode, ffa: match.ffa, playerId: c.id, roster: rosterOf(match),
     score: { ...match.score }, scoreLimit: match.scoreLimit, tags: [...match.tags.values()],
     phase: match.phase, mapId: match.mapId, vote: voteInfo(match, c.id), players: match.ffa ? boardOf(match) : undefined,
+    tourney: match.tourney ? { id: match.tourney.id, name: match.tourney.name, format: match.tourney.format, points: tourneyLivePoints(match, c.accountKey || keyOf(c.account)) } : undefined,
   });
   // Bring the newcomer up to date on where everyone is.
   for (const p of match.players.values()) {
@@ -1121,8 +1127,11 @@ function leaveMatch(c, notify = true) {
   if (c.accountKey) setTimeout(() => pushAround(c.accountKey), 0);
   if (!match) return;
   mod.matchSeen(match); regionSeen(match);
+  const lp = match.players.get(c.id);
+  if (match.tourney && lp && !match.ended) match.tourney.gone.set(lp.key, { kills: lp.kills, score: lp.score, at: now() });
   match.players.delete(c.id);
   if (notify) send(c, { type: 'match_left', matchId: match.id });
+  if (match.tourney && !match.ended && match.players.size) tourneyForfeit(match);
   broadcast(match, { type: 'player_left', matchId: match.id, playerId: c.id });
   if (match.players.size > 0) { broadcast(match, { type: 'match_update', matchId: match.id, roster: rosterOf(match) }); broadcastVote(match); if (match.ffa) broadcast(match, scoreMsg(match)); }
   else if (match.droneWait > 0 || [...match.spectators || []].some((id) => clients.get(id)?.drone)) {
@@ -1138,6 +1147,7 @@ function endMatch(match, winner) {
   match.ended = true;
   mod.matchSeen(match); regionSeen(match);
   const msg = { type: 'match_ended', matchId: match.id, winner, score: { ...match.score } };
+  if (match.tourney) { try { tourneyReport(match, winner); } catch (e) { log(`tournament result error: ${e.message}`); } msg.tourney = { id: match.tourney.id, name: match.tourney.name }; }
   if (match.ffa) { msg.ffa = true; msg.players = boardOf(match); msg.winnerName = match.players.get(winner)?.name || null; msg.scoreLimit = match.scoreLimit; }
   broadcast(match, msg);
   for (const p of match.players.values()) if (p.key) pushSocial(p.key); // "Recently played" now lists this match
@@ -1187,6 +1197,7 @@ function onHit(c, msg) {
   target.diedAt = now();
   target.deaths++;
   attacker.kills++;
+  if (match.tourney) tourneyLive(match, attacker);
   broadcast(match, { type: 'player_killed', matchId: match.id, attackerId: attacker.id, targetId: target.id, zone, attackerName: attacker.name, targetName: target.name, ...(streak ? { streak: msg.streak } : {}) });
   if (match.mode === 'kc') {
     const pos = target.pos || { x: 0, y: 0, z: 0 };
@@ -1682,6 +1693,234 @@ mod.kickNow = (c, b) => kickClient(c, mod.bannedMsg(b));
 // ---------- operations: announcements, maintenance, Steam, developers, latest build (see ops.mjs) ----------
 const ops = createOps({ DATA_DIR, now, log, keyOf, nameOf, userOf, roleOf: (k) => mod.roleOf(k), ownerKey: () => mod.ownerKey(), env: process.env });
 if (ops.state.release) raiseLatest(ops.state.release.build, ops.state.release.label, 'console');
+// ---------- Release 1.0: tournaments (see tourneys.mjs) ----------
+// The main server keeps the tournaments, registrations and leaderboards. Pressing Play hands each team member a
+// ticket for the tournament's match server (this one, or a regional one), whose tournament queue starts a match as
+// soon as two whole teams are waiting (Duo and Squad), or 2 to 8 solo players after a short wait (Solo). Results go
+// back to the main server.
+const TQ_FFA_WAIT = process.env.TOURNEY_FFA_WAIT !== undefined && process.env.TOURNEY_FFA_WAIT !== '' && Number.isFinite(Number(process.env.TOURNEY_FFA_WAIT)) ? Math.max(0, Number(process.env.TOURNEY_FFA_WAIT)) : 20;
+const tourneys = REGIONAL ? null : createTourneys({ DATA_DIR, now, log, nameOf, keyOf, userOf, staff: (k) => ops.staff(k), modeName: shortName, regions: () => REGIONS, mainRegion: { id: REGION, name: REGION_NAMES[REGION] || REGION } });
+function tourneyListTo(key) { if (tourneys) sendTo(key, { type: 'tourneys', list: tourneys.listFor(key) }); }
+// the owner changed a tournament: every game with the Tournaments screen open asks for the list again
+if (tourneys) mod.attachTourneys({ ...tourneys, changed(keys) { broadcastAll({ type: 'tourneys_changed' }); for (const k of keys || []) tourneyListTo(k); } });
+function partyKeys(key) {
+  const pt = parties.get(partyOf.get(key));
+  return pt ? { members: pt.members.slice(), leader: pt.leader } : { members: [key], leader: key };
+}
+function tourneyMsg(c, msg) {
+  if (!tourneys) return;
+  const key = keyOf(c.account), id = String(msg.id || '');
+  const fail = (message) => send(c, { type: 'tourney_error', id, message });
+  if (msg.type === 'tourney_list') return send(c, { type: 'tourneys', list: tourneys.listFor(key) });
+  if (msg.type === 'tourney_board') { const b = tourneys.board(id, key); return b ? send(c, { type: 'tourney_board', ...b }) : fail('That tournament no longer exists.'); }
+  const pk = partyKeys(key);
+  if (msg.type === 'tourney_register') {
+    const r = tourneys.register(key, id, pk.members, pk.leader);
+    if (r.error) return fail(r.error);
+    log(`tournament ${r.tournament.name}: ${r.team.members.map(nameOf).join(', ')} registered`);
+    for (const k of new Set([...pk.members, key])) { tourneyListTo(k); k !== key && note(k, `${nameOf(key)} registered your party for ${r.tournament.name}`, { kind: 'party' }); }
+    return send(c, { type: 'tourney_ok', id, action: 'register' });
+  }
+  if (msg.type === 'tourney_unregister') {
+    const r = tourneys.unregister(key, id);
+    if (r.error) return fail(r.error);
+    for (const k of new Set([...r.team.members, key])) tourneyListTo(k);
+    return send(c, { type: 'tourney_ok', id, action: 'unregister' });
+  }
+  if (msg.type === 'tourney_play') {
+    // checked after the tournament's own rules: everyone online, nobody in a match that's still going, the servers up
+    const busy = (members, region) => {
+      for (const k of members) {
+        if (statusOf(k) === 'offline') return `${nameOf(k)} is offline.`;
+        for (const pc of online.get(k) || []) { const m = pc.matchId && matches.get(pc.matchId); if (m && !m.ended) return `${nameOf(k)} is in a match. Wait for them to finish.`; }
+      }
+      if (region.id !== REGION && !regionUp.get(region.id)) return `The ${region.name} servers are offline right now. Try again in a minute.`;
+      return null;
+    };
+    const r = tourneys.play(key, id, pk.members, busy);
+    if (r.error) return fail(r.error);
+    for (const tk of r.tickets) sendTo(tk.key, { type: 'tourney_go', id: r.tournament.id, name: r.tournament.name, mode: r.tournament.mode, format: r.tournament.format, url: r.region.url || null, ticket: tk.ticket, leader: nameOf(key) });
+    log(`tournament ${r.tournament.name}: ${r.team.members.map(nameOf).join(', ')} queued (${r.region.id})`);
+  }
+}
+// main: a tournament match ended (here or on a regional server)
+function tourneyResult(tid, matchId, rows, round = null) {
+  if (!tourneys) return { error: 'not the main server' };
+  const r = tourneys.result(tid, matchId, rows, round);
+  if (!r.ok || r.dup) return r;
+  const t = r.tournament;
+  for (const row of r.teams) {
+    const tm = t.teams[row.teamId];
+    if (!tm) continue;
+    const my = tourneys.board(t.id, tm.members[0], 0)?.my;
+    for (const k of tm.members) {
+      sendTo(k, { type: 'tourney_result', id: t.id, name: t.name, points: row.points, kills: row.kills, won: row.won, place: row.place, total: tm.points, rank: my?.rank ?? null, matches: tm.matches, maxMatches: t.maxMatches, left: my?.left ?? 0, rounds: t.rounds });
+      tourneyListTo(k);
+    }
+  }
+  log(`tournament ${t.name}: match ${matchId} · ${r.teams.map((x) => `${x.name} +${x.points}`).join(', ')}`);
+  return { ok: true };
+}
+
+// ---------- tournament queue (every match server) ----------
+const tq = new Map(); // tournament id -> { conf, teams: Map(teamId -> { team, at, cids: Map(key -> client id) }), cd }
+async function tourneyJoin(c, msg) {
+  const key = c.accountKey || keyOf(c.account), ticket = String(msg.tourney?.ticket || '');
+  let r;
+  if (REGIONAL) { try { r = await internalPost(MAIN_URL, '/internal/tourney-ticket', { ticket, key }); } catch { r = { error: "Can't reach the tournament server. Try again." }; } }
+  else r = tourneys.ticketCheck(ticket, key);
+  if (!r?.ok) return send(c, { type: 'error', code: 'tourney', message: r?.error || 'Could not join the tournament.' });
+  if (c.ws.readyState !== WebSocket.OPEN || !clients.has(c.id)) return;
+  const { conf, team } = r;
+  let q = tq.get(conf.id);
+  if (!q) tq.set(conf.id, q = { conf, teams: new Map(), cd: null });
+  q.conf = conf;
+  let e = q.teams.get(team.id);
+  if (!e) q.teams.set(team.id, e = { team, at: now(), cids: new Map() });
+  e.team = team;
+  const was = e.cids.get(key);
+  if (was && was !== c.id) { const oc = clients.get(was); if (oc) oc.tourneyQ = null; }
+  e.cids.set(key, c.id);
+  c.queuedMode = `t:${conf.id}`, c.tourneyQ = { tid: conf.id, teamId: team.id };
+  if (c.accountKey) pushAround(c.accountKey);
+  log(`${c.name} is waiting in the ${conf.name} tournament queue`);
+  tqCheck(conf.id);
+}
+const tqHere = (q, e, k) => { const cl = clients.get(e.cids.get(k)); return !!cl && cl.tourneyQ?.tid === q.conf.id && cl.tourneyQ.teamId === e.team.id; };
+const tqReady = (q) => [...q.teams.values()].filter((e) => e.team.members.every((k) => tqHere(q, e, k))).sort((a, b) => a.at - b.at);
+function tqStatus(q) {
+  const ready = tqReady(q), solo = q.conf.format === 'solo', startsIn = q.cd ? Math.max(0, Math.ceil((q.cd.endsAt - now()) / 1000)) : null;
+  for (const e of q.teams.values()) {
+    const missing = e.team.members.filter((k) => !tqHere(q, e, k)).map(nameOf);
+    for (const cid of e.cids.values()) send(clients.get(cid), { type: 'queue_status', mode: q.conf.mode, tourney: q.conf.id, tourneyName: q.conf.name, format: q.conf.format, queued: ready.length, minimum: 2, maximum: solo ? T_FFA_MAX : 2, startsIn, full: false, waitingFor: missing });
+  }
+}
+function tqCheck(tid) {
+  const q = tq.get(tid);
+  if (!q) return;
+  for (const [id, e] of q.teams) { for (const k of [...e.cids.keys()]) if (!tqHere(q, e, k)) e.cids.delete(k); if (!e.cids.size) q.teams.delete(id); }
+  if (!q.teams.size) { clearInterval(q.cd?.timer); tq.delete(tid); return; }
+  if (q.conf.endsAt <= now()) {
+    for (const e of [...q.teams.values()]) for (const cid of [...e.cids.values()]) { const cl = clients.get(cid); if (cl) { cl.tourneyQ = null; cl.queuedMode = null; send(cl, { type: 'queue_cancelled' }); send(cl, { type: 'error', code: 'tourney', message: `${q.conf.name} has ended.` }); } }
+    clearInterval(q.cd?.timer); tq.delete(tid); return;
+  }
+  const ready = tqReady(q);
+  if (q.conf.format === 'solo') {
+    if (ready.length >= T_FFA_MAX) return tqStart(q, ready.slice(0, T_FFA_MAX));
+    if (ready.length >= 2 && TQ_FFA_WAIT === 0) return tqStart(q, ready);
+    if (ready.length >= 2 && !q.cd) {
+      const cd = q.cd = { endsAt: now() + TQ_FFA_WAIT * 1000, timer: null };
+      cd.timer = setInterval(() => {
+        if (q.cd !== cd) return clearInterval(cd.timer);
+        const r2 = tqReady(q);
+        if (r2.length < 2) { clearInterval(cd.timer); q.cd = null; return tqStatus(q); }
+        if (now() >= cd.endsAt) { clearInterval(cd.timer); q.cd = null; return tqStart(q, r2.slice(0, T_FFA_MAX)); }
+        tqStatus(q);
+      }, 1000);
+    } else if (ready.length < 2 && q.cd) { clearInterval(q.cd.timer); q.cd = null; }
+  } else if (ready.length >= 2) return tqStart(q, ready.slice(0, 2));
+  tqStatus(q);
+}
+// a team member left the queue (cancel, disconnect): the whole team leaves it
+function tqLeave(c) {
+  const { tid, teamId } = c.tourneyQ;
+  c.tourneyQ = null;
+  const q = tq.get(tid), e = q?.teams.get(teamId);
+  if (!e) return;
+  const key = c.accountKey || keyOf(c.account);
+  e.cids.get(key) === c.id && e.cids.delete(key);
+  for (const [k, cid] of [...e.cids]) {
+    const cl = clients.get(cid);
+    e.cids.delete(k);
+    if (!cl || !cl.tourneyQ) continue;
+    cl.tourneyQ = null, cl.queuedMode = null;
+    send(cl, { type: 'queue_cancelled' }), send(cl, { type: 'error', code: 'tourney', message: `${nameOf(key)} left the tournament queue.` });
+    if (cl.accountKey) pushAround(cl.accountKey);
+  }
+  q.teams.delete(teamId);
+  setTimeout(() => tqCheck(tid), 0);
+}
+function tqStart(q, entries) {
+  const conf = q.conf, ffa = !!MODES[conf.mode]?.ffa, side = new Map(), teams = [];
+  entries.forEach((e, i) => {
+    const s = ffa ? 'ffa' : i === 0 ? 'alpha' : 'bravo';
+    for (const k of e.team.members) side.set(k, s);
+    teams.push({ teamId: e.team.id, side: s, members: e.team.members.slice(), name: e.team.name, base: Math.max(0, Math.floor(Number(e.team.points) || 0)) });
+    q.teams.delete(e.team.id);
+  });
+  const match = {
+    id: newId('m'), mode: conf.mode, ffa, scoreLimit: conf.scoreLimit || MODES[conf.mode].scoreLimit, score: { alpha: 0, bravo: 0 },
+    players: new Map(), tags: new Map(), ended: false, createdAt: now(),
+    phase: VOTE_S > 0 ? 'vote' : 'live', mapId: null,
+    vote: { options: shuffled(MAPS).slice(0, 3), votes: new Map(), endsAt: now() + VOTE_S * 1000, timer: null },
+    tourney: { id: conf.id, name: conf.name, format: conf.format, round: Number.isInteger(conf.round) ? conf.round : null, side, teams, gone: new Map() },
+  };
+  if (match.phase === 'vote') match.vote.timer = setTimeout(() => finishVote(match), VOTE_S * 1000);
+  else match.mapId = match.vote.options[0];
+  matches.set(match.id, match);
+  for (const e of entries) for (const cid of e.cids.values()) {
+    const c = clients.get(cid);
+    if (!c) continue;
+    c.tourneyQ = null, c.queuedMode = null;
+    addToMatch(match, c, false);
+  }
+  for (const id of match.players.keys()) sendMatchFound(match, clients.get(id));
+  for (const id of match.players.keys()) { const pc = clients.get(id); if (pc?.accountKey) pushAround(pc.accountKey); }
+  log(`tournament match ${match.id} (${conf.name}, ${conf.mode}) started: ${teams.map((t) => t.name).join(' vs ')}`);
+  if (!q.teams.size) { clearInterval(q.cd?.timer); tq.delete(conf.id); } else tqStatus(q);
+}
+// the team's tournament points so far, live in the match: before it, plus every elimination in it (the win and the
+// free-for-all placement are added when it ends)
+function tourneyLivePoints(match, key) {
+  const T = match.tourney, tm = T?.teams.find((x) => x.members.includes(key));
+  if (!tm) return null;
+  let kills = 0;
+  for (const k of tm.members) {
+    let here = false;
+    for (const p of match.players.values()) if (p.key === k) { kills += p.kills; here = true; }
+    if (!here) kills += T.gone.get(k)?.kills || 0;
+  }
+  return tm.base + kills;
+}
+function tourneyLive(match, attacker) {
+  const T = match.tourney, tm = T.teams.find((x) => x.members.includes(attacker.key));
+  if (!tm) return;
+  const points = tourneyLivePoints(match, attacker.key);
+  for (const p of match.players.values()) if (tm.members.includes(p.key)) send(clients.get(p.id), { type: 'tourney_points', matchId: match.id, id: T.id, points, add: 1, by: attacker.name });
+}
+// a whole team left (or all but one free-for-all player): the match ends and the rest win
+function tourneyForfeit(match) {
+  const T = match.tourney;
+  if (match.ffa) {
+    if (match.players.size === 1) endMatch(match, [...match.players.keys()][0]);
+    return;
+  }
+  const here = new Set([...match.players.values()].map((p) => p.team));
+  if (here.size === 1) endMatch(match, [...here][0]);
+  else if (!here.size) endMatch(match, null);
+  void T;
+}
+function tourneyReport(match, winner) {
+  const T = match.tourney;
+  if (T.reported) return;
+  T.reported = true;
+  const statOf = (k) => {
+    for (const p of match.players.values()) if (p.key === k) return { kills: p.kills, score: p.score, here: 1, at: 0 };
+    const g = T.gone.get(k);
+    return g ? { kills: g.kills, score: g.score, here: 0, at: g.at } : { kills: 0, score: 0, here: 0, at: 0 };
+  };
+  const rows = [];
+  if (match.ffa) {
+    const ppl = T.teams.map((t) => ({ t, s: statOf(t.members[0]), w: match.players.get(winner)?.key === t.members[0] ? 1 : 0 }));
+    ppl.sort((a, b) => b.w - a.w || b.s.here - a.s.here || b.s.score - a.s.score || b.s.at - a.s.at);
+    ppl.forEach((x, i) => rows.push({ teamId: x.t.teamId, place: i + 1, kills: x.s.kills }));
+  } else for (const t of T.teams) rows.push({ teamId: t.teamId, won: winner === t.side, kills: t.members.reduce((n, k) => n + statOf(k).kills, 0) });
+  const id = `${REGION}:${match.id}`;
+  if (REGIONAL) internalPost(MAIN_URL, '/internal/tourney-result', { tid: T.id, matchId: id, round: T.round, rows }).catch((e) => log(`could not report tournament match ${match.id}: ${e.message}`));
+  else tourneyResult(T.id, id, rows, T.round);
+}
+// a tournament that ended empties its queue
+setInterval(() => { for (const tid of [...tq.keys()]) tqCheck(tid); }, 5000).unref?.();
 function broadcastAll(msg) { for (const c of clients.values()) send(c, msg); }
 // ---------- regions: main <-> regional servers ----------
 async function internalPost(base, path, body, ms = 5000) {
@@ -1873,6 +2112,7 @@ function handle(c, raw) {
     case 'party_invite': case 'party_accept': case 'party_decline': case 'party_leave': case 'party_kick':
     case 'party_ready_start': case 'party_ready_reply': case 'party_ready_cancel':
     case 'block': case 'chat_send': case 'chat_history': case 'voice': case 'rtc':
+    case 'tourney_list': case 'tourney_register': case 'tourney_unregister': case 'tourney_play': case 'tourney_board':
       handleSocial(c, msg); break;
     case 'bug_report': mod.onBug(c, msg); break;
     case 'spectate_join': msg.drone ? droneJoin(c, msg) : spectateJoin(c, msg); break;
@@ -1929,6 +2169,8 @@ const server = http.createServer((req, res) => {
       try {
         if (!v) out = { error: 'Bad JSON.' };
         else if (path === '/internal/session' && !REGIONAL) out = await internalSession(v);
+        else if (path === '/internal/tourney-ticket' && !REGIONAL) out = tourneys.ticketCheck(String(v.ticket || ''), String(v.key || ''));
+        else if (path === '/internal/tourney-result' && !REGIONAL && v.tid) out = tourneyResult(String(v.tid), String(v.matchId || ''), Array.isArray(v.rows) ? v.rows : [], Number.isInteger(v.round) ? v.round : null);
         else if (path === '/internal/seen' && !REGIONAL && v.match?.id) {
           const m = v.match;
           mod.matchSeen({ id: String(m.id).slice(0, 40), mode: m.mode, mapId: m.mapId, createdAt: m.createdAt, ended: !!m.ended, players: new Map((Array.isArray(m.players) ? m.players : []).slice(0, 24).map((p) => [String(p.key), { key: String(p.key), name: String(p.name || p.key).slice(0, 20), team: p.team, kills: p.kills | 0, deaths: p.deaths | 0, score: p.score | 0 }])) });

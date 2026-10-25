@@ -6,7 +6,8 @@ and keyboard.
 
 ## Release 1.0 downloads
 
-The current game (Release 1.0: melee weapons for the secondary slot (Viper Knife, Jackal Machete, Bison Axe and
+The current game (Release 1.0: tournaments in Multiplayer (Solo, Duo and Squad, made in the console, with leaderboards),
+the game in Español, Português, Français and Deutsch (Settings > Account > Language), melee weapons for the secondary slot (Viper Knife, Jackal Machete, Bison Axe and
 Slugger Bat, held one-handed), prestige levels past level 100, a Career page with lifetime stats, lobby chat (All and
 Party), party voice chat, muting and blocking players, gyro aiming and an Edit Controls screen that remaps every
 controller button on a picture of the controller, smarter cheat flags with replay review in the console, the

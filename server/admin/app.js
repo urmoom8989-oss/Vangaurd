@@ -96,7 +96,7 @@
   }
 
   // ---------- shell ----------
-  const TABS = [['reports', 'Reports'], ['flags', 'Cheat flags'], ['players', 'Players'], ['chat', 'Chat'], ['bugs', 'Bugs'], ['bans', 'Bans'], ['news', 'News'], ['server', 'Server'], ['activity', 'Activity'], ['mods', 'Moderators']];
+  const TABS = [['reports', 'Reports'], ['flags', 'Cheat flags'], ['players', 'Players'], ['chat', 'Chat'], ['bugs', 'Bugs'], ['bans', 'Bans'], ['news', 'News'], ['tourneys', 'Tournaments'], ['server', 'Server'], ['activity', 'Activity'], ['mods', 'Moderators']];
   const BUGCAT = { gameplay: 'Gameplay', graphics: 'Graphics', controls: 'Controls', online: 'Online', menus: 'Menus', performance: 'Performance', other: 'Other' };
   function shell() {
     app.innerHTML = `<header class="top"><div class="brand">${SHIELD}<div><b>VANGAURD</b><small>Anti-Cheat</small></div></div>
@@ -123,7 +123,7 @@
   function show(tab) {
     ui.tab = tab;
     $$('.tab').forEach((b) => { const on = b.dataset.tab === tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-    ({ reports: viewReports, flags: viewFlags, chat: viewChat, players: viewPlayers, bugs: viewBugs, bans: viewBans, news: viewNews, server: viewServer, activity: viewActivity, mods: viewMods })[tab]();
+    ({ reports: viewReports, flags: viewFlags, chat: viewChat, players: viewPlayers, bugs: viewBugs, bans: viewBans, news: viewNews, tourneys: viewTourneys, server: viewServer, activity: viewActivity, mods: viewMods })[tab]();
   }
 
   // ---------- reports ----------
@@ -571,6 +571,195 @@
       };
       $$('[data-del]', v).forEach((b) => { b.onclick = async () => { if (!confirm('Delete this post?')) return; try { await api('news/delete', { body: { id: b.dataset.del } }); viewNews(); } catch (e) { fail(e); } }; });
     } catch (e) { fail(e); }
+  }
+
+  // ---------- Release 1.0: tournaments (the Tournament Creator) ----------
+  // The owner makes tournaments here; players see them in the game under Multiplayer > Tournaments (the live ones are
+  // also a card in the game mode selector), register their party (Solo: alone, Duo: 2, Squad: 4) and play tournament
+  // matches while a round is live.
+  const TFMT = { solo: 'Solo', duo: 'Duo', squad: 'Squad' };
+  const TNEED = { solo: 'Just you, no one else in the party', duo: 'You and exactly one other player', squad: 'You and exactly three others' };
+  const TART = { solo: 'vanguard', duo: 'duo', squad: 'squad' };
+  const PERSON = '<svg viewBox="0 0 10 14" aria-hidden="true"><circle cx="5" cy="3.4" r="2.6"/><path d="M0.6 13.4c0-3.4 1.9-5.6 4.4-5.6s4.4 2.2 4.4 5.6z"/></svg>';
+  const ICON_IMG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>';
+  const ICON_FMT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>';
+  const TLENS = [[30, '30 min'], [60, '1 hour'], [90, '1 h 30 min'], [120, '2 hours'], [180, '3 hours'], [240, '4 hours'], [360, '6 hours'], [480, '8 hours'], [720, '12 hours'], [1080, '18 hours'], [1440, '1 day'], [2880, '2 days'], [4320, '3 days'], [10080, '7 days']];
+  const money = (n) => (n ? `$${Number(n).toLocaleString('en-US')}` : '');
+  const dtLocal = (ms) => { const d = new Date(ms); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  const trel = (ms) => { const m = Math.max(1, Math.round(ms / 6e4)), h = Math.floor(m / 60), d = Math.round(m / 1440); return m >= 1440 ? (d >= 2 ? `${d} days` : '1 day') : h ? `${h} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`; };
+  const tday = (ms) => new Date(ms).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const thm = (ms) => new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  // the rounds: the same clock time every day or week (like the server)
+  const tWindows = (start, len, rounds, every) => Array.from({ length: rounds }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i * (every === 'week' ? 7 : 1)); return [d.getTime(), d.getTime() + len]; });
+  function tDates(W) {
+    const a = new Date(W[0][0]), b = new Date(W[W.length - 1][1] - 1), md = (x) => x.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return a.toDateString() === b.toDateString() ? md(a) : a.getMonth() === b.getMonth() ? `${md(a)} – ${b.getDate()}` : `${md(a)} – ${md(b)}`;
+  }
+  function tTag(t, now = Date.now()) {
+    if (t.status === 'live') return ['live', 'Live'];
+    if (t.status === 'upcoming') return ['up', `In ${trel(((t.windows || [])[t.nextRound ?? 0]?.[0] ?? t.startsAt) - now)}`];
+    return ['end', 'Ended'];
+  }
+  // the poster players see in the game (the same art and backgrounds)
+  function posterHtml(t) {
+    const W = t.windows || [[t.startsAt, t.endsAt]], long = Math.max(0, ...String(t.name || '').split(/\s+/).map((w) => w.length));
+    return `<div class="vg-poster vg-th-${esc(t.theme || 'gold')}${long > 11 ? ' tl' : long > 9 ? ' tm' : ''}"><img class="art" src="/admin/posters/${esc(t.art || 'vanguard')}.webp" alt="" draggable="false"><span class="fmt">${PERSON.repeat(t.size || 1)}${TFMT[t.format] || ''}</span>${t.status === 'live' ? '<span class="live">Live</span>' : ''}${t.prizePool ? `<span class="prize${t.status === 'live' ? '' : ' top'}">${money(t.prizePool)}</span>` : ''}<div class="tt"><b>${esc(t.name)}</b>${t.description ? `<small>${esc(t.description)}</small>` : ''}<i>${esc(tDates(W))}</i></div></div>`;
+  }
+  const tDateList = (W, cur, now = Date.now()) => W.map(([s, e], i) => `<li class="${i === cur ? 'on' : e <= now ? 'past' : ''}"><span>Round ${i + 1}</span><span>${esc(tday(s))}</span><span>${esc(thm(s))} – ${esc(thm(e))}</span></li>`).join('');
+
+  // the gallery of tournaments, and the one you picked
+  async function viewTourneys(sel = ui.tsel) {
+    const v = $('#view');
+    let o;
+    try { o = await api('tourneys'); } catch (e) { fail(e); return; }
+    ui.tdata = o;
+    const cur = o.list.find((t) => t.id === sel) || null;
+    v.innerHTML = `<div class="tgal">
+      <section class="pane"><header><span class="k">Tournaments (${o.list.length})</span><span class="muted tg-sub">Live and upcoming first · players see them in Multiplayer > Tournaments</span><span class="sp"></span>${o.owner ? '<button class="btn sm pri" id="tnew">Tournament Creator</button>' : ''}</header>
+        <div class="tg-grid">${o.owner ? '<button class="tg-new" id="tnew2"><span>+</span><b>New tournament</b><small>Open the Tournament Creator</small></button>' : ''}${o.list.map((t) => { const [k, txt] = tTag(t); return `<button class="tg-card ${k}${t.id === sel ? ' on' : ''}" data-t="${esc(t.id)}">${k === 'live' ? '' : `<span class="tg-tag ${k}">${esc(txt)}</span>`}${posterHtml(t)}<span class="tg-meta"><span>${plural(t.teams.length, 'team')}</span><span>${esc(t.regionName)}</span>${t.participation === 'invite' ? '<span>Invite only</span>' : ''}</span></button>`; }).join('')}</div>
+        ${!o.list.length && !o.owner ? '<div class="empty"><b>No tournaments yet</b>The owner makes tournaments.</div>' : ''}</section>
+      <section class="pane" id="tdetail">${cur ? '' : `<div class="empty"><b>${o.list.length ? 'Select a tournament' : 'No tournaments yet'}</b>${o.list.length ? 'Its event dates, teams, leaderboard and match results appear here.' : 'Make one with the Tournament Creator.'}</div>`}</section></div>`;
+    for (const id of ['#tnew', '#tnew2']) if ($(id)) $(id).onclick = () => tourneyCreator(null);
+    $$('[data-t]', v).forEach((b) => { b.onclick = () => { ui.tsel = b.dataset.t; $$('[data-t]', v).forEach((x) => x.classList.toggle('on', x === b)); tourneyDetail(o.list.find((t) => t.id === b.dataset.t)); $('#tdetail').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }; });
+    if (cur) tourneyDetail(cur);
+  }
+  function tourneyDetail(t) {
+    const o = ui.tdata, box = $('#tdetail'), [k, txt] = tTag(t);
+    const W = t.windows || [[t.startsAt, t.endsAt]];
+    const res = (t.results || []).map((r) => `<div class="item"><time>${esc(fmt(r.at))}</time><span>${r.round != null && t.rounds > 1 ? `<span class="muted">Round ${r.round + 1}</span> · ` : ''}${r.teams.map((x) => `${esc(x.name)} <b>+${x.points}</b>${x.place ? ` (#${x.place})` : x.won ? ' (win)' : ''}`).join(' · ')}</span></div>`).join('');
+    box.innerHTML = `<div class="td"><div class="td-poster">${posterHtml(t)}</div>
+      <div class="detail td-info"><div class="head"><div><h2>${esc(t.name)} <span class="tg-tag ${k}">${esc(txt)}</span></h2>${t.description ? `<p class="muted td-desc">${esc(t.description)}</p>` : ''}
+          <div class="facts"><span>${TFMT[t.format]} · ${TNEED[t.format]}</span><span>${esc(t.modeName)} to ${t.scoreLimit}</span><span>${esc(t.regionName)} servers</span><span>${t.maxMatches} match${t.maxMatches === 1 ? '' : 'es'} per team per round</span></div>
+          <div class="facts"><span>${t.prizePool ? `Prize pool ${money(t.prizePool)}` : 'No prize pool'}</span>${t.prize ? `<span>${esc(t.prize)}</span>` : ''}<span>${t.participation === 'invite' ? `Invite only: ${t.invites.map(esc).join(', ')}` : 'Public'}</span></div></div>
+        ${o.owner ? '<div class="acts"><button class="btn sm" id="tedit">Edit</button><button class="btn sm" id="tcopy">Duplicate</button><button class="btn sm ghost-danger" id="tdel">Delete</button></div>' : ''}</div>
+        <h4 class="td-h">Event dates · ${t.rounds > 1 ? `${t.rounds} rounds, every ${t.every}` : 'one round'}</h4><ul class="td-dates">${tDateList(W, t.round)}</ul>
+        ${t.rules ? `<h4 class="td-h">Rules</h4><p class="td-rules">${esc(t.rules)}</p>` : ''}</div></div>
+      <header class="td-sec"><span class="k">Leaderboard · ${plural(t.teams.length, 'team')}</span></header>
+      ${t.teams.length ? `<div class="table-wrap"><table><thead><tr><th>#</th><th>Team</th><th class="num">Points</th><th class="num">Matches</th><th class="num">Wins</th><th class="num">Elims</th><th>Registered</th>${o.owner ? '<th></th>' : ''}</tr></thead><tbody>${t.teams.map((tm) => `<tr><td class="num">${tm.rank ?? '—'}</td><td>${tm.members.map(esc).join(', ')}</td><td class="num"><b>${tm.points}</b></td><td class="num">${tm.matches}</td><td class="num">${tm.wins}</td><td class="num">${tm.kills}</td><td>${esc(ago(tm.registeredAt))}</td>${o.owner ? `<td><button class="btn sm ghost-danger" data-tm="${esc(tm.id)}">Remove</button></td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty"><b>No teams yet</b>Party leaders register their party in the game.</div>'}
+      <header class="td-sec"><span class="k">Matches (${(t.results || []).length})</span></header>
+      ${res ? `<div class="log">${res}</div>` : '<div class="empty">No tournament matches played yet.</div>'}`;
+    if ($('#tedit')) $('#tedit').onclick = () => tourneyCreator(t);
+    if ($('#tcopy')) $('#tcopy').onclick = () => tourneyCreator(t, true);
+    if ($('#tdel')) $('#tdel').onclick = async () => {
+      if (!confirm(`Delete ${t.name}? Its teams and leaderboard are deleted too.`)) return;
+      try { await api('tourneys/delete', { body: { id: t.id } }); ui.tsel = null; toast('Tournament deleted.'); viewTourneys(); } catch (e) { fail(e); }
+    };
+    $$('[data-tm]', box).forEach((b) => { b.onclick = async () => {
+      const tm = t.teams.find((x) => x.id === b.dataset.tm);
+      if (!confirm(`Remove ${tm.members.join(', ')} from ${t.name}? Their points are deleted.`)) return;
+      try { await api('tourneys/team/remove', { body: { id: t.id, teamId: tm.id } }); toast('Team removed.'); viewTourneys(t.id); } catch (e) { fail(e); }
+    }; });
+  }
+
+  // the Tournament Creator: the poster on the left (Publish, Images, Format), the details on the right
+  function tourneyCreator(t, copy = false) {
+    const o = ui.tdata, v = $('#view'), now = Date.now(), edit = !!t && !copy;
+    const nextHour = Math.ceil((now + 864e5) / 36e5) * 36e5;
+    const c = t ? {
+      id: edit ? t.id : null, name: copy ? `${t.name}`.slice(0, 40) : t.name, description: t.description || '', format: t.format, mode: t.mode, region: t.region, art: t.art, theme: t.theme,
+      rounds: t.rounds || 1, every: t.every || 'week', start: copy && t.startsAt < now ? nextHour : t.startsAt, len: t.roundLen || (t.endsAt - t.startsAt), maxMatches: t.maxMatches, scoreLimit: t.scoreLimit || '',
+      prizePool: t.prizePool || 0, prize: t.prize || '', rules: t.rules || '', participation: t.participation || 'public', invites: (t.invites || []).join(', '),
+    } : { id: null, name: '', description: '', format: 'duo', mode: 'tdm', region: o.regions[0]?.id, art: 'duo', theme: 'gold', rounds: 1, every: 'week', start: nextHour, len: 3 * 36e5, maxMatches: 10, scoreLimit: '', prizePool: 0, prize: '', rules: '', participation: 'public', invites: '' };
+    let page = 'details';
+    const fmtOf = () => o.formats.find((f) => f.id === c.format) || o.formats[0];
+    const modeOf = () => fmtOf().modes.find((m) => m.id === c.mode) || fmtOf().modes[0];
+    const preview = () => {
+      const W = tWindows(c.start, c.len, c.rounds, c.every), n = Date.now();
+      return { name: c.name.trim() || 'Tournament title', description: c.description.trim(), format: c.format, size: fmtOf().size, art: c.art, theme: c.theme, prizePool: c.prizePool, windows: W, status: W.some(([s, e]) => s <= n && n < e) ? 'live' : 'upcoming' };
+    };
+    v.innerHTML = `<div class="tc">
+      <div class="tc-head"><button class="btn sm" id="tcback">‹ All tournaments</button><div><span class="k">${edit ? `Editing · ${esc(t.name)}` : copy ? `Copy of ${esc(t.name)}` : 'New tournament'}</span><h1>Tournament Creator</h1></div></div>
+      <div class="tc-body"><div class="tc-left"><div class="tc-prev"></div>
+          <button class="btn pri tc-pub" id="tcpub">${edit ? 'Save changes' : 'Publish'}</button>
+          <div class="tc-btns"><button type="button" class="tc-b" data-pg="images">${ICON_IMG}Images</button><button type="button" class="tc-b" data-pg="format">${ICON_FMT}Format</button></div>
+          <p class="muted tc-note">${edit ? 'Changes show up in the game as soon as you save.' : 'Players see it in the game as soon as you publish: Multiplayer > Tournaments, and the game mode selector while a round is live.'}</p></div>
+        <div class="tc-right" id="tcpage"></div></div></div>`;
+    const root = $('.tc', v), prev = $('.tc-prev', v), box = $('#tcpage', v);
+    const paintPoster = () => { prev.innerHTML = posterHtml(preview()); };
+    const step = (b, dis) => `<div class="step${b.wide ? ' wide' : ''}"><button type="button" data-step="${b.k}" data-d="-1" aria-label="Less"${dis[0] ? ' disabled' : ''}>−</button><b>${b.v}</b><button type="button" data-step="${b.k}" data-d="1" aria-label="More"${dis[1] ? ' disabled' : ''}>+</button></div>`;
+    const lenOpts = () => { const L = TLENS.slice(), m = Math.round(c.len / 6e4); L.some(([x]) => x === m) || L.push([m, trel(c.len)]); return L.sort((a, b) => a[0] - b[0]).map(([x, n]) => `<option value="${x}"${x === m ? ' selected' : ''}${c.rounds > 1 && x * 6e4 > (c.every === 'week' ? 7 * 864e5 : 864e5) - 2 * 36e5 ? ' disabled' : ''}>${n}</option>`).join(''); };
+    const head = (h, sub) => `<div class="tc-ph"><h3>${h}</h3><span class="muted">${sub}</span>${page === 'details' ? '' : '<button type="button" class="btn sm" data-pg="details">‹ Details</button>'}</div>`;
+    function paintPage() {
+      $$('.tc-b', v).forEach((b) => b.classList.toggle('on', b.dataset.pg === page));
+      const pz = o.prizes, F = fmtOf(), M = modeOf();
+      if (page === 'images') {
+        box.innerHTML = `${head('Images', 'The poster players see')}
+          <div class="tc-f top"><span>Operators</span><div><div class="tc-arts">${o.arts.map((a) => `<button type="button" class="tc-art vg-th-${esc(c.theme)}${a.id === c.art ? ' on' : ''}" data-art="${esc(a.id)}"><img src="/admin/posters/${esc(a.id)}.webp" alt="" draggable="false"><small>${esc(a.name)}</small></button>`).join('')}</div><p class="muted tc-hint">The default operator and the free Season 1 Pass operators.</p></div></div>
+          <div class="tc-f top"><span>Background</span><div class="tc-themes">${o.themes.map((th) => `<button type="button" class="tc-theme vg-th-${esc(th.id)}${th.id === c.theme ? ' on' : ''}" data-theme="${esc(th.id)}"><small>${esc(th.name)}</small></button>`).join('')}</div></div>`;
+      } else if (page === 'format') {
+        box.innerHTML = `${head('Format', 'How teams play')}
+          <div class="tc-f top"><span>Team size</span><div class="tc-fmts">${o.formats.map((f) => `<button type="button" class="tc-fmt${f.id === c.format ? ' on' : ''}" data-fmt="${esc(f.id)}"><i>${PERSON.repeat(f.size)}</i><b>${esc(f.name)}</b><small>${TNEED[f.id] || ''}</small></button>`).join('')}</div></div>
+          <div class="tc-f"><span>Mode</span><div><div class="seg">${F.modes.map((m) => `<button type="button" data-mode="${esc(m.id)}" class="${m.id === M.id ? 'on' : ''}">${esc(m.name)}</button>`).join('')}</div><p class="muted tc-hint">${c.format === 'solo' ? 'Every player for themselves, up to 8 in a match: 1st 10 points, 2nd 7, 3rd 5, 4th 3, 5th to 8th 1, plus 1 for every elimination.' : 'One team against another: a win is 10 points, every elimination 1.'}</p></div></div>
+          <label class="tc-f"><span>Server region</span><select class="input" data-k="region">${o.regions.map((r) => `<option value="${esc(r.id)}"${r.id === c.region ? ' selected' : ''}>${esc(r.name)}</option>`).join('')}</select></label>
+          <div class="tc-f"><span>Matches per round</span><div>${step({ k: 'matches', v: c.maxMatches }, [c.maxMatches <= 1, c.maxMatches >= 50])}<p class="muted tc-hint">How many matches each team can play in every round.</p></div></div>
+          <label class="tc-f"><span>Score limit</span><input class="input" type="number" data-k="scoreLimit" min="5" max="200" value="${esc(c.scoreLimit)}" placeholder="${M.scoreLimit} (the default)"></label>
+          <label class="tc-f"><span>Prize details</span><input class="input" data-k="prize" maxlength="120" value="${esc(c.prize)}" placeholder="Optional, e.g. $50 gift card for the winning team" autocomplete="off"></label>
+          <label class="tc-f top"><span>Rules</span><textarea class="input" data-k="rules" maxlength="800" placeholder="Optional. Anything players should know (shown on Event details).">${esc(c.rules)}</textarea></label>`;
+      } else {
+        const i = pz.indexOf(c.prizePool), lo = i >= 0 ? i > 0 : c.prizePool > 0, hi = i >= 0 ? i < pz.length - 1 : c.prizePool < pz[pz.length - 1];
+        box.innerHTML = `${head('Details', 'What players see on the poster and on Event details')}
+          <label class="tc-f"><span>Title</span><div class="tc-in"><input class="input" data-k="name" maxlength="40" value="${esc(c.name)}" placeholder="e.g. Friday Night Duos" autocomplete="off"><em data-n="name">${c.name.length}/40</em></div></label>
+          <label class="tc-f"><span>Description</span><div class="tc-in"><input class="input" data-k="description" maxlength="60" value="${esc(c.description)}" placeholder="A short line under the title, e.g. Every Friday" autocomplete="off"><em data-n="description">${c.description.length}/60</em></div></label>
+          <div class="tc-f"><span>Rounds</span><div class="tc-row">${step({ k: 'rounds', v: c.rounds }, [c.rounds <= 1, c.rounds >= 10])}${c.rounds > 1 ? `<div class="seg"><button type="button" data-every="day" class="${c.every === 'day' ? 'on' : ''}">Every day</button><button type="button" data-every="week" class="${c.every === 'week' ? 'on' : ''}">Every week</button></div>` : '<span class="muted">One round. Add more to repeat it every day or week.</span>'}</div></div>
+          <div class="tc-f"><span>${c.rounds > 1 ? 'First round' : 'When'}</span><div class="tc-row"><input class="input" type="datetime-local" data-k="start" value="${dtLocal(c.start)}"><select class="input" data-k="len" aria-label="How long each round lasts">${lenOpts()}</select></div></div>
+          <div class="tc-f"><span>Prize pool</span><div class="tc-row">${step({ k: 'prize', v: c.prizePool ? money(c.prizePool) : 'None', wide: true }, [!lo, !hi])}</div></div>
+          <label class="tc-f"><span>Participation</span><select class="input" data-k="participation"><option value="public"${c.participation === 'public' ? ' selected' : ''}>Public · everyone can see it and join</option><option value="invite"${c.participation === 'invite' ? ' selected' : ''}>Invite only · just the players you list</option></select></label>
+          ${c.participation === 'invite' ? `<label class="tc-f top"><span>Who can join</span><div><textarea class="input" data-k="invites" placeholder="Usernames, separated by commas or spaces">${esc(c.invites)}</textarea><p class="muted tc-hint">Only they see the tournament, and every player on a team has to be on the list.</p></div></label>` : ''}
+          <div class="tc-f top"><span>Event dates</span><ul class="td-dates" id="tcdates"></ul></div>`;
+        paintDates();
+      }
+    }
+    function paintDates() {
+      const ul = $('#tcdates', v);
+      if (!ul) return;
+      const W = tWindows(c.start, c.len, c.rounds, c.every), n = Date.now();
+      ul.innerHTML = tDateList(W, W.findIndex(([s, e]) => s <= n && n < e));
+    }
+    box.addEventListener('input', (ev) => {
+      const el = ev.target.closest('[data-k]');
+      if (!el) return;
+      const k = el.dataset.k;
+      if (k === 'start') { const ms = new Date(el.value).getTime(); if (Number.isFinite(ms)) c.start = ms; } else if (k === 'len') c.len = Number(el.value) * 6e4;
+      else c[k] = el.value;
+      const n = $(`[data-n="${k}"]`, box);
+      if (n) n.textContent = `${el.value.length}/${el.maxLength}`;
+      paintPoster(), paintDates();
+    });
+    box.addEventListener('change', (ev) => {
+      const el = ev.target.closest('[data-k]');
+      if (el && el.dataset.k === 'participation') { c.participation = el.value; paintPage(); }
+    });
+    root.addEventListener('click', (ev) => {
+      const b = ev.target.closest('button');
+      if (!b) return;
+      const D = b.dataset;
+      if (D.pg) { page = page === D.pg ? 'details' : D.pg; paintPage(); return; }
+      if (D.art) c.art = D.art;
+      else if (D.theme) c.theme = D.theme;
+      else if (D.fmt) {
+        if (c.art === TART[c.format]) c.art = TART[D.fmt];
+        c.format = D.fmt; c.mode = fmtOf().modes.some((m) => m.id === c.mode) ? c.mode : fmtOf().modes[0].id;
+      } else if (D.mode) c.mode = D.mode;
+      else if (D.every) c.every = D.every;
+      else if (D.step) {
+        const d = Number(D.d);
+        if (D.step === 'rounds') c.rounds = Math.max(1, Math.min(10, c.rounds + d));
+        else if (D.step === 'matches') c.maxMatches = Math.max(1, Math.min(50, c.maxMatches + d));
+        else if (D.step === 'prize') { const pz = o.prizes; c.prizePool = d > 0 ? (pz.find((x) => x > c.prizePool) ?? c.prizePool) : ([...pz].reverse().find((x) => x < c.prizePool) ?? 0); }
+      } else return;
+      paintPage(), paintPoster();
+    });
+    $('#tcback', v).onclick = () => viewTourneys(ui.tsel);
+    $('#tcpub', v).onclick = async () => {
+      if (c.name.trim().length < 3) { toast('Give the tournament a title first (3 to 40 characters).', true); page = 'details'; paintPage(); $('[data-k="name"]', box)?.focus(); return; }
+      let tz = null;
+      try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { /* old browser */ }
+      const body = { id: c.id || undefined, name: c.name, description: c.description, format: c.format, mode: modeOf().id, region: c.region, art: c.art, theme: c.theme, rounds: c.rounds, every: c.every, tz, startsAt: c.start, roundEnd: c.start + c.len, maxMatches: c.maxMatches, scoreLimit: Number(c.scoreLimit) || 0, prizePool: c.prizePool, prize: c.prize, rules: c.rules, participation: c.participation, invites: c.invites };
+      const btn = $('#tcpub', v); btn.disabled = true;
+      try { const r = await api('tourneys/save', { body }); ui.tsel = r.id; toast(edit ? 'Saved.' : 'Published. Players can see it now.'); viewTourneys(r.id); } catch (e) { btn.disabled = false; fail(e); }
+    };
+    paintPoster(), paintPage();
+    window.scrollTo({ top: 0 });
   }
 
   // ---------- server: lobby announcement, maintenance, Steam, developers, game version ----------
