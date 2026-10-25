@@ -1737,10 +1737,12 @@ function tourneyMsg(c, msg) {
       if (region.id !== REGION && !regionUp.get(region.id)) return `The ${region.name} servers are offline right now. Try again in a minute.`;
       return null;
     };
-    const r = tourneys.play(key, id, pk.members, busy);
+    const r = tourneys.play(key, id, pk.members, busy, pk.leader);
     if (r.error) return fail(r.error);
     for (const tk of r.tickets) sendTo(tk.key, { type: 'tourney_go', id: r.tournament.id, name: r.tournament.name, mode: r.tournament.mode, format: r.tournament.format, url: r.region.url || null, ticket: tk.ticket, leader: nameOf(key) });
     log(`tournament ${r.tournament.name}: ${r.team.members.map(nameOf).join(', ')} queued (${r.region.id})`);
+    // Play made the party a team (there's no registering by hand): everyone's list shows it
+    if (r.joined) for (const k of r.team.members) tourneyListTo(k);
   }
 }
 // main: a tournament match ended (here or on a regional server)

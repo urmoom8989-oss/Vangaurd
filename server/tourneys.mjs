@@ -218,7 +218,8 @@ export function createTourneys(d) {
   function board(id, key, limit = 50) {
     const t = get(id);
     if (!t || !canSee(t, key)) return null;
-    const rows = ranked(t);
+    // (teams join the leaderboard with their first match: Play registers them, nobody registers by hand)
+    const rows = ranked(t).filter(({ tm }) => tm.matches > 0);
     return { id: t.id, total: rows.length, rows: rows.slice(0, limit).map(({ tm, rank }) => ({ rank, name: teamName(tm), points: tm.points, matches: tm.matches, wins: tm.wins, kills: tm.kills, me: !!key && tm.members.includes(key) })), my: key ? mine(t, key) : null };
   }
 
@@ -226,7 +227,7 @@ export function createTourneys(d) {
   function sizeRule(t, party) {
     const f = T_FORMATS[t.format], n = party.length;
     if (n === f.size) return null;
-    if (t.format === 'solo') return 'Solo tournaments are just you. Leave your party to register or play.';
+    if (t.format === 'solo') return 'Solo tournaments are just you. Leave your party to play.';
     if (t.format === 'duo') return n < 2 ? 'Duo tournaments need one other player in your party with you. Invite a friend from the Friends panel.' : `Duo tournaments are 2 players: your party has ${n}.`;
     return n < 4 ? `Squad tournaments need three others in your party with you (your party has ${n}). Invite more friends from the Friends panel.` : `Squad tournaments are 4 players: your party has ${n}.`;
   }
@@ -236,7 +237,7 @@ export function createTourneys(d) {
     if (status(t) === 'ended') return { error: 'That tournament has ended.' };
     const err = sizeRule(t, party);
     if (err) return { error: err };
-    if (party.length > 1 && leaderKey !== key) return { error: 'Only your party leader can register the party.' };
+    if (party.length > 1 && leaderKey !== key) return { error: `${d.nameOf(leaderKey)} starts your party's tournament matches.` };
     if (t.participation === 'invite') for (const k of party) if (!t.invites.includes(k)) return { error: `${d.nameOf(k)} isn't invited to this tournament.` };
     const mineNow = teamOf(t, key);
     if (mineNow && mineNow.members.length === party.length && party.every((k) => mineNow.members.includes(k))) return { error: "You're already registered." };
@@ -265,14 +266,23 @@ export function createTourneys(d) {
 
   // ---------- playing: the main server hands each team member a ticket for the tournament's match server
   const tickets = new Map(); // ticket -> { tid, teamId, key, until }
-  function play(key, id, party, busy = () => null) {
+  function play(key, id, party, busy = () => null, leaderKey = key) {
     const t = get(id);
     if (!t || !canSee(t, key)) return { error: 'That tournament no longer exists.' };
     const ra = roundAt(t);
     if (ra.cur == null) return { error: ra.next == null ? 'That tournament has ended.' : ra.next === 0 ? 'That tournament has not started yet.' : `Round ${ra.next + 1} hasn't started yet.` };
-    const tm = teamOf(t, key);
-    if (!tm) return { error: 'Register for the tournament first.' };
-    if (tm.members.length > 1 && tm.leader !== key) return { error: 'Your team leader starts tournament matches.' };
+    // like Fortnite: there's no registering by hand. Play makes the party a team (the first time, or after the party
+    // changed and the old team never played); a team that has played stays together for the whole tournament.
+    let tm = teamOf(t, key);
+    const same = tm && tm.members.length === party.length && party.every((k) => tm.members.includes(k));
+    if (!same) {
+      if (tm?.matches) return { error: `You've already played in this tournament as ${teamName(tm)}. Play with that ${t.format === 'solo' ? 'party (just you)' : 'party'} to keep your points.` };
+      const r = register(key, id, party, leaderKey);
+      if (r.error) return r;
+      tm = r.team;
+    }
+    const joined = !same;
+    if (tm.members.length > 1 && tm.leader !== key) return { error: `${d.nameOf(tm.leader)} starts your team's matches.` };
     if ((tm.rm?.[ra.cur] || 0) >= t.maxMatches) return { error: t.rounds > 1 ? `Your team has played all ${t.maxMatches} of its matches in this round.` : `Your team has played all ${t.maxMatches} of its matches.` };
     if (party.length !== tm.members.length || !party.every((k) => tm.members.includes(k))) return { error: `Your party has to be exactly your registered team: ${teamName(tm)}.` };
     const region = regionOf(t);
@@ -286,7 +296,7 @@ export function createTourneys(d) {
       out.push({ key: k, ticket });
     }
     for (const [tk, v] of tickets) if (v.until < d.now()) tickets.delete(tk);
-    return { ok: true, tournament: t, team: tm, region, tickets: out };
+    return { ok: true, tournament: t, team: tm, region, tickets: out, joined };
   }
   // a match server checks a ticket (one use per queue); returns what it needs to run the team's matches
   function ticketCheck(ticket, key) {
