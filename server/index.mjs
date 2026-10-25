@@ -1739,7 +1739,7 @@ function tourneyMsg(c, msg) {
     };
     const r = tourneys.play(key, id, pk.members, busy, pk.leader);
     if (r.error) return fail(r.error);
-    for (const tk of r.tickets) sendTo(tk.key, { type: 'tourney_go', id: r.tournament.id, name: r.tournament.name, mode: r.tournament.mode, format: r.tournament.format, url: r.region.url || null, ticket: tk.ticket, leader: nameOf(key) });
+    for (const tk of r.tickets) sendTo(tk.key, { type: 'tourney_go', id: r.tournament.id, name: r.tournament.name, mode: r.tournament.mode, format: r.tournament.format, url: r.region.url || null, ticket: tk.ticket, leader: nameOf(key), points: r.team.points || 0 });
     log(`tournament ${r.tournament.name}: ${r.team.members.map(nameOf).join(', ')} queued (${r.region.id})`);
     // Play made the party a team (there's no registering by hand): everyone's list shows it
     if (r.joined) for (const k of r.team.members) tourneyListTo(k);
