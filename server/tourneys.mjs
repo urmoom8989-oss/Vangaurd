@@ -184,7 +184,8 @@ export function createTourneys(d) {
       regions: regionList().map((r) => ({ id: r.id, name: r.name })),
       formats: Object.entries(T_FORMATS).map(([id, f]) => ({ id, name: f.name, size: f.size, modes: T_MODES[id].map((m) => ({ id: m, name: d.modeName(m), scoreLimit: T_LIMITS[id][m] })) })),
       arts: T_ARTS.map(([id, name]) => ({ id, name })), themes: T_THEMES.map(([id, name]) => ({ id, name })), prizes: T_PRIZES,
-      list: st.list.slice().sort((a, b) => (status(a, n) === 'ended') - (status(b, n) === 'ended') || a.startsAt - b.startsAt).map((t) => ({
+      // in date order: a tournament that's over keeps its place
+      list: st.list.slice().sort((a, b) => a.startsAt - b.startsAt).map((t) => ({
         ...pub(t, n), invites: t.invites.map(d.nameOf), prize: t.prize,
         teams: ranked(t).map(({ tm, rank }) => ({ id: tm.id, name: teamName(tm), members: tm.members.map(d.nameOf), rank, points: tm.points, matches: tm.matches, wins: tm.wins, kills: tm.kills, registeredAt: tm.registeredAt })),
         results: (t.results || []).slice(-30).reverse(),
@@ -210,9 +211,10 @@ export function createTourneys(d) {
     return { teamId: tm.id, members: tm.members.map(d.nameOf), leader: d.nameOf(tm.leader), isLeader: tm.leader === key, points: tm.points, matches: tm.matches, wins: tm.wins, kills: tm.kills, rank: row?.rank ?? null, left: ri == null ? 0 : Math.max(0, t.maxMatches - (tm.rm?.[ri] || 0)) };
   }
   function listFor(key) {
-    const n = d.now(), ord = { live: 0, upcoming: 1, ended: 2 };
-    // live and upcoming ones, and the ones that ended in the last 7 days
-    return st.list.filter((t) => t.endsAt > n - 7 * 864e5 && canSee(t, key)).sort((a, b) => ord[status(a, n)] - ord[status(b, n)] || (status(a, n) === 'ended' ? b.endsAt - a.endsAt : a.startsAt - b.startsAt))
+    const n = d.now();
+    // live and upcoming ones, and the ones that ended in the last 7 days, in date order (one that's over keeps its
+    // place instead of moving to the end)
+    return st.list.filter((t) => t.endsAt > n - 7 * 864e5 && canSee(t, key)).sort((a, b) => a.startsAt - b.startsAt)
       .map((t) => ({ ...pub(t, n), my: key ? mine(t, key) : null }));
   }
   function board(id, key, limit = 50) {

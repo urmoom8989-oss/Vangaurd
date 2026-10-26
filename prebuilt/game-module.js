@@ -59465,7 +59465,8 @@ typeof window < "u" && (vgNet.listeners.push((m) => {
   if (!m?.type) return;
   if (m.type === "tourneys") {
     T.list = Array.isArray(m.list) ? m.list : [], T.at = Date.now();
-    T.list.some((t) => t.id === T.sel) || (T.sel = (T.list.find((t) => t.status === "live") || T.list[0])?.id || null);
+    // (the list is in date order, ended ones included: start on the live one, else the next one)
+    T.list.some((t) => t.id === T.sel) || (T.sel = (T.list.find((t) => t.status === "live") || T.list.find((t) => t.status === "upcoming") || T.list[0])?.id || null);
     T.el && (T.el.__render(), T.view === "det" && !T.boards[T.sel] && T.el.__board(T.el.__cur())), T.gm?.();
   } else if (m.type === "tourneys_changed" || m.type === "auth_ok") (T.el || T.want?.()) && (T.ask = Date.now(), vgNetSend({ type: "tourney_list" }));
   else if (m.type === "tourney_board") T.boards[m.id] = { ...m, at: Date.now() }, T.el?.__render();
@@ -61032,6 +61033,12 @@ function cJ(A) {
     eA.addEventListener("mouseover", (ev) => {
       const b = ev.target.closest(".od-mode-option");
       b && b !== vgTour.ui?.hi && vgGmHi(b);
+    });
+    // a click selects a mode; a double click picks it (like Accept)
+    eA.addEventListener("dblclick", (ev) => {
+      const b = ev.target.closest(".od-mode-option");
+      if (!b || b.hidden) return;
+      ev.preventDefault(), vgGmHi(b), vgGmAccept();
     });
     row.addEventListener("click", (ev) => {
       const b = ev.target.closest("[data-tourney]");
