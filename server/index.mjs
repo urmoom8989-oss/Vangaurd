@@ -20,6 +20,14 @@ const COUNTDOWN_S = process.env.MATCH_COUNTDOWN !== undefined && process.env.MAT
 const TAG_LIFETIME_S = 60;
 const SPAWN_PROTECT_MS = 2000;
 const LOAD_GRACE_MS = 4000; // extra spawn protection while clients load the voted map
+// Release 1.0: the match intro: a flyover of the map and a 5-second countdown before the fight (seconds, after the
+// map loads; MATCH_INTRO=0 turns it off)
+const INTRO_MS = (process.env.MATCH_INTRO !== undefined && process.env.MATCH_INTRO !== '' && Number.isFinite(Number(process.env.MATCH_INTRO)) ? Math.max(0, Number(process.env.MATCH_INTRO)) : 11.5) * 1000;
+const startsIn = (match) => (match.startAt && match.startAt > now() ? Math.round((match.startAt - now()) / 100) / 10 : undefined);
+// Release 1.0: after a match the lobby stays together and plays the next one after this many seconds (0 = off)
+const LOBBY_NEXT_S = process.env.LOBBY_NEXT !== undefined && process.env.LOBBY_NEXT !== '' && Number.isFinite(Number(process.env.LOBBY_NEXT)) ? Math.max(0, Number(process.env.LOBBY_NEXT)) : 20;
+// Release 1.0: tournament spectators see the match this many seconds late (so it can't be used to cheat)
+const CASTER_DELAY_MS = (process.env.CASTER_DELAY !== undefined && process.env.CASTER_DELAY !== '' && Number.isFinite(Number(process.env.CASTER_DELAY)) ? Math.max(0, Number(process.env.CASTER_DELAY)) : 10) * 1000;
 const VOTE_S = process.env.MAP_VOTE_SECONDS !== undefined && process.env.MAP_VOTE_SECONDS !== '' && Number.isFinite(Number(process.env.MAP_VOTE_SECONDS)) ? Math.max(0, Number(process.env.MAP_VOTE_SECONDS)) : 10;
 const MAPS = ['vardanek', 'kessel', 'foundry', 'freighter', 'airfield', 'lindenhof'];
 // Release 1.0 anti-cheat: the walls of every map, for the server's line-of-sight check (see los.mjs)
@@ -30,6 +38,8 @@ const GUN_RANGE = { ar7: 450, smg9: 220, br4: 520, lmg60: 600, dmr14: 750, sg12:
 const GUN_DMG = { ar7: 31, smg9: 26, br4: 36, lmg60: 34, dmr14: 54, sg12: 20, sr50: 105, p9: 34, mp20: 21, hc50: 68, p3b: 28 };
 const GUN_RPM = { ar7: 750, smg9: 920, br4: 900, lmg60: 680, dmr14: 320, sg12: 190, sr50: 70, p9: 420, mp20: 1050, hc50: 170, p3b: 1000 };
 const MELEE_DMG = { knife: 150, machete: 150, axe: 200, bat: 160 }, MELEE_REACH = 6;
+// Release 1.0: dropped guns: how long they lie there, how many at once, how close you must be to pick one up
+const GUN_LIFE_MS = 30000, GUN_MAX = 24, GUN_REACH = 3.5;
 const AC_FLAG_SCORE = Math.max(3, Number(process.env.AC_FLAG_SCORE) || 8);
 const AC_WALL_MIN = Math.max(3, Number(process.env.AC_WALL_MIN) || 8), AC_WALL_SHARE = Math.min(1, Math.max(0.1, Number(process.env.AC_WALL_SHARE) || 0.4));
 const MODES = {
@@ -849,7 +859,7 @@ function handleSocial(c, msg) {
     case 'chat_history': chatHistory(c); break;
     case 'voice': voiceSet(c, msg); break;
     case 'rtc': rtcRelay(c, msg); break;
-    case 'tourney_list': case 'tourney_register': case 'tourney_unregister': case 'tourney_play': case 'tourney_board': tourneyMsg(c, msg); break;
+    case 'tourney_list': case 'tourney_register': case 'tourney_unregister': case 'tourney_play': case 'tourney_board': case 'tourney_watch': tourneyMsg(c, msg); break;
     default: break;
   }
 }
@@ -878,8 +888,21 @@ function send(c, msg) {
 }
 function broadcast(match, msg, exceptId = null) {
   for (const id of match.players.keys()) if (id !== exceptId) send(clients.get(id), msg);
-  if (match.spectators?.size) for (const id of match.spectators) send(clients.get(id), msg);
+  if (match.spectators?.size) for (const id of match.spectators) { const sc = clients.get(id); sc?.caster ? castSend(sc, msg) : send(sc, msg); }
 }
+// a tournament spectator's messages wait CASTER_DELAY_MS
+function castSend(c, msg) {
+  if (!c) return;
+  if (!CASTER_DELAY_MS) return send(c, msg);
+  (c.cq ||= []).push([now() + CASTER_DELAY_MS, msg]);
+}
+setInterval(() => {
+  const t = now();
+  for (const c of clients.values()) {
+    if (!c.cq?.length) continue;
+    while (c.cq.length && c.cq[0][0] <= t) send(c, c.cq.shift()[1]);
+  }
+}, 100).unref?.();
 function rosterOf(match) {
   return [...match.players.values()].map((p) => ({ id: p.id, name: p.name, team: p.team, alive: p.alive, kills: p.kills, deaths: p.deaths, score: p.score }));
 }
@@ -933,8 +956,9 @@ function finishVote(match) {
   match.mapId = top[Math.floor(Math.random() * top.length)];
   match.phase = 'live';
   const at = now() + LOAD_GRACE_MS;
+  match.startAt = INTRO_MS ? at + INTRO_MS : 0;
   for (const p of match.players.values()) { p.spawnedAt = at; p.health = 100; p.alive = true; }
-  broadcast(match, { type: 'map_selected', matchId: match.id, mapId: match.mapId, tallies: t });
+  broadcast(match, { type: 'map_selected', matchId: match.id, mapId: match.mapId, tallies: t, startsIn: startsIn(match) });
   log(`match ${match.id} map vote -> ${match.mapId} ${JSON.stringify(t)}`);
 }
 
@@ -1081,7 +1105,7 @@ function startMatch(mode) {
     vote: { options: shuffled(MAPS).slice(0, 3), votes: new Map(), endsAt: now() + VOTE_S * 1000, timer: null },
   };
   if (match.phase === 'vote') match.vote.timer = setTimeout(() => finishVote(match), VOTE_S * 1000);
-  else match.mapId = match.vote.options[0];
+  else match.mapId = match.vote.options[0], match.startAt = INTRO_MS ? now() + LOAD_GRACE_MS + INTRO_MS : 0;
   matches.set(match.id, match);
   for (const id of ids) {
     const c = clients.get(id);
@@ -1098,8 +1122,9 @@ function sendMatchFound(match, c) {
   send(c, {
     type: 'match_found', matchId: match.id, mode: match.mode, ffa: match.ffa, playerId: c.id, roster: rosterOf(match),
     score: { ...match.score }, scoreLimit: match.scoreLimit, tags: [...match.tags.values()],
-    phase: match.phase, mapId: match.mapId, vote: voteInfo(match, c.id), players: match.ffa ? boardOf(match) : undefined,
+    phase: match.phase, mapId: match.mapId, vote: voteInfo(match, c.id), players: match.ffa ? boardOf(match) : undefined, startsIn: startsIn(match),
     tourney: match.tourney ? { id: match.tourney.id, name: match.tourney.name, format: match.tourney.format, points: tourneyLivePoints(match, c.accountKey || keyOf(c.account)) } : undefined,
+    lobby: match.lobby || undefined,
   });
   // Bring the newcomer up to date on where everyone is.
   for (const p of match.players.values()) {
@@ -1143,7 +1168,7 @@ function leaveMatch(c, notify = true) {
     clearTimeout(match.vote?.timer);
     for (const id of [...match.spectators || []]) { const sc = clients.get(id); if (sc && !sc.drone) { sc.spectating = null; match.spectators.delete(id); send(sc, { type: 'spectate_end', reason: 'Everyone left the match.' }); } }
     broadcast(match, { type: 'match_update', matchId: match.id, roster: [] });
-  } else { clearTimeout(match.vote?.timer); spectatorsOut(match, 'Everyone left the match.'); recKeep(match); matches.delete(match.id); log(`match ${match.id} closed`); }
+  } else { clearTimeout(match.vote?.timer); clearTimeout(match.nextTimer); spectatorsOut(match, 'Everyone left the match.'); recKeep(match); matches.delete(match.id); log(`match ${match.id} closed`); }
   if (queues[match.mode]?.length) setTimeout(() => checkQueue(match.mode), 0); // a spot opened (or the match closed)
 }
 function endMatch(match, winner) {
@@ -1151,12 +1176,43 @@ function endMatch(match, winner) {
   match.ended = true;
   mod.matchSeen(match); regionSeen(match);
   const msg = { type: 'match_ended', matchId: match.id, winner, score: { ...match.score } };
+  if (!match.tourney && !match.drone && LOBBY_NEXT_S > 0) {
+    msg.nextIn = LOBBY_NEXT_S;
+    match.nextAt = now() + LOBBY_NEXT_S * 1000;
+    match.nextTimer = setTimeout(() => lobbyNext(match), LOBBY_NEXT_S * 1000);
+  }
   if (match.tourney) { try { tourneyReport(match, winner); } catch (e) { log(`tournament result error: ${e.message}`); } msg.tourney = { id: match.tourney.id, name: match.tourney.name }; }
   if (match.ffa) { msg.ffa = true; msg.players = boardOf(match); msg.winnerName = match.players.get(winner)?.name || null; msg.scoreLimit = match.scoreLimit; }
   broadcast(match, msg);
   for (const p of match.players.values()) if (p.key) pushSocial(p.key); // "Recently played" now lists this match
   log(`match ${match.id} ended · winner ${winner}`);
   if (queues[match.mode]?.length) setTimeout(() => checkQueue(match.mode), 0); // the players who waited start the next match
+}
+// the next match of a lobby: the same players, a new map vote (teams are balanced again, parties together)
+function lobbyNext(old) {
+  if (matches.get(old.id) !== old) return;
+  const ids = [...old.players.keys()].filter((id) => clients.get(id)?.matchId === old.id);
+  if (!ids.length) return;
+  const mode = old.mode;
+  const match = {
+    id: newId('m'), mode, ffa: MODES[mode].ffa, scoreLimit: MODES[mode].scoreLimit, score: { alpha: 0, bravo: 0 },
+    players: new Map(), tags: new Map(), ended: false, createdAt: now(), lobby: (old.lobby || 0) + 1,
+    phase: VOTE_S > 0 ? 'vote' : 'live', mapId: null,
+    vote: { options: shuffled(MAPS.filter((m) => m !== old.mapId)).slice(0, 3), votes: new Map(), endsAt: now() + VOTE_S * 1000, timer: null },
+  };
+  if (match.phase === 'vote') match.vote.timer = setTimeout(() => finishVote(match), VOTE_S * 1000);
+  else match.mapId = match.vote.options[0], match.startAt = INTRO_MS ? now() + LOAD_GRACE_MS + INTRO_MS : 0;
+  matches.set(match.id, match);
+  for (const id of ids) {
+    const c = clients.get(id);
+    old.players.delete(id), c.matchId = null;
+    addToMatch(match, c, false);
+  }
+  for (const id of match.players.keys()) sendMatchFound(match, clients.get(id));
+  for (const id of match.players.keys()) { const pc = clients.get(id); if (pc?.accountKey) pushAround(pc.accountKey); }
+  spectatorsOut(old, 'The match is over.'); recKeep(old); matches.delete(old.id);
+  log(`lobby: match ${old.id} -> next match ${match.id} (${mode}) with ${match.players.size} player(s)`);
+  if (queues[mode]?.length) setTimeout(() => checkQueue(mode), 0); // anyone waiting joins while there's room
 }
 function addScore(match, team, pts) {
   if (match.ended) return;
@@ -1180,6 +1236,7 @@ function onHit(c, msg) {
   if (!attacker || !target || !target.alive || !(attacker.alive || streak) || target.id === attacker.id) return;
   if (!match.ffa && target.team === attacker.team) return; // no friendly fire
   if (now() - target.spawnedAt < SPAWN_PROTECT_MS) return; // fresh spawn
+  if (match.startAt && now() < match.startAt) return; // the intro: the match hasn't started yet
   const amount = Math.max(0, Math.min(250, num(msg.amount)));
   if (!amount) return;
   // Release 1.0 anti-cheat: the server checks the shot's distance, line of sight, damage, fire rate and aim
@@ -1203,6 +1260,7 @@ function onHit(c, msg) {
   attacker.kills++;
   if (match.tourney) tourneyLive(match, attacker);
   broadcast(match, { type: 'player_killed', matchId: match.id, attackerId: attacker.id, targetId: target.id, zone, attackerName: attacker.name, targetName: target.name, ...(streak ? { streak: msg.streak } : {}) });
+  if (match.mode !== 'gg') gunSpawn(match, target.state?.variant, target.pos);
   if (match.mode === 'kc') {
     const pos = target.pos || { x: 0, y: 0, z: 0 };
     const tag = { id: newId('t'), x: pos.x, y: pos.y, z: pos.z, team: target.team, victimId: target.id, killerId: attacker.id, createdAt: now() };
@@ -1440,6 +1498,34 @@ function onStreak(c, msg) {
   if (phase !== 'fire' && phase !== 'taken') p.streakUntil = Math.max(p.streakUntil || 0, t + (STREAK_LIFE[kind] || 30e3));
   broadcast(match, { type: 'streak', matchId: match.id, playerId: c.id, name: p.name, team: p.team, kind, phase, data }, c.id);
 }
+// a gun on the ground (ammo and reserve: what was in it, or null for a full magazine)
+function gunSpawn(match, variant, pos, ammo = null, reserve = null) {
+  if (!GUN_DMG[variant] || !pos || ![pos.x, pos.y, pos.z].every(Number.isFinite) || match.ended) return null;
+  const guns = match.guns ||= new Map();
+  while (guns.size >= GUN_MAX) {
+    const old = guns.values().next().value;
+    guns.delete(old.id);
+    broadcast(match, { type: 'gun_removed', matchId: match.id, gunId: old.id, reason: 'expired' });
+  }
+  const n = (v) => (Number.isFinite(v) ? Math.max(0, Math.min(999, Math.floor(v))) : null);
+  const gun = { id: newId('g'), variant, x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), z: +pos.z.toFixed(2), yaw: +(Math.random() * Math.PI * 2).toFixed(2), ammo: n(ammo), reserve: n(reserve), at: now() };
+  guns.set(gun.id, gun);
+  broadcast(match, { type: 'gun_spawned', matchId: match.id, gun });
+  return gun;
+}
+function onGunPickup(c, msg) {
+  const match = matches.get(c.matchId);
+  if (!match || match.ended || match.phase !== 'live' || !match.guns) return;
+  const p = match.players.get(c.id), gun = match.guns.get(String(msg.gunId || ''));
+  if (!p || !p.alive || !gun) return send(c, { type: 'gun_missed', matchId: match.id, gunId: String(msg.gunId || '') });
+  if (p.pos && Math.hypot(p.pos.x - gun.x, p.pos.z - gun.z) > GUN_REACH) return send(c, { type: 'gun_missed', matchId: match.id, gunId: gun.id });
+  match.guns.delete(gun.id);
+  broadcast(match, { type: 'gun_removed', matchId: match.id, gunId: gun.id, by: c.id });
+  send(c, { type: 'gun_taken', matchId: match.id, gunId: gun.id, variant: gun.variant, ammo: gun.ammo, reserve: gun.reserve });
+  // the gun you had in that slot drops where you stand
+  const d = msg.drop && typeof msg.drop === 'object' ? msg.drop : null;
+  if (d && typeof d.variant === 'string' && GUN_DMG[d.variant] && p.pos) gunSpawn(match, d.variant, p.pos, Number(d.ammo), Number(d.reserve));
+}
 function onTagPickup(c, msg) {
   const match = matches.get(c.matchId);
   if (!match || match.ended || match.mode !== 'kc' || match.phase !== 'live') return;
@@ -1571,6 +1657,7 @@ function spectateOffer(modKey, targetKey) {
   return { match: lm.match.id, players: lm.match.players.size, mode: lm.match.mode };
 }
 function spectateJoin(c, msg) {
+  if (msg.tourney) return void casterJoin(c, msg).catch((e) => log(`watch error: ${e.message}`));
   if (!c.account && msg.token) { const u = sessionUser(msg.token); if (u) c.account = u.name; }
   const me = keyOf(c.account);
   if (!me || !mod.roleOf(me)) return send(c, { type: 'spectate_error', message: 'Only moderators can spectate.' });
@@ -1590,6 +1677,7 @@ function spectateJoin(c, msg) {
   log(`moderation: ${c.account} is spectating ${nameOf(keyOf(msg.target))} in match ${match.id}`);
 }
 function spectateLeave(c, notify) {
+  if (c.caster) c.cq = [], c.caster = false;
   const match = c.spectating && matches.get(c.spectating);
   if (match) {
     if (match.spectators?.has(c.id)) match.spectators.delete(c.id);
@@ -1668,8 +1756,45 @@ function droneReady(c) {
 }
 function spectatorsOut(match, reason) {
   if (!match.spectators?.size) return;
-  for (const id of match.spectators) { const sc = clients.get(id); if (sc) { sc.spectating = null; send(sc, { type: 'spectate_end', reason }); } }
+  for (const id of match.spectators) { const sc = clients.get(id); if (sc) { sc.spectating = null; sc.caster ? castSend(sc, { type: 'spectate_end', reason, caster: true }) : send(sc, { type: 'spectate_end', reason }); } }
   match.spectators.clear();
+}
+// ---------- Release 1.0: watching tournament matches ----------
+async function casterJoin(c, msg) {
+  if (REGIONAL) {
+    const r = await regionalSession(c, msg);
+    if (r?.error) return send(c, { type: 'spectate_error', message: r.message || 'Sign in to watch tournament matches.' });
+    c.account = r.name; c.accountKey = r.key;
+  } else if (!c.account && msg.token) { const u = sessionUser(msg.token); if (u) c.account = u.name; }
+  if (!c.account) return send(c, { type: 'spectate_error', message: 'Sign in to watch tournament matches.' });
+  if (c.matchId) return send(c, { type: 'spectate_error', message: 'Leave your own match first.' });
+  const tid = String(msg.tourney || '');
+  const all = [...matches.values()].filter((m) => m.tourney?.id === tid && !m.ended && m.players.size), live = all.filter((m) => m.phase === 'live' && m.mapId);
+  if (!live.length) return send(c, { type: 'spectate_error', code: all.length ? 'soon' : 'none', message: all.length ? 'A match is picking its map. Try again in a few seconds.' : 'No matches of this tournament are being played right now. Try again in a minute.' });
+  const match = live.find((m) => m.id === String(msg.matchId || '')) || live.sort((a, b) => b.players.size - a.players.size || b.createdAt - a.createdAt)[0];
+  spectateLeave(c, false);
+  removeFromQueue(c);
+  c.spectating = match.id; c.caster = true; c.cq = []; c.castReady = false;
+  const T = match.tourney;
+  send(c, {
+    type: 'spectate_start', caster: true, delay: CASTER_DELAY_MS / 1000, matchId: match.id, mode: match.mode, ffa: match.ffa, phase: match.phase, mapId: match.mapId,
+    roster: rosterOf(match), score: { ...match.score }, scoreLimit: match.scoreLimit, players: match.ffa ? boardOf(match) : undefined, target: null, targetName: '', ended: match.ended,
+    tourney: { id: T.id, name: T.name, format: T.format, round: T.round, teams: (T.teams || []).map((t) => ({ side: t.side, name: t.name, members: t.members.map(nameOf) })) },
+    live: live.map((m) => ({ matchId: m.id, players: m.players.size, mapId: m.mapId, score: { ...m.score } })),
+  });
+  log(`${c.account} is watching ${T.name} (match ${match.id}, ${match.players.size} players)`);
+}
+// the spectator's map has loaded: from now on they get the match (late)
+function casterReady(c) {
+  const match = c.caster && c.spectating && matches.get(c.spectating);
+  if (!match) { if (c.caster) { c.spectating = null; send(c, { type: 'spectate_end', reason: 'The match is over.', caster: true }); } return; }
+  if (match.spectators?.has(c.id)) return;
+  (match.spectators ||= new Set()).add(c.id);
+  castSend(c, { type: 'match_update', matchId: match.id, roster: rosterOf(match) });
+  castSend(c, scoreMsg(match));
+  for (const t of match.tags.values()) castSend(c, { type: 'tag_spawned', matchId: match.id, tag: t });
+  for (const g of match.guns?.values() || []) castSend(c, { type: 'gun_spawned', matchId: match.id, gun: g });
+  for (const p of match.players.values()) if (p.state) castSend(c, { type: 'player_state', matchId: match.id, playerId: p.id, state: p.state });
 }
 
 // ---------- moderation (bans, reports, /admin console) ----------
@@ -1717,6 +1842,7 @@ function tourneyMsg(c, msg) {
   const fail = (message) => send(c, { type: 'tourney_error', id, message });
   if (msg.type === 'tourney_list') return send(c, { type: 'tourneys', list: tourneys.listFor(key) });
   if (msg.type === 'tourney_board') { const b = tourneys.board(id, key); return b ? send(c, { type: 'tourney_board', ...b }) : fail('That tournament no longer exists.'); }
+  if (msg.type === 'tourney_watch') { const w = tourneys.watch(id); return w.error ? fail(w.error) : send(c, { type: 'tourney_watch_go', id, name: w.tournament.name, url: w.region.url || null }); }
   const pk = partyKeys(key);
   if (msg.type === 'tourney_register') {
     const r = tourneys.register(key, id, pk.members, pk.leader);
@@ -1869,7 +1995,7 @@ function tqStart(q, entries) {
     tourney: { id: conf.id, name: conf.name, format: conf.format, round: Number.isInteger(conf.round) ? conf.round : null, side, teams, cap, gone: new Map() },
   };
   if (match.phase === 'vote') match.vote.timer = setTimeout(() => finishVote(match), VOTE_S * 1000);
-  else match.mapId = match.vote.options[0];
+  else match.mapId = match.vote.options[0], match.startAt = INTRO_MS ? now() + LOAD_GRACE_MS + INTRO_MS : 0;
   matches.set(match.id, match);
   for (const e of entries) for (const [k, cid] of e.cids) {
     const c = clients.get(cid);
@@ -2097,6 +2223,7 @@ function handle(c, raw) {
     case 'player_hit': onHit(c, msg); break;
     case 'player_respawn': onRespawn(c, msg); break;
     case 'tag_pickup': onTagPickup(c, msg); break;
+    case 'gun_pickup': onGunPickup(c, msg); break;
     case 'vote_map': onVote(c, msg); break;
     case 'weapon_fired': {
       const match = matches.get(c.matchId);
@@ -2105,7 +2232,7 @@ function handle(c, raw) {
     }
     case 'player_ready': {
       const match = matches.get(c.matchId);
-      if (match) { send(c, scoreMsg(match)); for (const t of match.tags.values()) send(c, { type: 'tag_spawned', matchId: match.id, tag: t }); if (match.phase === 'vote') send(c, { type: 'map_vote', matchId: match.id, ...voteInfo(match, c.id) }); }
+      if (match) { send(c, scoreMsg(match)); for (const t of match.tags.values()) send(c, { type: 'tag_spawned', matchId: match.id, tag: t }); for (const g of match.guns?.values() || []) send(c, { type: 'gun_spawned', matchId: match.id, gun: g }); if (match.phase === 'vote') send(c, { type: 'map_vote', matchId: match.id, ...voteInfo(match, c.id) }); }
       break;
     }
     case 'ping': send(c, { type: 'pong', t: msg.t, seq: msg.seq, serverTime: now() }); break;
@@ -2125,12 +2252,12 @@ function handle(c, raw) {
     case 'party_invite': case 'party_accept': case 'party_decline': case 'party_leave': case 'party_kick':
     case 'party_ready_start': case 'party_ready_reply': case 'party_ready_cancel':
     case 'block': case 'chat_send': case 'chat_history': case 'voice': case 'rtc':
-    case 'tourney_list': case 'tourney_register': case 'tourney_unregister': case 'tourney_play': case 'tourney_board':
+    case 'tourney_list': case 'tourney_register': case 'tourney_unregister': case 'tourney_play': case 'tourney_board': case 'tourney_watch':
       handleSocial(c, msg); break;
     case 'bug_report': mod.onBug(c, msg); break;
     case 'spectate_join': msg.drone ? droneJoin(c, msg) : spectateJoin(c, msg); break;
     case 'drone_info': droneInfo(c, msg); break;
-    case 'spectate_ready': droneReady(c); break;
+    case 'spectate_ready': c.caster ? casterReady(c) : droneReady(c); break;
     case 'spectate_leave': spectateLeave(c, true); break;
     case 'logout': onLogout(c, msg); break;
     case 'verify_code': onVerifyCode(c, msg).catch((e) => { log(`verify error: ${e.message}`); authError(c, 'server', 'The server could not check the code. Try again.'); }); break;
@@ -2152,6 +2279,7 @@ setInterval(() => {
         broadcast(match, { type: 'tag_removed', matchId: match.id, tagId: tag.id, reason: 'expired' });
       }
     }
+    for (const g of match.guns?.values() || []) if (t - g.at > GUN_LIFE_MS) { match.guns.delete(g.id); broadcast(match, { type: 'gun_removed', matchId: match.id, gunId: g.id, reason: 'expired' }); }
     if (match.ended && t - match.createdAt > 6 * 3600 * 1000) { spectatorsOut(match, 'The match is over.'); matches.delete(match.id); }
   }
 }, 2000);

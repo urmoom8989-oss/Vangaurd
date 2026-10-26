@@ -337,5 +337,13 @@ export function createTourneys(d) {
     return { ok: true, tournament: t, teams: out };
   }
 
-  return { get, status, upsert, remove, removeTeam, adminView, listFor, board, register, unregister, play, ticketCheck, result, teamOf, membersOf: (t) => teamsOf(t).flatMap((tm) => tm.members), pub, mine };
+  // Release 1.0: watching a live tournament: which server its matches are on
+  function watch(id) {
+    const t = get(id);
+    if (!t) return { error: 'That tournament no longer exists.' };
+    if (roundAt(t).cur == null) return { error: `${t.name} isn't live right now.` };
+    const region = regionOf(t);
+    return region ? { ok: true, tournament: t, region } : { error: "That tournament's servers aren't available." };
+  }
+  return { get, status, upsert, remove, removeTeam, adminView, listFor, board, register, unregister, play, ticketCheck, result, teamOf, membersOf: (t) => teamsOf(t).flatMap((tm) => tm.members), pub, mine, watch };
 }
