@@ -1108,6 +1108,10 @@ function sendMatchFound(match, c) {
   }
 }
 function addToMatch(match, c, inProgress) {
+  if (match.tourney) {
+    const k = c.accountKey || keyOf(c.account);
+    if (!match.tourney.side.has(k) || (!match.players.has(c.id) && match.players.size >= (match.tourney.cap || T_FFA_MAX))) return false;
+  }
   removeFromQueue(c);
   const p = { id: c.id, key: c.accountKey || keyOf(c.account), name: c.name, team: pickTeam(match, c), health: 100, alive: true, kills: 0, deaths: 0, score: 0, state: null, pos: null, joinedAt: now(), spawnedAt: now() + (match.phase === 'vote' ? LOAD_GRACE_MS : 0), diedAt: 0 };
   match.players.set(c.id, p);
@@ -1788,13 +1792,18 @@ async function tourneyJoin(c, msg) {
   log(`${c.name} is waiting in the ${conf.name} tournament queue`);
   tqCheck(conf.id);
 }
+// a tournament lobby: Duo is 2v2 (4 players), Squad 4v4 (8 players), Solo a free-for-all of up to T_FFA_MAX
+const tqSize = (conf) => Math.max(1, Number(conf.size) || (conf.format === 'squad' ? 4 : conf.format === 'duo' ? 2 : 1));
+const tqCap = (conf) => (conf.format === 'solo' ? T_FFA_MAX : 2 * tqSize(conf));
 const tqHere = (q, e, k) => { const cl = clients.get(e.cids.get(k)); return !!cl && cl.tourneyQ?.tid === q.conf.id && cl.tourneyQ.teamId === e.team.id; };
 const tqReady = (q) => [...q.teams.values()].filter((e) => e.team.members.every((k) => tqHere(q, e, k))).sort((a, b) => a.at - b.at);
 function tqStatus(q) {
   const ready = tqReady(q), solo = q.conf.format === 'solo', startsIn = q.cd ? Math.max(0, Math.ceil((q.cd.endsAt - now()) / 1000)) : null;
+  // counted in players: a team lobby needs both teams (2 of 4 players for Duo, 4 of 8 for Squad)
+  const size = tqSize(q.conf), cap = tqCap(q.conf), queued = solo ? ready.length : Math.min(1, ready.length) * size;
   for (const e of q.teams.values()) {
     const missing = e.team.members.filter((k) => !tqHere(q, e, k)).map(nameOf);
-    for (const cid of e.cids.values()) send(clients.get(cid), { type: 'queue_status', mode: q.conf.mode, tourney: q.conf.id, tourneyName: q.conf.name, format: q.conf.format, queued: ready.length, minimum: 2, maximum: solo ? T_FFA_MAX : 2, startsIn, full: false, waitingFor: missing });
+    for (const cid of e.cids.values()) send(clients.get(cid), { type: 'queue_status', mode: q.conf.mode, tourney: q.conf.id, tourneyName: q.conf.name, format: q.conf.format, queued, minimum: solo ? 2 : cap, maximum: cap, teams: ready.length, teamSize: size, startsIn, full: false, waitingFor: missing });
   }
 }
 function tqCheck(tid) {
@@ -1843,11 +1852,13 @@ function tqLeave(c) {
   setTimeout(() => tqCheck(tid), 0);
 }
 function tqStart(q, entries) {
-  const conf = q.conf, ffa = !!MODES[conf.mode]?.ffa, side = new Map(), teams = [];
+  const conf = q.conf, ffa = !!MODES[conf.mode]?.ffa, side = new Map(), teams = [], size = tqSize(conf), cap = tqCap(conf);
+  // exactly two teams of the format's size in a team lobby (2v2, 4v4); up to T_FFA_MAX players in a free-for-all
+  entries = conf.format === 'solo' ? entries.slice(0, T_FFA_MAX) : entries.slice(0, 2);
   entries.forEach((e, i) => {
-    const s = ffa ? 'ffa' : i === 0 ? 'alpha' : 'bravo';
-    for (const k of e.team.members) side.set(k, s);
-    teams.push({ teamId: e.team.id, side: s, members: e.team.members.slice(), name: e.team.name, base: Math.max(0, Math.floor(Number(e.team.points) || 0)) });
+    const s = ffa ? 'ffa' : i === 0 ? 'alpha' : 'bravo', members = e.team.members.slice(0, size);
+    for (const k of members) side.set(k, s);
+    teams.push({ teamId: e.team.id, side: s, members, name: e.team.name, base: Math.max(0, Math.floor(Number(e.team.points) || 0)) });
     q.teams.delete(e.team.id);
   });
   const match = {
@@ -1855,14 +1866,14 @@ function tqStart(q, entries) {
     players: new Map(), tags: new Map(), ended: false, createdAt: now(),
     phase: VOTE_S > 0 ? 'vote' : 'live', mapId: null,
     vote: { options: shuffled(MAPS).slice(0, 3), votes: new Map(), endsAt: now() + VOTE_S * 1000, timer: null },
-    tourney: { id: conf.id, name: conf.name, format: conf.format, round: Number.isInteger(conf.round) ? conf.round : null, side, teams, gone: new Map() },
+    tourney: { id: conf.id, name: conf.name, format: conf.format, round: Number.isInteger(conf.round) ? conf.round : null, side, teams, cap, gone: new Map() },
   };
   if (match.phase === 'vote') match.vote.timer = setTimeout(() => finishVote(match), VOTE_S * 1000);
   else match.mapId = match.vote.options[0];
   matches.set(match.id, match);
-  for (const e of entries) for (const cid of e.cids.values()) {
+  for (const e of entries) for (const [k, cid] of e.cids) {
     const c = clients.get(cid);
-    if (!c) continue;
+    if (!c || !side.has(k)) continue;
     c.tourneyQ = null, c.queuedMode = null;
     addToMatch(match, c, false);
   }
