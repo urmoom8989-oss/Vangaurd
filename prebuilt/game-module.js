@@ -80851,6 +80851,53 @@ function p6(A, e) {
     rec: e
   });
 }
+// Release 1.0: the weapon inspect, and the skilled reload that plays after it, as keyframes. gun: [t, x, y, z, pitch,
+// yaw, roll] (metres and degrees, from the hip pose; the gun rolls around its barrel, so the stock never swings across
+// the camera); lh: the left hand on the gun's grip / magazine / bolt catch, or free; lhPose: its hand shape.
+var VG_VM_KEYS = {
+  rifle: {
+    inspect: {
+      dur: 3.6,
+      // tilt it up to show the right side and the magazine, turn it flat to show its profile (the hand taps the
+      // magazine), then back; the stock stays out of the camera
+      gun: [[0, 0, 0, 0, 0, 0, 0], [0.45, -0.04, 0.04, -0.11, 12, 24, -24], [1.35, -0.045, 0.045, -0.12, 14, 27, -27], [1.85, -0.03, 0.012, -0.04, -4, 30, -18], [2.7, -0.03, 0.014, -0.045, -6, 32, -20], [3.2, -0.01, 4e-3, -0.01, 0, 6, -4], [3.6, 0, 0, 0, 0, 0, 0]],
+      lh: [[0, "grip"], [0.45, "grip", [0, 0, -0.02]], [1.9, "grip", [0, 0, -0.02]], [2.15, "mag", [-0.012, -0.03, 0.02], [0, 0, -8]], [2.3, "mag", [0, -6e-3, 0]], [2.45, "mag", [-0.012, -0.03, 0.02], [0, 0, -8]], [2.9, "grip", [0, -0.01, 0.01]], [3.2, "grip"]],
+      lhPose: [[0, "gripVert"], [1.9, "open", 0.15], [2.12, "magGrab", 0.1], [2.45, "open", 0.1], [2.95, "gripVert", 0.15]],
+      events: [[0.1, "inspect_start"], [2.3, "magTap"], [3.3, "rattle"]]
+    },
+    flourish: {
+      dur: 2.3,
+      gun: [[0, 0, 0, 0, 0, 0, 0], [0.14, 0.01, 0.025, -0.01, 10, -6, -32], [0.26, 0.025, 0.03, -0.01, 12, -8, -42], [0.5, 0, 0.02, -0.02, 8, -6, -24], [0.86, -5e-3, 0.012, -0.02, 6, -4, -18], [0.95, -5e-3, 0.03, -0.025, -6, -4, -10], [1.15, -0.01, 0.025, -0.03, 4, 6, 38], [1.42, -0.01, 0.02, -0.03, 4, 6, 40], [1.62, 0, 0.012, -5e-3, 2, 4, 22], [1.75, 0, 0.012, 0.012, 0, 2, 18], [2.05, 0, 0, 0, 0, 0, 4], [2.3, 0, 0, 0, 0, 0, 0]],
+      lh: [[0, "grip"], [0.1, "mag", [-0.01, -0.03, 0.02], [0, 0, -10]], [0.2, "mag", [-0.06, -0.14, 0.03], [20, 10, 20]], [0.32, "free", [-0.16, -0.3, 0.04], [35, 15, 35]], [0.52, "mag", [-0.1, -0.32, 0.1], [40, 20, 40]], [0.76, "mag", [-0.04, -0.14, 0.04], [14, 5, 10]], [0.9, "mag", [0, -0.02, 0], [-5, 0, 0]], [0.95, "mag", [0, 0, 0]], [1.05, "catch", [-0.05, -0.05, 0.05], [0, 0, 0]], [1.22, "catch", [-0.03, -0.022, 0.016], [0, 0, 0]], [1.3, "catch", [-0.03, -0.016, 0], [0, 0, 0]], [1.45, "catch", [-0.045, -0.035, 0.035], [0, 0, 0]], [1.75, "grip", [-0.01, -0.03, 0.04], [10, 0, -10]], [2, "grip"]],
+      lhPose: [[0, "gripVert"], [0.08, "magGrab", 0.08], [0.3, "open", 0.08], [0.46, "magGrab", 0.08], [0.98, "flat", 0.06], [1.15, "press", 0.08], [1.4, "open", 0.1], [1.8, "gripVert", 0.14]],
+      events: [[0.24, "magDrop"], [0.5, "magNew"], [0.95, "magSeat"], [1.3, "boltRelease"], [2.05, "rattle"]]
+    }
+  },
+  pistol: {
+    inspect: {
+      dur: 3.2,
+      // the left side (muzzle turned in), a flip of the wrist, then the right side tilted up
+      gun: [[0, 0, 0, 0, 0, 0, 0], [0.5, -0.04, 0.03, -0.04, 6, -50, 10], [1.4, -0.04, 0.032, -0.045, 8, -54, 12], [2, -0.03, 0.03, -0.05, 14, 22, -30], [2.7, -0.03, 0.032, -0.05, 16, 25, -32], [3.2, 0, 0, 0, 0, 0, 0]],
+      lhW: [[0, 0], [0.3, 1], [2.9, 1], [3.2, 0]],
+      lh: [[0, "grip"], [0.4, "free", [-0.12, -0.25, 0.1], [20, 10, 20]], [2.8, "free", [-0.12, -0.25, 0.1], [20, 10, 20]], [3.2, "grip"]],
+      lhPose: [[0, "supportWrap"], [0.3, "relaxed", 0.2], [2.8, "supportWrap", 0.2]],
+      events: [[0.1, "inspect_start"]]
+    },
+    flourish: {
+      dur: 1.6,
+      gun: [[0, 0, 0, 0, 0, 0, 0], [0.12, -0.02, 0.035, 0.02, 14, 8, -48], [0.24, -0.03, 0.03, 0.03, 20, 10, -30], [0.7, -0.03, 0.03, 0.03, 18, 10, -26], [0.8, -0.03, 0.05, 0.022, 26, 10, -20], [0.95, -0.02, 0.035, 0.02, 10, 6, 30], [1.1, -0.02, 0.05, 0.015, 16, 6, 34], [1.25, -0.01, 0.02, 0.01, 4, 2, 12], [1.6, 0, 0, 0, 0, 0, 0]],
+      lh: [[0, "grip"], [0.08, "grip", [-0.04, -0.06, 0.04], [0, 0, 20]], [0.22, "free", [-0.14, -0.28, 0.12], [30, 15, 30]], [0.36, "mag", [-0.12, -0.33, 0.13], [40, 20, 40]], [0.55, "mag", [-0.04, -0.14, 0.03], [10, 5, 8]], [0.68, "mag", [0, -0.05, 4e-3], [-6, 0, 0]], [0.78, "mag", [0, 0, 0]], [0.83, "mag", [0, -6e-3, 0]], [0.98, "grip", [-0.02, 0.03, 0.02], [0, 0, 10]], [1.1, "grip", [-0.02, 0.02, 0], [0, 0, 10]], [1.3, "grip", [-0.02, -0.03, 0.02], [0, 0, 10]], [1.48, "grip"]],
+      lhPose: [[0, "supportWrap"], [0.07, "open", 0.1], [0.28, "magGrab", 0.08], [0.8, "flat", 0.06], [0.95, "press", 0.08], [1.2, "open", 0.1], [1.4, "supportWrap", 0.12]],
+      events: [[0.14, "magDrop"], [0.3, "magNew"], [0.78, "magSeat"], [1.1, "boltRelease"]]
+    }
+  }
+};
+// a clip from those keyframes (xf: hand track, tr: number track, pt: hand shape track)
+function vgVmClip(k, xf, tr, pt) {
+  if (!k) return void 0;
+  const c = { dur: k.dur, allowAds: !1, gun: tr(k.gun.map((r) => r.slice())), events: k.events.map((r) => r.slice()) };
+  return k.lh && (c.lh = xf("l", k.lh.map((r) => r.slice()))), k.lhW && (c.lhW = tr(k.lhW.map((r) => r.slice()))), k.lhPose && (c.lhPose = pt(k.lhPose.map((r) => r.slice()))), c;
+}
 function C6({ xf: A, tr: e, pt: t, rec: i }) {
   return i.catchHold = new Oe().setFromEuler(new ga(10 * Bu, 0, 0)).premultiply(i.gripL.quat.clone()), {
     reload: {
@@ -81541,171 +81588,9 @@ function C6({ xf: A, tr: e, pt: t, rec: i }) {
         [2.2, "rattle"]
       ]
     },
-    inspect: {
-      dur: 3.8,
-      allowAds: !1,
-      gun: e([
-        [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        [
-          0.55,
-          -0.05,
-          0.03,
-          0.03,
-          12,
-          -52,
-          18
-        ],
-        [
-          1.5,
-          -0.052,
-          0.034,
-          0.028,
-          10,
-          -58,
-          20
-        ],
-        [
-          1.75,
-          -0.052,
-          0.034,
-          0.028,
-          10,
-          -58,
-          20
-        ],
-        [
-          2.35,
-          -0.035,
-          0.03,
-          0.03,
-          -12,
-          22,
-          58
-        ],
-        [
-          3.1,
-          -0.035,
-          0.034,
-          0.028,
-          -10,
-          26,
-          60
-        ],
-        [
-          3.8,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ]
-      ]),
-      lh: A("l", [
-        [0, "grip"],
-        [
-          0.5,
-          "grip",
-          [
-            0,
-            0,
-            -0.02
-          ]
-        ],
-        [
-          2.3,
-          "grip",
-          [
-            0,
-            0,
-            -0.02
-          ]
-        ],
-        [
-          2.62,
-          "mag",
-          [
-            -0.012,
-            -0.03,
-            0.02
-          ],
-          [
-            0,
-            0,
-            -8
-          ]
-        ],
-        [
-          2.72,
-          "mag",
-          [
-            0,
-            -6e-3,
-            0
-          ]
-        ],
-        [
-          2.84,
-          "mag",
-          [
-            -0.012,
-            -0.03,
-            0.02
-          ],
-          [
-            0,
-            0,
-            -8
-          ]
-        ],
-        [
-          3.3,
-          "grip",
-          [
-            0,
-            -0.01,
-            0.01
-          ]
-        ],
-        [3.6, "grip"]
-      ]),
-      lhPose: t([
-        [0, "gripVert"],
-        [
-          2.35,
-          "open",
-          0.15
-        ],
-        [
-          2.6,
-          "magGrab",
-          0.1
-        ],
-        [
-          2.84,
-          "open",
-          0.1
-        ],
-        [
-          3.35,
-          "gripVert",
-          0.15
-        ]
-      ]),
-      events: [
-        [0.1, "inspect_start"],
-        [2.72, "magTap"],
-        [3.5, "rattle"]
-      ]
-    },
+    // Release 1.0: the inspect, and the skilled reload that follows it (see VG_VM_KEYS)
+    inspect: vgVmClip(VG_VM_KEYS.rifle.inspect, A, e, t),
+    reloadFlourish: vgVmClip(VG_VM_KEYS.rifle.flourish, A, e, t),
     melee: {
       dur: 0.66,
       allowAds: !1,
@@ -82477,117 +82362,8 @@ function m6({ xf: A, tr: e, pt: t, rec: i }) {
         [1.36, "boltRelease"]
       ]
     },
-    inspect: {
-      dur: 3.2,
-      gun: e([
-        [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        [
-          0.5,
-          -0.05,
-          0.03,
-          0.02,
-          10,
-          -60,
-          15
-        ],
-        [
-          1.4,
-          -0.05,
-          0.034,
-          0.02,
-          12,
-          -64,
-          18
-        ],
-        [
-          2,
-          -0.035,
-          0.03,
-          0.02,
-          -8,
-          30,
-          55
-        ],
-        [
-          2.7,
-          -0.035,
-          0.03,
-          0.02,
-          -8,
-          32,
-          58
-        ],
-        [
-          3.2,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ]
-      ]),
-      lhW: e([
-        [0, 0],
-        [0.3, 1],
-        [2.9, 1],
-        [3.2, 0]
-      ]),
-      lh: A("l", [
-        [0, "grip"],
-        [
-          0.4,
-          "free",
-          [
-            -0.12,
-            -0.25,
-            0.1
-          ],
-          [
-            20,
-            10,
-            20
-          ]
-        ],
-        [
-          2.8,
-          "free",
-          [
-            -0.12,
-            -0.25,
-            0.1
-          ],
-          [
-            20,
-            10,
-            20
-          ]
-        ],
-        [3.2, "grip"]
-      ]),
-      lhPose: t([
-        [0, "supportWrap"],
-        [
-          0.3,
-          "relaxed",
-          0.2
-        ],
-        [
-          2.8,
-          "supportWrap",
-          0.2
-        ]
-      ]),
-      events: [[0.1, "inspect_start"]]
-    },
+    inspect: vgVmClip(VG_VM_KEYS.pistol.inspect, A, e, t),
+    reloadFlourish: vgVmClip(VG_VM_KEYS.pistol.flourish, A, e, t),
     melee: {
       dur: 0.58,
       gun: e([
@@ -83209,6 +82985,9 @@ function b6(A) {
     const OA = u.parts?.mag, oe = HA.magScale;
     OA && (oe ? OA.scale.set(oe[0], oe[1], oe[2]) : OA.scale.set(1, 1, 1));
   }
+  // the grenade throw holds at this point of its clip while the button is held (the arm drawn back, the pin out)
+  const VG_GREN_HOLD = 0.56;
+  let vgCook = -1;
   function Je(HA, OA) {
     const oe = u.clips[HA];
     return oe ? (v = {
@@ -83219,7 +82998,7 @@ function b6(A) {
     }, R = 0, k = 0, !0) : (OA?.(), !1);
   }
   function Dt() {
-    v && (u.parts.mag && (u.parts.mag.visible = !u.vgMelee), u.handMag.visible = !1, f.root.visible = !1, v = null);
+    v && (u.parts.mag && (u.parts.mag.visible = !u.vgMelee), u.handMag.visible = !1, f.root.visible = !1, v = null), vgCook = -1;
   }
   function Tt(HA) {
     mA.weaponId = E.id, mA.cue = HA, i.emit("weapons:cue", mA);
@@ -83262,6 +83041,13 @@ function b6(A) {
   function Pe(HA) {
     if (!v) return;
     R += HA * (v.rate || 1);
+    if (v.name === "grenade" && v.hold && R > VG_GREN_HOLD) {
+      R = VG_GREN_HOLD, vgCook = Math.max(0, vgCook) + HA;
+      if (vgCook >= Ic.fuse && E.grenadeType !== "proximity") {
+        vgCookOff();
+        return;
+      }
+    }
     const OA = v.data.events;
     for (; k < OA.length && R >= OA[k][0]; )
       Tt(OA[k][1]), k++;
@@ -83280,6 +83066,15 @@ function b6(A) {
     return vBurstQ = 0, E.reloading = !0, E.reloadProgress = 0, E.reloadType = oe ? "empty" : "tactical", E.action = "reload", wA.weaponId = E.id, wA.phase = "start", wA.type = E.reloadType, i.emit("weapon:reload", wA), Je(oe ? "reloadEmpty" : "reload", () => {
       E.reloading = !1, E.reloadProgress = 0, E.action = "idle", wA.weaponId = E.id, wA.phase = "end", wA.type = E.reloadType, i.emit("weapon:reload", wA);
     }), !0;
+  }
+  // Release 1.0: after an inspect, a skilled reload: quick and flashy, it tops up the magazine (with a full one it's
+  // just for show). Anything that cancels a reload cancels it.
+  function vgFlourish() {
+    if (!u || u.vgMelee || E.reloading || !u.clips.reloadFlourish || !Xe()) return;
+    E.reloading = !0, E.reloadProgress = 0, E.reloadType = "tactical", E.action = "reload", wA.weaponId = E.id, wA.phase = "start", wA.type = "tactical", i.emit("weapon:reload", wA);
+    Je("reloadFlourish", () => {
+      E.reloading = !1, E.reloadProgress = 0, E.action = "idle", wA.weaponId = E.id, wA.phase = "end", wA.type = E.reloadType, i.emit("weapon:reload", wA);
+    });
   }
   function gt() {
     const HA = u.cfg, OA = E.ammo > 0 && HA.chamber || 0, oe = HA.magSize + OA - E.ammo, xe = Math.min(oe, E.reserve);
@@ -83339,12 +83134,20 @@ function b6(A) {
   }
   function vA() {
     f.root.visible = !1;
+    const vgC = E.grenadeType === "proximity" ? 0 : Math.max(0, vgCook);
+    vgCook = -1;
     const HA = p.find((OA) => !OA.alive) || p[0];
-    e.getWorldPosition(ie), e.getWorldDirection(SA), T.set(1, 0, 0).applyQuaternion(e.getWorldQuaternion(qA)), HA.pos.copy(ie).addScaledVector(SA, 0.4).addScaledVector(T, -0.15), HA.pos.y -= 0.1, HA.vel.copy(SA).multiplyScalar(Ic.speed), HA.vel.y += Ic.up, HA.spin.set(9, 2, 4), HA.alive = !0, HA.t = 0, HA.rest = !1, HA.type = E.grenadeType, HA.obj.visible = !0, HA.obj.position.copy(HA.pos), i.emit("weapons:grenade", {
+    e.getWorldPosition(ie), e.getWorldDirection(SA), T.set(1, 0, 0).applyQuaternion(e.getWorldQuaternion(qA)), HA.pos.copy(ie).addScaledVector(SA, 0.4).addScaledVector(T, -0.15), HA.pos.y -= 0.1, HA.vel.copy(SA).multiplyScalar(Ic.speed), HA.vel.y += Ic.up, HA.spin.set(9, 2, 4), HA.alive = !0, HA.t = vgC, HA.rest = !1, HA.type = E.grenadeType, HA.obj.visible = !0, HA.obj.position.copy(HA.pos), i.emit("weapons:grenade", {
       phase: "thrown",
       type: HA.type,
       position: HA.pos
     }), A.services.audio.play("grenade_throw", { bus: "sfx" });
+  }
+  // held for the whole fuse: it goes off in your hand
+  function vgCookOff() {
+    const HA = p.find((OA) => !OA.alive) || p[0], OA = v?.onDone;
+    e.getWorldPosition(ie), e.getWorldDirection(SA), HA.pos.copy(ie).addScaledVector(SA, 0.3), HA.pos.y -= 0.15, HA.type = E.grenadeType, HA.vel.set(0, 0, 0);
+    vgCook = -1, f.root.visible = !1, v = null, oA(HA), OA?.();
   }
   function oA(HA) {
     if (HA.alive = !1, HA.obj.visible = !1, HA.type === "smoke") A.services.vfx.spawn("smoke", {
@@ -83442,7 +83245,7 @@ function b6(A) {
     }
     let Mt = A.settings.data.controls.toggleAds ? t.pressed("ads") ? !(w > 0.5) : w > 0.5 && E.ads > 0 : t.isDown("ads");
     if ((xe || vgBF || G > 0.07 || v && !v.data.allowAds || Y >= 0 || N > u.cfg.equipTime * 0.5 || oe.melee) && (Mt = !1), w = Math.min(1, Math.max(0, w + (Mt ? 1 : -1) * HA / oe.adsTime)), E.ads = Ed(w), t.pressed("inspect") && !vgBF && Xe() && !xe && E.ads < 0.1 && (E.action = "inspect", E.inspecting = !0, Je("inspect", () => {
-      E.inspecting = !1, E.action = "idle";
+      E.inspecting = !1, E.action = "idle", vgFlourish();
     })), t.pressed("ads") && v?.name === "inspect" && (Dt(), E.inspecting = !1, E.action = "idle"), xe && v?.name === "inspect" && (Dt(), E.inspecting = !1, E.action = "idle"), t.pressed("fireMode") && !vgBF && Xe() && u.cfg.modes.length > 1 && Je("fireMode"), t.pressed("reload") && !vgBF && !oe.melee && (Xe() || v?.name === "inspect") && !xe && (Dt(), E.inspecting = !1, qe()), t.pressed("melee") && !vgBF && !vgMountPress(A, E.ads) && (Xe() || v?.name === "inspect" || E.reloading) && (E.reloading && AA(), Dt(), E.inspecting = !1, E.action = "melee", Je("melee", () => {
       E.action = "idle";
     })), t.pressed("tactical")) {
@@ -83457,7 +83260,7 @@ function b6(A) {
     }
     t.pressed("grenade") && !vgBF && E.lethal > 0 && (Xe() || v?.name === "inspect" || E.reloading && !v?.data?.pastSeat) && (E.reloading && AA(), Dt(), E.lethal--, E.action = "grenade", Je("grenade", () => {
       E.action = "idle";
-    })), y = Math.max(y - HA, -HA);
+    })), v?.name === "grenade" && (v.hold = v.hold !== !1 && t.isDown("grenade")), y = Math.max(y - HA, -HA);
     const ai = t.isDown("fire"), Qi = t.pressed("fire"), hi = A.services.gamemode.state || {};
     oe.melee ? !(hi.matchType === "tdm" && !["match-live", "match-dead"].includes(hi.stage)) && !vgBF && (ai || Qi) && y <= 0 && Y < 0 && N <= u.cfg.equipTime * 0.25 && (!v || v.name === "inspect") && (v && (Dt(), E.inspecting = !1), E.action = "melee", y = 0.05, Je("melee", () => {
       E.action = "idle";
@@ -83743,6 +83546,9 @@ function b6(A) {
       await A.services.materials.ready;
       const HA = await dt();
       o = a6(HA, A.services), Te();
+      typeof window < "u" && (window.__VGWPN__ = { keys: VG_VM_KEYS, rebuild() {
+        for (const k in I) I[k] && (I[k].clips = p6(k, I[k]));
+      }, state: () => ({ action: E.action, ammo: E.ammo, reserve: E.reserve, reloading: E.reloading, inspecting: E.inspecting, clip: v?.name || null, t: R, kind: u?.cfg?.kind }) });
       const OA = A.shot?.weapon;
       bt(OA?.id && I[OA.id] ? OA.id : "rifle");
       try {
