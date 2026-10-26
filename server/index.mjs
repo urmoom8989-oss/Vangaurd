@@ -2,7 +2,7 @@
 // Speaks the same WebSocket protocol as the game client (path /ws).
 // Railway: root directory /server, start command `npm start`; it listens on $PORT.
 import http from 'node:http';
-import { createModeration, cleanDevice } from './moderation.mjs';
+import { createModeration, cleanDevice, levelOf } from './moderation.mjs';
 import { createMailer, codeEmail } from './mailer.mjs';
 import { createOps } from './ops.mjs';
 import { createTourneys, T_FFA_MAX } from './tourneys.mjs';
@@ -1159,6 +1159,7 @@ function leaveMatch(c, notify = true) {
   const lp = match.players.get(c.id);
   if (match.tourney && lp && !match.ended) match.tourney.gone.set(lp.key, { kills: lp.kills, score: lp.score, at: now() });
   match.players.delete(c.id);
+  if (match.tourney && lp && !match.ended) tourneyLeft(match, lp.key);
   if (notify) send(c, { type: 'match_left', matchId: match.id });
   if (match.tourney && !match.ended && match.players.size) tourneyForfeit(match);
   broadcast(match, { type: 'player_left', matchId: match.id, playerId: c.id });
@@ -1828,7 +1829,22 @@ if (ops.state.release) raiseLatest(ops.state.release.build, ops.state.release.la
 // soon as two whole teams are waiting (Duo and Squad), or 2 to 8 solo players after a short wait (Solo). Results go
 // back to the main server.
 const TQ_FFA_WAIT = process.env.TOURNEY_FFA_WAIT !== undefined && process.env.TOURNEY_FFA_WAIT !== '' && Number.isFinite(Number(process.env.TOURNEY_FFA_WAIT)) ? Math.max(0, Number(process.env.TOURNEY_FFA_WAIT)) : 20;
-const tourneys = REGIONAL ? null : createTourneys({ DATA_DIR, now, log, nameOf, keyOf, userOf, staff: (k) => ops.staff(k), modeName: shortName, regions: () => REGIONS, mainRegion: { id: REGION, name: REGION_NAMES[REGION] || REGION } });
+// Release 1.0: what tournament requirements look at: the lifetime level and the online career (from the account's
+// cloud save), how old the account is and whether its email is verified
+const factsCache = new Map();
+function playerFacts(key) {
+  const u = userOf(key), sv = saves[key], rev = sv?.rev ?? -1, c = factsCache.get(key);
+  let f = c && c.rev === rev ? c.f : null;
+  if (!f) {
+    let p = null;
+    try { p = sv?.blob ? JSON.parse(sv.blob)?.progression : null; } catch { p = null; }
+    const mp = p?.career?.mp || {}, n = (v) => Math.max(0, Math.floor(Number(v) || 0));
+    f = { level: levelOf(n(p?.xp)), matches: n(mp.matches), kills: n(mp.kills), deaths: n(mp.deaths) };
+    factsCache.set(key, { rev, f });
+  }
+  return { ...f, created: u?.created || 0, email: !!u?.emailVerified };
+}
+const tourneys = REGIONAL ? null : createTourneys({ DATA_DIR, now, log, nameOf, keyOf, userOf, staff: (k) => ops.staff(k), modeName: shortName, regions: () => REGIONS, mainRegion: { id: REGION, name: REGION_NAMES[REGION] || REGION }, facts: playerFacts, party: (k) => partyKeys(k).members });
 function tourneyListTo(key) { if (tourneys) sendTo(key, { type: 'tourneys', list: tourneys.listFor(key) }); }
 // the owner changed a tournament: every game with the Tournaments screen open asks for the list again
 if (tourneys) mod.attachTourneys({ ...tourneys, changed(keys) { broadcastAll({ type: 'tourneys_changed' }); for (const k of keys || []) tourneyListTo(k); } });
@@ -1886,11 +1902,11 @@ function tourneyResult(tid, matchId, rows, round = null) {
     if (!tm) continue;
     const my = tourneys.board(t.id, tm.members[0], 0)?.my;
     for (const k of tm.members) {
-      sendTo(k, { type: 'tourney_result', id: t.id, name: t.name, points: row.points, kills: row.kills, won: row.won, place: row.place, total: tm.points, rank: my?.rank ?? null, matches: tm.matches, maxMatches: t.maxMatches, left: my?.left ?? 0, rounds: t.rounds });
+      sendTo(k, { type: 'tourney_result', id: t.id, name: t.name, points: row.points, kills: row.kills, won: row.won, place: row.place, forfeit: !!row.forfeit, total: tm.points, rank: my?.rank ?? null, matches: tm.matches, maxMatches: t.maxMatches, left: my?.left ?? 0, rounds: t.rounds });
       tourneyListTo(k);
     }
   }
-  log(`tournament ${t.name}: match ${matchId} · ${r.teams.map((x) => `${x.name} +${x.points}`).join(', ')}`);
+  log(`tournament ${t.name}: match ${matchId} · ${r.teams.map((x) => `${x.name} +${x.points}${x.forfeit ? ' (forfeit)' : ''}`).join(', ')}`);
   return { ok: true };
 }
 
@@ -2009,17 +2025,20 @@ function tqStart(q, entries) {
   if (!q.teams.size) { clearInterval(q.cd?.timer); tq.delete(conf.id); } else tqStatus(q);
 }
 // the team's tournament points so far, live in the match: before it, plus every elimination in it (the win and the
-// free-for-all placement are added when it ends)
+// free-for-all placement are added when it ends). A player who left forfeited theirs.
 function tourneyLivePoints(match, key) {
   const T = match.tourney, tm = T?.teams.find((x) => x.members.includes(key));
   if (!tm) return null;
   let kills = 0;
-  for (const k of tm.members) {
-    let here = false;
-    for (const p of match.players.values()) if (p.key === k) { kills += p.kills; here = true; }
-    if (!here) kills += T.gone.get(k)?.kills || 0;
-  }
+  for (const k of tm.members) for (const p of match.players.values()) if (p.key === k) kills += p.kills;
   return tm.base + kills;
+}
+// a player left a tournament match before the end: their teammates' badge drops their eliminations
+function tourneyLeft(match, key) {
+  const T = match.tourney, tm = T?.teams.find((x) => x.members.includes(key));
+  if (!tm) return;
+  const points = tourneyLivePoints(match, key);
+  for (const p of match.players.values()) if (tm.members.includes(p.key)) send(clients.get(p.id), { type: 'tourney_points', matchId: match.id, id: T.id, points, add: 0, left: nameOf(key) });
 }
 function tourneyLive(match, attacker) {
   const T = match.tourney, tm = T.teams.find((x) => x.members.includes(attacker.key));
@@ -2043,17 +2062,22 @@ function tourneyReport(match, winner) {
   const T = match.tourney;
   if (T.reported) return;
   T.reported = true;
+  // Release 1.0: whoever left before the end forfeited: their eliminations don't count, and a team that's gone
+  // altogether (a Solo player who left) gets nothing from the match
   const statOf = (k) => {
     for (const p of match.players.values()) if (p.key === k) return { kills: p.kills, score: p.score, here: 1, at: 0 };
     const g = T.gone.get(k);
-    return g ? { kills: g.kills, score: g.score, here: 0, at: g.at } : { kills: 0, score: 0, here: 0, at: 0 };
+    return { kills: 0, score: g?.score || 0, here: 0, at: g?.at || 0 };
   };
   const rows = [];
   if (match.ffa) {
     const ppl = T.teams.map((t) => ({ t, s: statOf(t.members[0]), w: match.players.get(winner)?.key === t.members[0] ? 1 : 0 }));
     ppl.sort((a, b) => b.w - a.w || b.s.here - a.s.here || b.s.score - a.s.score || b.s.at - a.s.at);
-    ppl.forEach((x, i) => rows.push({ teamId: x.t.teamId, place: i + 1, kills: x.s.kills }));
-  } else for (const t of T.teams) rows.push({ teamId: t.teamId, won: winner === t.side, kills: t.members.reduce((n, k) => n + statOf(k).kills, 0) });
+    ppl.forEach((x, i) => rows.push(x.s.here ? { teamId: x.t.teamId, place: i + 1, kills: x.s.kills } : { teamId: x.t.teamId, forfeit: true }));
+  } else for (const t of T.teams) {
+    const st = t.members.map(statOf);
+    rows.push(st.some((x) => x.here) ? { teamId: t.teamId, won: winner === t.side, kills: st.reduce((n, x) => n + x.kills, 0) } : { teamId: t.teamId, forfeit: true });
+  }
   const id = `${REGION}:${match.id}`;
   if (REGIONAL) internalPost(MAIN_URL, '/internal/tourney-result', { tid: T.id, matchId: id, round: T.round, rows }).catch((e) => log(`could not report tournament match ${match.id}: ${e.message}`));
   else tourneyResult(T.id, id, rows, T.round);

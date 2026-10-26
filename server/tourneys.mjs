@@ -15,6 +15,15 @@
 //
 // Participation: Public (everyone sees it) or Invite only (only the players on its list see it and can register; the
 // whole team has to be on the list).
+//
+// Requirements (Release 1.0): the owner can ask for a lifetime level (at least and/or at most; levels past 100 are
+// prestige levels), a number of online matches played, an online K/D, an account at least so many days old, a
+// verified email, and a qualifier: having played in an earlier tournament, or having finished in its top N. Every
+// player on a team has to meet them whenever the team plays.
+//
+// Forfeits (Release 1.0): a player who leaves a match before it ends forfeits it: their eliminations in it don't
+// count. A team that leaves altogether (a Solo player who leaves) gets no points at all from that match, and it still
+// counts as one of the team's matches.
 import fs from 'node:fs';
 import pathMod from 'node:path';
 import crypto from 'node:crypto';
@@ -45,11 +54,46 @@ export function addDays(ms, days, tz) {
   return wall - off(t);
 }
 
+// the requirements the owner set (null = none)
+export function reqClean(b) {
+  b = b && typeof b === 'object' ? b : {};
+  const int = (v, lo, hi) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n >= lo ? Math.min(hi, n) : null; };
+  const kd = Math.round(Number(b.minKd) * 100) / 100;
+  const prevId = typeof b.prevId === 'string' && /^t_[0-9a-f]{4,32}$/.test(b.prevId) ? b.prevId : null;
+  return { minLevel: int(b.minLevel, 2, 999), maxLevel: int(b.maxLevel, 1, 999), minMatches: int(b.minMatches, 1, 100000), minKd: Number.isFinite(kd) && kd > 0 ? Math.min(20, kd) : null, minAgeDays: int(b.minAgeDays, 1, 3650), email: b.email === true, prevId, prevRank: prevId ? int(b.prevRank, 1, 1000) : null };
+}
+const reqAny = (q) => !!q && !!(q.minLevel || q.maxLevel || q.minMatches || q.minKd || q.minAgeDays || q.email || q.prevId);
+// a requirement in words, and what the player has
+export function reqLabel(m) {
+  switch (m.id) {
+    case 'minLevel': return `Lifetime level ${m.need}+`;
+    case 'maxLevel': return `Lifetime level ${m.need} or lower`;
+    case 'minMatches': return `${m.need}+ online matches played`;
+    case 'minKd': return `Online K/D ${Number(m.need).toFixed(2)}+`;
+    case 'minAgeDays': return `An account at least ${m.need} day${m.need === 1 ? '' : 's'} old`;
+    case 'prev': return `Played in ${m.name}`;
+    case 'prevRank': return `Top ${m.need} in ${m.name}`;
+    default: return 'A verified email';
+  }
+}
+function reqHave(m) {
+  switch (m.id) {
+    case 'minLevel': case 'maxLevel': return `level ${m.have}`;
+    case 'minMatches': return `${m.have} played`;
+    case 'minKd': return `K/D ${Number(m.have).toFixed(2)}`;
+    case 'minAgeDays': return `${m.have} day${m.have === 1 ? '' : 's'} old`;
+    case 'prev': return "didn't play";
+    case 'prevRank': return m.have ? `#${m.have}` : "didn't play";
+    default: return 'not verified';
+  }
+}
+
 const clean = (v, n) => String(v ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f<>]+/g, ' ').replace(/[ \t]+/g, ' ').trim().slice(0, n);
 const cleanText = (v, n) => String(v ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f<>]+/g, ' ').trim().slice(0, n);
 
 export function createTourneys(d) {
-  // d: { DATA_DIR, now, log, nameOf, keyOf, userOf, staff(key), modeName(mode), regions() -> [{ id, name, url }], mainRegion: { id, name } }
+  // d: { DATA_DIR, now, log, nameOf, keyOf, userOf, staff(key), modeName(mode), regions() -> [{ id, name, url }], mainRegion: { id, name },
+  //      facts(key) -> { level, matches, kills, deaths, created, email } (for the requirements), party(key) -> keys }
   const FILE = pathMod.join(d.DATA_DIR, 'tournaments.json');
   const st = { list: [] };
   try {
@@ -60,7 +104,7 @@ export function createTourneys(d) {
   for (const t of st.list) {
     t.rounds ||= 1; t.every ||= 'day'; t.roundLen ||= Math.max(10 * 60e3, (t.endsAt || 0) - (t.startsAt || 0));
     t.art ||= t.format === 'squad' ? 'squad' : t.format === 'duo' ? 'duo' : 'vanguard'; t.theme ||= 'gold'; t.description ??= '';
-    t.prizePool ??= 0; t.participation ||= 'public'; t.invites ||= []; t.tz ??= null;
+    t.prizePool ??= 0; t.participation ||= 'public'; t.invites ||= []; t.tz ??= null; t.req = reqClean(t.req);
     for (const tm of Object.values(t.teams || {})) tm.rm ||= tm.matches ? { 0: tm.matches } : {};
   }
   let saveTimer = null;
@@ -150,7 +194,10 @@ export function createTourneys(d) {
       if (!invites.length) return { error: 'Add the players who can join (Invite only).' };
     }
     if (old && old.format !== format && teamsOf(old).length) return { error: "Teams have already registered, so the format can't change. Make a new tournament instead." };
-    return { ok: true, v: { name, description, format, mode, region, art, theme, rounds, every, tz, startsAt, roundLen, endsAt, maxMatches, scoreLimit, prizePool, prize: clean(body.prize, 120), rules: cleanText(body.rules, 800), participation, invites } };
+    const req = reqClean(body.req);
+    if (req.minLevel && req.maxLevel && req.maxLevel < req.minLevel) return { error: 'Requirements: the highest level has to be at least the lowest level.' };
+    if (req.prevId && (!get(req.prevId) || req.prevId === old?.id)) return { error: 'Requirements: pick another tournament as the qualifier.' };
+    return { ok: true, v: { name, description, format, mode, region, art, theme, rounds, every, tz, startsAt, roundLen, endsAt, maxMatches, scoreLimit, prizePool, prize: clean(body.prize, 120), rules: cleanText(body.rules, 800), participation, invites, req } };
   }
   function upsert(by, body) {
     const old = body.id ? get(body.id) : null;
@@ -202,7 +249,41 @@ export function createTourneys(d) {
       startsAt: t.startsAt, endsAt: t.endsAt, rounds: t.rounds, every: t.every, roundLen: t.roundLen, windows: ra.W, round: ra.cur, nextRound: ra.next,
       maxMatches: t.maxMatches, scoreLimit: t.scoreLimit, prizePool: t.prizePool, prize: t.prize, rules: t.rules, participation: t.participation,
       status: ra.cur != null ? 'live' : ra.next != null ? 'upcoming' : 'ended', teams: teamsOf(t).length,
+      req: reqAny(t.req) ? { ...Object.fromEntries(Object.entries(t.req).filter(([, v]) => v)), ...(t.req.prevId ? { prevName: get(t.req.prevId)?.name || null } : {}) } : null,
     };
+  }
+  // ---------- requirements: what a player is missing ([] when they meet them all)
+  function reqMiss(t, key) {
+    const q = t.req;
+    if (!reqAny(q)) return [];
+    const f = d.facts?.(key) || {}, lv = Math.max(1, f.level | 0), out = [];
+    const kd = Math.round(((f.deaths | 0) ? (f.kills | 0) / f.deaths : f.kills | 0) * 100) / 100;
+    // (an account from before sign-up dates were kept is old enough)
+    const age = f.created ? Math.floor((d.now() - f.created) / 864e5) : 1e6;
+    if (q.minLevel && lv < q.minLevel) out.push({ id: 'minLevel', need: q.minLevel, have: lv });
+    if (q.maxLevel && lv > q.maxLevel) out.push({ id: 'maxLevel', need: q.maxLevel, have: lv });
+    if (q.minMatches && (f.matches | 0) < q.minMatches) out.push({ id: 'minMatches', need: q.minMatches, have: f.matches | 0 });
+    if (q.minKd && kd < q.minKd) out.push({ id: 'minKd', need: q.minKd, have: kd });
+    if (q.minAgeDays && age < q.minAgeDays) out.push({ id: 'minAgeDays', need: q.minAgeDays, have: Math.max(0, age) });
+    if (q.email && !f.email) out.push({ id: 'email', need: true, have: false });
+    // the qualifier: played in that tournament (the team had at least one match), or finished in its top N (the
+    // team's rank on its leaderboard; a deleted tournament doesn't count against anyone)
+    const pv = q.prevId ? get(q.prevId) : null;
+    if (pv) {
+      const tm = teamOf(pv, key), played = !!tm?.matches, rank = played ? ranked(pv).find((x) => x.tm === tm)?.rank ?? null : null;
+      if (q.prevRank && !(rank && rank <= q.prevRank)) out.push({ id: 'prevRank', need: q.prevRank, have: rank, name: pv.name, tid: pv.id });
+      else if (!q.prevRank && !played) out.push({ id: 'prev', need: true, have: false, name: pv.name, tid: pv.id });
+    }
+    return out;
+  }
+  // the first player on the team who doesn't meet them, in words (or null)
+  function reqError(t, keys, me) {
+    for (const k of keys) {
+      const m = reqMiss(t, k)[0];
+      if (!m) continue;
+      return k === me ? `You don't meet this tournament's requirements: ${reqLabel(m)} (you: ${reqHave(m)}).` : `${d.nameOf(k)} doesn't meet this tournament's requirements: ${reqLabel(m)} (${d.nameOf(k)}: ${reqHave(m)}).`;
+    }
+    return null;
   }
   function mine(t, key) {
     const tm = teamOf(t, key);
@@ -214,8 +295,17 @@ export function createTourneys(d) {
     const n = d.now();
     // live and upcoming ones, and the ones that ended in the last 7 days, in date order (one that's over keeps its
     // place instead of moving to the end)
+    const party = key ? (d.party?.(key) || [key]).filter((k) => k !== key) : [];
     return st.list.filter((t) => t.endsAt > n - 7 * 864e5 && canSee(t, key)).sort((a, b) => a.startsAt - b.startsAt)
-      .map((t) => ({ ...pub(t, n), my: key ? mine(t, key) : null }));
+      .map((t) => {
+        const o = { ...pub(t, n), my: key ? mine(t, key) : null };
+        // the requirements you (and your party) don't meet
+        if (o.req && key) {
+          o.reqMe = reqMiss(t, key);
+          o.reqParty = party.map((k) => ({ name: d.nameOf(k), miss: reqMiss(t, k) })).filter((x) => x.miss.length).map((x) => ({ name: x.name, miss: x.miss[0] }));
+        }
+        return o;
+      });
   }
   function board(id, key, limit = 50) {
     const t = get(id);
@@ -241,6 +331,8 @@ export function createTourneys(d) {
     if (err) return { error: err };
     if (party.length > 1 && leaderKey !== key) return { error: `${d.nameOf(leaderKey)} starts your party's tournament matches.` };
     if (t.participation === 'invite') for (const k of party) if (!t.invites.includes(k)) return { error: `${d.nameOf(k)} isn't invited to this tournament.` };
+    const rq = reqError(t, [key, ...party.filter((k) => k !== key)], key);
+    if (rq) return { error: rq };
     const mineNow = teamOf(t, key);
     if (mineNow && mineNow.members.length === party.length && party.every((k) => mineNow.members.includes(k))) return { error: "You're already registered." };
     for (const k of party) {
@@ -285,6 +377,8 @@ export function createTourneys(d) {
     }
     const joined = !same;
     if (tm.members.length > 1 && tm.leader !== key) return { error: `${d.nameOf(tm.leader)} starts your team's matches.` };
+    const rq = reqError(t, [key, ...tm.members.filter((k) => k !== key)], key);
+    if (rq) return { error: rq };
     if ((tm.rm?.[ra.cur] || 0) >= t.maxMatches) return { error: t.rounds > 1 ? `Your team has played all ${t.maxMatches} of its matches in this round.` : `Your team has played all ${t.maxMatches} of its matches.` };
     if (party.length !== tm.members.length || !party.every((k) => tm.members.includes(k))) return { error: `Your party has to be exactly your registered team: ${teamName(tm)}.` };
     const region = regionOf(t);
@@ -312,7 +406,8 @@ export function createTourneys(d) {
     tickets.delete(String(ticket));
     return { ok: true, conf: { id: t.id, name: t.name, format: t.format, size: T_FORMATS[t.format].size, mode: t.mode, scoreLimit: t.scoreLimit, endsAt: ra.W[ra.cur][1], round: ra.cur }, team: { id: tm.id, members: tm.members.slice(), name: teamName(tm), points: tm.points } };
   }
-  // a tournament match ended: [{ teamId, won, place, kills }] (place for free-for-all, won for team modes)
+  // a tournament match ended: [{ teamId, won, place, kills, forfeit }] (place for free-for-all, won for team modes;
+  // forfeit: the team left before the end, so the match counts but earns nothing)
   function result(tid, matchId, rows, round = null) {
     const t = get(tid);
     if (!t || !Array.isArray(rows)) return { error: 'Unknown tournament.' };
@@ -325,11 +420,12 @@ export function createTourneys(d) {
       if (!tm) continue;
       tm.rm ||= {};
       if ((tm.rm[ri] || 0) >= t.maxMatches) continue;
-      const kills = Math.max(0, Math.min(500, Math.floor(Number(r.kills) || 0)));
-      const place = Math.floor(Number(r.place) || 0), won = !!r.won;
-      const pts = (t.format === 'solo' ? (place >= 1 ? T_PLACE[place - 1] || 0 : 0) : won ? T_WIN : 0) + kills;
+      const forfeit = r.forfeit === true;
+      const kills = forfeit ? 0 : Math.max(0, Math.min(500, Math.floor(Number(r.kills) || 0)));
+      const place = forfeit ? 0 : Math.floor(Number(r.place) || 0), won = !forfeit && !!r.won;
+      const pts = forfeit ? 0 : (t.format === 'solo' ? (place >= 1 ? T_PLACE[place - 1] || 0 : 0) : won ? T_WIN : 0) + kills;
       tm.rm[ri] = (tm.rm[ri] || 0) + 1, tm.matches++, tm.points += pts, tm.kills += kills, (won || place === 1) && tm.wins++, pts > 0 && (tm.reachedAt = d.now());
-      out.push({ teamId: tm.id, name: teamName(tm), points: pts, kills, won: won || place === 1, place: place || null });
+      out.push({ teamId: tm.id, name: teamName(tm), points: pts, kills, won: won || place === 1, place: place || null, ...(forfeit ? { forfeit: true } : {}) });
     }
     t.results.push({ matchId: String(matchId).slice(0, 48), at: d.now(), round: ri, teams: out });
     if (t.results.length > 400) t.results.splice(0, t.results.length - 400);
@@ -345,5 +441,5 @@ export function createTourneys(d) {
     const region = regionOf(t);
     return region ? { ok: true, tournament: t, region } : { error: "That tournament's servers aren't available." };
   }
-  return { get, status, upsert, remove, removeTeam, adminView, listFor, board, register, unregister, play, ticketCheck, result, teamOf, membersOf: (t) => teamsOf(t).flatMap((tm) => tm.members), pub, mine, watch };
+  return { get, status, upsert, remove, removeTeam, adminView, listFor, board, register, unregister, play, ticketCheck, result, teamOf, membersOf: (t) => teamsOf(t).flatMap((tm) => tm.members), pub, mine, watch, reqMiss };
 }

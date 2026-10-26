@@ -353,6 +353,12 @@ select.input option { background: #14181b; color: #e9ece6; }
 .tc-row .seg button { padding: 8px 12px; }
 .tc-f .seg button { padding: 8px 12px; }
 .tc-hint { margin: 6px 0 0; font-size: 12px; }
+/* Release 1.0: tournament requirements */
+.tc-b.wide { grid-column: 1 / -1; }
+.tc-row .input.tc-num { flex: none; width: 110px; min-width: 0; }
+.tc-chk input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.tc-q { margin-top: 10px; }
+.tc-req-sum { margin: 8px 0 0; color: var(--accent); font-weight: 700; letter-spacing: .02em; }
 .step { display: inline-flex; align-items: stretch; border: 1px solid var(--line-2); border-radius: var(--radius); overflow: hidden; }
 .step button { width: 42px; padding: 0; background: rgba(255,255,255,.04); border: 0; font-size: 18px; font-weight: 700; }
 .step button:hover:not(:disabled) { background: rgba(242,193,78,.14); color: var(--accent); }

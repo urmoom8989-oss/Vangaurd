@@ -582,6 +582,24 @@
   const TART = { solo: 'vanguard', duo: 'duo', squad: 'squad' };
   const PERSON = '<svg viewBox="0 0 10 14" aria-hidden="true"><circle cx="5" cy="3.4" r="2.6"/><path d="M0.6 13.4c0-3.4 1.9-5.6 4.4-5.6s4.4 2.2 4.4 5.6z"/></svg>';
   const ICON_IMG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>';
+  const ICON_REQ = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>';
+  // Release 1.0: a tournament's entry requirements in words
+  const reqWords = (q) => {
+    if (!q) return [];
+    const out = [];
+    if (q.minLevel && q.maxLevel) out.push(`Lifetime level ${q.minLevel} – ${q.maxLevel}`);
+    else if (q.minLevel) out.push(`Lifetime level ${q.minLevel}+`);
+    else if (q.maxLevel) out.push(`Lifetime level ${q.maxLevel} or lower`);
+    if (q.minMatches) out.push(`${q.minMatches}+ online matches`);
+    if (q.minKd) out.push(`Online K/D ${Number(q.minKd).toFixed(2)}+`);
+    if (q.minAgeDays) out.push(`Account ${q.minAgeDays}+ day${q.minAgeDays === 1 ? '' : 's'} old`);
+    if (q.email) out.push('Verified email');
+    if (q.prevId) {
+      const nm = q.prevName || ui.tdata?.list?.find((x) => x.id === q.prevId)?.name || 'a deleted tournament';
+      out.push(q.prevRank ? `Top ${q.prevRank} in ${nm}` : `Played in ${nm}`);
+    }
+    return out;
+  };
   const ICON_FMT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>';
   const TLENS = [[30, '30 min'], [60, '1 hour'], [90, '1 h 30 min'], [120, '2 hours'], [180, '3 hours'], [240, '4 hours'], [360, '6 hours'], [480, '8 hours'], [720, '12 hours'], [1080, '18 hours'], [1440, '1 day'], [2880, '2 days'], [4320, '3 days'], [10080, '7 days']];
   const money = (n) => (n ? `$${Number(n).toLocaleString('en-US')}` : '');
@@ -626,11 +644,12 @@
   function tourneyDetail(t) {
     const o = ui.tdata, box = $('#tdetail'), [k, txt] = tTag(t);
     const W = t.windows || [[t.startsAt, t.endsAt]];
-    const res = (t.results || []).map((r) => `<div class="item"><time>${esc(fmt(r.at))}</time><span>${r.round != null && t.rounds > 1 ? `<span class="muted">Round ${r.round + 1}</span> · ` : ''}${r.teams.map((x) => `${esc(x.name)} <b>+${x.points}</b>${x.place ? ` (#${x.place})` : x.won ? ' (win)' : ''}`).join(' · ')}</span></div>`).join('');
+    const res = (t.results || []).map((r) => `<div class="item"><time>${esc(fmt(r.at))}</time><span>${r.round != null && t.rounds > 1 ? `<span class="muted">Round ${r.round + 1}</span> · ` : ''}${r.teams.map((x) => `${esc(x.name)} <b>+${x.points}</b>${x.forfeit ? ' (forfeit)' : x.place ? ` (#${x.place})` : x.won ? ' (win)' : ''}`).join(' · ')}</span></div>`).join('');
     box.innerHTML = `<div class="td"><div class="td-poster">${posterHtml(t)}</div>
       <div class="detail td-info"><div class="head"><div><h2>${esc(t.name)} <span class="tg-tag ${k}">${esc(txt)}</span></h2>${t.description ? `<p class="muted td-desc">${esc(t.description)}</p>` : ''}
           <div class="facts"><span>${TFMT[t.format]} · ${TNEED[t.format]}</span><span>${esc(t.modeName)} to ${t.scoreLimit}</span><span>${esc(t.regionName)} servers</span><span>${t.maxMatches} match${t.maxMatches === 1 ? '' : 'es'} per team per round</span></div>
-          <div class="facts"><span>${t.prizePool ? `Prize pool ${money(t.prizePool)}` : 'No prize pool'}</span>${t.prize ? `<span>${esc(t.prize)}</span>` : ''}<span>${t.participation === 'invite' ? `Invite only: ${t.invites.map(esc).join(', ')}` : 'Public'}</span></div></div>
+          <div class="facts"><span>${t.prizePool ? `Prize pool ${money(t.prizePool)}` : 'No prize pool'}</span>${t.prize ? `<span>${esc(t.prize)}</span>` : ''}<span>${t.participation === 'invite' ? `Invite only: ${t.invites.map(esc).join(', ')}` : 'Public'}</span></div>
+          <div class="facts"><span>${reqWords(t.req).length ? `Requirements: ${reqWords(t.req).map(esc).join(' · ')}` : 'No requirements'}</span></div></div>
         ${o.owner ? '<div class="acts"><button class="btn sm" id="tedit">Edit</button><button class="btn sm" id="tcopy">Duplicate</button><button class="btn sm ghost-danger" id="tdel">Delete</button></div>' : ''}</div>
         <h4 class="td-h">Event dates · ${t.rounds > 1 ? `${t.rounds} rounds, every ${t.every}` : 'one round'}</h4><ul class="td-dates">${tDateList(W, t.round)}</ul>
         ${t.rules ? `<h4 class="td-h">Rules</h4><p class="td-rules">${esc(t.rules)}</p>` : ''}</div></div>
@@ -659,7 +678,9 @@
       id: edit ? t.id : null, name: copy ? `${t.name}`.slice(0, 40) : t.name, description: t.description || '', format: t.format, mode: t.mode, region: t.region, art: t.art, theme: t.theme,
       rounds: t.rounds || 1, every: t.every || 'week', start: copy && t.startsAt < now ? nextHour : t.startsAt, len: t.roundLen || (t.endsAt - t.startsAt), maxMatches: t.maxMatches, scoreLimit: t.scoreLimit || '',
       prizePool: t.prizePool || 0, prize: t.prize || '', rules: t.rules || '', participation: t.participation || 'public', invites: (t.invites || []).join(', '),
-    } : { id: null, name: '', description: '', format: 'duo', mode: 'tdm', region: o.regions[0]?.id, art: 'duo', theme: 'gold', rounds: 1, every: 'week', start: nextHour, len: 3 * 36e5, maxMatches: 10, scoreLimit: '', prizePool: 0, prize: '', rules: '', participation: 'public', invites: '' };
+      req: { minLevel: t.req?.minLevel || '', maxLevel: t.req?.maxLevel || '', minMatches: t.req?.minMatches || '', minKd: t.req?.minKd || '', minAgeDays: t.req?.minAgeDays || '', email: !!t.req?.email, prevId: t.req?.prevId || '', prevRank: t.req?.prevRank || '' },
+    } : { id: null, name: '', description: '', format: 'duo', mode: 'tdm', region: o.regions[0]?.id, art: 'duo', theme: 'gold', rounds: 1, every: 'week', start: nextHour, len: 3 * 36e5, maxMatches: 10, scoreLimit: '', prizePool: 0, prize: '', rules: '', participation: 'public', invites: '', req: { minLevel: '', maxLevel: '', minMatches: '', minKd: '', minAgeDays: '', email: false, prevId: '', prevRank: '' } };
+    const reqBody = () => ({ minLevel: Number(c.req.minLevel) || null, maxLevel: Number(c.req.maxLevel) || null, minMatches: Number(c.req.minMatches) || null, minKd: Number(c.req.minKd) || null, minAgeDays: Number(c.req.minAgeDays) || null, email: !!c.req.email, prevId: c.req.prevId || null, prevRank: c.req.prevId ? Number(c.req.prevRank) || null : null });
     let page = 'details';
     const fmtOf = () => o.formats.find((f) => f.id === c.format) || o.formats[0];
     const modeOf = () => fmtOf().modes.find((m) => m.id === c.mode) || fmtOf().modes[0];
@@ -671,7 +692,7 @@
       <div class="tc-head"><button class="btn sm" id="tcback">‹ All tournaments</button><div><span class="k">${edit ? `Editing · ${esc(t.name)}` : copy ? `Copy of ${esc(t.name)}` : 'New tournament'}</span><h1>Tournament Creator</h1></div></div>
       <div class="tc-body"><div class="tc-left"><div class="tc-prev"></div>
           <button class="btn pri tc-pub" id="tcpub">${edit ? 'Save changes' : 'Publish'}</button>
-          <div class="tc-btns"><button type="button" class="tc-b" data-pg="images">${ICON_IMG}Images</button><button type="button" class="tc-b" data-pg="format">${ICON_FMT}Format</button></div>
+          <div class="tc-btns"><button type="button" class="tc-b" data-pg="images">${ICON_IMG}Images</button><button type="button" class="tc-b" data-pg="format">${ICON_FMT}Format</button><button type="button" class="tc-b wide" data-pg="req">${ICON_REQ}Requirements</button></div>
           <p class="muted tc-note">${edit ? 'Changes show up in the game as soon as you save.' : 'Players see it in the game as soon as you publish: Multiplayer > Tournaments, and the game mode selector while a round is live.'}</p></div>
         <div class="tc-right" id="tcpage"></div></div></div>`;
     const root = $('.tc', v), prev = $('.tc-prev', v), box = $('#tcpage', v);
@@ -686,6 +707,19 @@
         box.innerHTML = `${head('Images', 'The poster players see')}
           <div class="tc-f top"><span>Operators</span><div><div class="tc-arts">${o.arts.map((a) => `<button type="button" class="tc-art vg-th-${esc(c.theme)}${a.id === c.art ? ' on' : ''}" data-art="${esc(a.id)}"><img src="/admin/posters/${esc(a.id)}.webp" alt="" draggable="false"><small>${esc(a.name)}</small></button>`).join('')}</div><p class="muted tc-hint">The default operator and the free Season 1 Pass operators.</p></div></div>
           <div class="tc-f top"><span>Background</span><div class="tc-themes">${o.themes.map((th) => `<button type="button" class="tc-theme vg-th-${esc(th.id)}${th.id === c.theme ? ' on' : ''}" data-theme="${esc(th.id)}"><small>${esc(th.name)}</small></button>`).join('')}</div></div>`;
+      } else if (page === 'req') {
+        const num = (k, min, max, step, ph) => `<input class="input tc-num" type="number" data-k="req.${k}" min="${min}" max="${max}" step="${step}" value="${esc(c.req[k])}" placeholder="${ph}">`;
+        const words = reqWords(reqBody());
+        box.innerHTML = `${head('Requirements', 'Who can play: every player on a team has to meet them')}
+          <div class="tc-f"><span>Lifetime level</span><div><div class="tc-row"><span class="muted">At least</span>${num('minLevel', 2, 999, 1, 'Any')}<span class="muted">At most</span>${num('maxLevel', 1, 999, 1, 'Any')}</div><p class="muted tc-hint">The player's level, prestige included: levels past 100 are prestige levels (Prestige 1 is level 101).</p></div></div>
+          <div class="tc-f"><span>Online matches</span><div><div class="tc-row"><span class="muted">At least</span>${num('minMatches', 1, 100000, 1, 'Any')}<span class="muted">played</span></div><p class="muted tc-hint">Multiplayer matches on the player's Career page.</p></div></div>
+          <div class="tc-f"><span>Online K/D</span><div><div class="tc-row"><span class="muted">At least</span>${num('minKd', 0.01, 20, 0.01, 'Any')}</div><p class="muted tc-hint">Multiplayer eliminations per death, from the Career page.</p></div></div>
+          <div class="tc-f"><span>Account age</span><div class="tc-row"><span class="muted">At least</span>${num('minAgeDays', 1, 3650, 1, 'Any')}<span class="muted">days old</span></div></div>
+          <label class="tc-f tc-chk"><span>Verified email</span><span class="tc-row"><input type="checkbox" data-k="req.email"${c.req.email ? ' checked' : ''}><span>Players need a verified email on their account</span></span></label>
+          <div class="tc-f top"><span>Qualifier</span><div><div class="tc-row"><select class="input" data-k="req.prevId" aria-label="Qualifier tournament"><option value="">None</option>${o.list.filter((x) => x.id !== c.id).sort((a, b) => b.startsAt - a.startsAt).map((x) => `<option value="${esc(x.id)}"${x.id === c.req.prevId ? ' selected' : ''}>${esc(x.name)} · ${esc(tDates(x.windows || [[x.startsAt, x.endsAt]]))}${x.status === 'ended' ? '' : x.status === 'live' ? ' (live)' : ' (upcoming)'}</option>`).join('')}</select></div>
+            ${c.req.prevId ? `<div class="tc-row tc-q"><div class="seg"><button type="button" data-prev="played" class="${c.req.prevRank ? '' : 'on'}">Played in it</button><button type="button" data-prev="rank" class="${c.req.prevRank ? 'on' : ''}">Finished in the top</button></div>${c.req.prevRank ? num('prevRank', 1, 1000, 1, '10') : ''}</div>` : ''}
+            <p class="muted tc-hint">An earlier tournament players have to have played in (their team played at least one match), or finished in the top of on its leaderboard.</p></div></div>
+          <div class="tc-f top"><span>Summary</span><div><p class="tc-req-sum" id="tcreqsum">${words.length ? words.map(esc).join(' · ') : 'No requirements: anyone can play.'}</p><p class="muted tc-hint">Checked whenever a team presses Play. Players see them on Event details, with a tick for each one they meet.</p></div></div>`;
       } else if (page === 'format') {
         box.innerHTML = `${head('Format', 'How teams play')}
           <div class="tc-f top"><span>Team size</span><div class="tc-fmts">${o.formats.map((f) => `<button type="button" class="tc-fmt${f.id === c.format ? ' on' : ''}" data-fmt="${esc(f.id)}"><i>${PERSON.repeat(f.size)}</i><b>${esc(f.name)}</b><small>${TNEED[f.id] || ''}</small></button>`).join('')}</div></div>
@@ -705,6 +739,7 @@
           <div class="tc-f"><span>Prize pool</span><div class="tc-row">${step({ k: 'prize', v: c.prizePool ? money(c.prizePool) : 'None', wide: true }, [!lo, !hi])}</div></div>
           <label class="tc-f"><span>Participation</span><select class="input" data-k="participation"><option value="public"${c.participation === 'public' ? ' selected' : ''}>Public · everyone can see it and join</option><option value="invite"${c.participation === 'invite' ? ' selected' : ''}>Invite only · just the players you list</option></select></label>
           ${c.participation === 'invite' ? `<label class="tc-f top"><span>Who can join</span><div><textarea class="input" data-k="invites" placeholder="Usernames, separated by commas or spaces">${esc(c.invites)}</textarea><p class="muted tc-hint">Only they see the tournament, and every player on a team has to be on the list.</p></div></label>` : ''}
+          <div class="tc-f"><span>Requirements</span><div class="tc-row"><span class="muted">${reqWords(reqBody()).length ? reqWords(reqBody()).map(esc).join(' · ') : 'None · anyone can play'}</span><button type="button" class="btn sm" data-pg="req">Edit</button></div></div>
           <div class="tc-f top"><span>Event dates</span><ul class="td-dates" id="tcdates"></ul></div>`;
         paintDates();
       }
@@ -720,7 +755,11 @@
       if (!el) return;
       const k = el.dataset.k;
       if (k === 'start') { const ms = new Date(el.value).getTime(); if (Number.isFinite(ms)) c.start = ms; } else if (k === 'len') c.len = Number(el.value) * 6e4;
-      else c[k] = el.value;
+      else if (k.startsWith('req.')) {
+        c.req[k.slice(4)] = el.type === 'checkbox' ? el.checked : el.value;
+        const sum = $('#tcreqsum', box), w = reqWords(reqBody());
+        if (sum) sum.textContent = w.length ? w.join(' · ') : 'No requirements: anyone can play.';
+      } else c[k] = el.value;
       const n = $(`[data-n="${k}"]`, box);
       if (n) n.textContent = `${el.value.length}/${el.maxLength}`;
       paintPoster(), paintDates();
@@ -728,6 +767,7 @@
     box.addEventListener('change', (ev) => {
       const el = ev.target.closest('[data-k]');
       if (el && el.dataset.k === 'participation') { c.participation = el.value; paintPage(); }
+      if (el && el.dataset.k === 'req.prevId') { c.req.prevId = el.value; paintPage(); }
     });
     root.addEventListener('click', (ev) => {
       const b = ev.target.closest('button');
@@ -741,6 +781,7 @@
         c.format = D.fmt; c.mode = fmtOf().modes.some((m) => m.id === c.mode) ? c.mode : fmtOf().modes[0].id;
       } else if (D.mode) c.mode = D.mode;
       else if (D.every) c.every = D.every;
+      else if (D.prev) c.req.prevRank = D.prev === 'rank' ? c.req.prevRank || 10 : '';
       else if (D.step) {
         const d = Number(D.d);
         if (D.step === 'rounds') c.rounds = Math.max(1, Math.min(10, c.rounds + d));
@@ -754,7 +795,7 @@
       if (c.name.trim().length < 3) { toast('Give the tournament a title first (3 to 40 characters).', true); page = 'details'; paintPage(); $('[data-k="name"]', box)?.focus(); return; }
       let tz = null;
       try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { /* old browser */ }
-      const body = { id: c.id || undefined, name: c.name, description: c.description, format: c.format, mode: modeOf().id, region: c.region, art: c.art, theme: c.theme, rounds: c.rounds, every: c.every, tz, startsAt: c.start, roundEnd: c.start + c.len, maxMatches: c.maxMatches, scoreLimit: Number(c.scoreLimit) || 0, prizePool: c.prizePool, prize: c.prize, rules: c.rules, participation: c.participation, invites: c.invites };
+      const body = { id: c.id || undefined, name: c.name, description: c.description, format: c.format, mode: modeOf().id, region: c.region, art: c.art, theme: c.theme, rounds: c.rounds, every: c.every, tz, startsAt: c.start, roundEnd: c.start + c.len, maxMatches: c.maxMatches, scoreLimit: Number(c.scoreLimit) || 0, prizePool: c.prizePool, prize: c.prize, rules: c.rules, participation: c.participation, invites: c.invites, req: reqBody() };
       const btn = $('#tcpub', v); btn.disabled = true;
       try { const r = await api('tourneys/save', { body }); ui.tsel = r.id; toast(edit ? 'Saved.' : 'Published. Players can see it now.'); viewTourneys(r.id); } catch (e) { btn.disabled = false; fail(e); }
     };
