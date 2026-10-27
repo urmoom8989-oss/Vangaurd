@@ -31,7 +31,8 @@ const CASTER_DELAY_MS = (process.env.CASTER_DELAY !== undefined && process.env.C
 const VOTE_S = process.env.MAP_VOTE_SECONDS !== undefined && process.env.MAP_VOTE_SECONDS !== '' && Number.isFinite(Number(process.env.MAP_VOTE_SECONDS)) ? Math.max(0, Number(process.env.MAP_VOTE_SECONDS)) : 10;
 const MAPS = ['vardanek', 'kessel', 'foundry', 'freighter', 'airfield', 'lindenhof'];
 // Release 1.0 anti-cheat: the walls of every map, for the server's line-of-sight check (see los.mjs)
-const LOS = loadLos(pathMod.join(pathMod.dirname(decodeURIComponent(new URL(import.meta.url).pathname)), 'los-maps.json'));
+const HERE_DIR = pathMod.dirname(decodeURIComponent(new URL(import.meta.url).pathname));
+const LOS = loadLos(pathMod.join(HERE_DIR, 'los-maps.json'));
 // How far each gun can hit (the game's own ranges, plus a little): a hit from further away is thrown out.
 const GUN_RANGE = { ar7: 450, smg9: 220, br4: 520, lmg60: 600, dmr14: 750, sg12: 60, sr50: 1200, p9: 150, mp20: 90, hc50: 160, p3b: 120 };
 // Release 1.0 anti-cheat: each gun's damage per bullet and fire rate (from the game), and the melee weapons' reach
@@ -2341,6 +2342,16 @@ const server = http.createServer((req, res) => {
   if (path === '/admin' || path.startsWith('/admin/')) {
     mod.http(req, res, path).then((done) => { if (!done) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('not found'); } })
       .catch((e) => { log(`admin error: ${e.message}`); try { res.writeHead(500, { 'content-type': 'application/json' }); res.end('{"error":"Server error."}'); } catch { /* sent */ } });
+    return;
+  }
+  // Release 1.0: the tournament poster art, for games that don't have an image built in (art added after their build)
+  const pm = /^\/posters\/([a-z0-9]{1,24})\.webp$/.exec(path);
+  if (pm) {
+    let body = null;
+    try { body = fs.readFileSync(pathMod.join(HERE_DIR, 'admin', 'posters', `${pm[1]}.webp`)); } catch { body = null; }
+    if (!body) { res.writeHead(404, { 'content-type': 'text/plain', 'access-control-allow-origin': '*' }); res.end('not found'); return; }
+    res.writeHead(200, { 'content-type': 'image/webp', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=3600', 'x-content-type-options': 'nosniff' });
+    res.end(body);
     return;
   }
   if (path === '/news') {
