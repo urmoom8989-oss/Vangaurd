@@ -37,8 +37,8 @@ export const T_FORMATS = { solo: { name: 'Solo', size: 1 }, duo: { name: 'Duo', 
 export const T_MODES = { solo: ['kc', 'gg'], duo: ['tdm', 'blackout'], squad: ['tdm', 'blackout'] };
 export const T_LIMITS = { solo: { kc: 15, gg: 11 }, duo: { tdm: 30, blackout: 30 }, squad: { tdm: 50, blackout: 50 } };
 export const T_WIN = 10, T_PLACE = [10, 7, 5, 3, 1, 1, 1, 1], T_FFA_MAX = 8;
-// poster art (the default and free Season Pass operators) and backgrounds
-export const T_ARTS = [['vanguard', 'Vanguard'], ['frostline', 'Frostline'], ['nightshade', 'Nightshade'], ['ember', 'Ember'], ['duo', 'Frostline & Nightshade'], ['duo2', 'Vanguard & Ember'], ['squad', 'Squad']];
+// poster art (the default and free Season Pass operators, and the Halloween Pack operators) and backgrounds
+export const T_ARTS = [['vanguard', 'Vanguard'], ['frostline', 'Frostline'], ['nightshade', 'Nightshade'], ['ember', 'Ember'], ['duo', 'Frostline & Nightshade'], ['duo2', 'Vanguard & Ember'], ['squad', 'Squad'], ['skeleton', 'Skeleton'], ['pumpkin', 'Pumpkin Head'], ['halloween', 'Skeleton & Pumpkin Head']];
 export const T_THEMES = [['gold', 'Gold'], ['crimson', 'Crimson'], ['royal', 'Royal'], ['violet', 'Violet'], ['teal', 'Teal'], ['orange', 'Orange'], ['sunset', 'Sunset'], ['twilight', 'Twilight'], ['ocean', 'Ocean'], ['toxic', 'Toxic'], ['inferno', 'Inferno'], ['midnight', 'Midnight'], ['arctic', 'Arctic']];
 export const T_PRIZES = [0, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
 const EVERY = { day: 864e5, week: 7 * 864e5 }, DAYS = { day: 1, week: 7 };

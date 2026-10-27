@@ -716,7 +716,7 @@
       const pz = o.prizes, F = fmtOf(), M = modeOf();
       if (page === 'images') {
         box.innerHTML = `${head('Images', 'The poster players see')}
-          <div class="tc-f top"><span>Operators</span><div><div class="tc-arts">${o.arts.map((a) => `<button type="button" class="tc-art vg-th-${esc(c.theme)}${a.id === c.art ? ' on' : ''}" data-art="${esc(a.id)}"><img src="/admin/posters/${esc(a.id)}.webp" alt="" draggable="false"><small>${esc(a.name)}</small></button>`).join('')}</div><p class="muted tc-hint">The default operator and the free Season 1 Pass operators.</p></div></div>
+          <div class="tc-f top"><span>Operators</span><div><div class="tc-arts">${o.arts.map((a) => `<button type="button" class="tc-art vg-th-${esc(c.theme)}${a.id === c.art ? ' on' : ''}" data-art="${esc(a.id)}"><img src="/admin/posters/${esc(a.id)}.webp" alt="" draggable="false"><small>${esc(a.name)}</small></button>`).join('')}</div><p class="muted tc-hint">The default operator, the free Season 1 Pass operators and the Halloween Pack operators.</p></div></div>
           <div class="tc-f top"><span>Background</span><div class="tc-themes">${o.themes.map((th) => `<button type="button" class="tc-theme vg-th-${esc(th.id)}${th.id === c.theme ? ' on' : ''}" data-theme="${esc(th.id)}"><small>${esc(th.name)}</small></button>`).join('')}</div></div>`;
       } else if (page === 'rw') {
         const n = (i, k, min, max, ph) => `<input class="input tc-num" type="number" data-rk="${i}.${k}" min="${min}" max="${max}" step="1" value="${esc(c.rewards[i][k])}" placeholder="${ph}">`;

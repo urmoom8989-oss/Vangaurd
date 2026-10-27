@@ -29,7 +29,7 @@ const STATIC = {
   '/admin/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/admin/app.css': ['app.css', 'text/css; charset=utf-8'],
   // the tournament poster art (the Tournament Creator)
-  ...Object.fromEntries(['vanguard', 'frostline', 'nightshade', 'ember', 'duo', 'duo2', 'squad'].map((n) => [`/admin/posters/${n}.webp`, [`posters/${n}.webp`, 'image/webp']])),
+  ...Object.fromEntries(['vanguard', 'frostline', 'nightshade', 'ember', 'duo', 'duo2', 'squad', 'skeleton', 'pumpkin', 'halloween'].map((n) => [`/admin/posters/${n}.webp`, [`posters/${n}.webp`, 'image/webp']])),
 };
 const SECURITY_HEADERS = {
   'cache-control': 'no-store',
