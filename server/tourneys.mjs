@@ -21,9 +21,9 @@
 // verified email, and a qualifier: having played in an earlier tournament, or having finished in its top N. Every
 // player on a team has to meet them whenever the team plays.
 //
-// Forfeits (Release 1.0): a player who leaves a match before it ends forfeits it: their eliminations in it don't
-// count. A team that leaves altogether (a Solo player who leaves) gets no points at all from that match, and it still
-// counts as one of the team's matches.
+// Forfeits (Release 1.0): a team that leaves a match altogether before it ends (a Solo player who leaves) forfeits
+// it: no points at all from that match, and it still counts as one of the team's matches. Duo and Squad points are
+// the team's: a teammate who leaves while the others play on doesn't forfeit, and their eliminations still count.
 import fs from 'node:fs';
 import pathMod from 'node:path';
 import crypto from 'node:crypto';

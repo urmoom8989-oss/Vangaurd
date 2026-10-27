@@ -1159,7 +1159,6 @@ function leaveMatch(c, notify = true) {
   const lp = match.players.get(c.id);
   if (match.tourney && lp && !match.ended) match.tourney.gone.set(lp.key, { kills: lp.kills, score: lp.score, at: now() });
   match.players.delete(c.id);
-  if (match.tourney && lp && !match.ended) tourneyLeft(match, lp.key);
   if (notify) send(c, { type: 'match_left', matchId: match.id });
   if (match.tourney && !match.ended && match.players.size) tourneyForfeit(match);
   broadcast(match, { type: 'player_left', matchId: match.id, playerId: c.id });
@@ -2025,20 +2024,17 @@ function tqStart(q, entries) {
   if (!q.teams.size) { clearInterval(q.cd?.timer); tq.delete(conf.id); } else tqStatus(q);
 }
 // the team's tournament points so far, live in the match: before it, plus every elimination in it (the win and the
-// free-for-all placement are added when it ends). A player who left forfeited theirs.
+// free-for-all placement are added when it ends). Points are shared: a teammate who left still counts.
 function tourneyLivePoints(match, key) {
   const T = match.tourney, tm = T?.teams.find((x) => x.members.includes(key));
   if (!tm) return null;
   let kills = 0;
-  for (const k of tm.members) for (const p of match.players.values()) if (p.key === k) kills += p.kills;
+  for (const k of tm.members) {
+    let here = false;
+    for (const p of match.players.values()) if (p.key === k) { kills += p.kills; here = true; }
+    if (!here) kills += T.gone.get(k)?.kills || 0;
+  }
   return tm.base + kills;
-}
-// a player left a tournament match before the end: their teammates' badge drops their eliminations
-function tourneyLeft(match, key) {
-  const T = match.tourney, tm = T?.teams.find((x) => x.members.includes(key));
-  if (!tm) return;
-  const points = tourneyLivePoints(match, key);
-  for (const p of match.players.values()) if (tm.members.includes(p.key)) send(clients.get(p.id), { type: 'tourney_points', matchId: match.id, id: T.id, points, add: 0, left: nameOf(key) });
 }
 function tourneyLive(match, attacker) {
   const T = match.tourney, tm = T.teams.find((x) => x.members.includes(attacker.key));
@@ -2062,12 +2058,12 @@ function tourneyReport(match, winner) {
   const T = match.tourney;
   if (T.reported) return;
   T.reported = true;
-  // Release 1.0: whoever left before the end forfeited: their eliminations don't count, and a team that's gone
-  // altogether (a Solo player who left) gets nothing from the match
+  // Release 1.0: a team that left altogether before the end (a Solo player who left) forfeited: it gets nothing from
+  // the match. A teammate who left while the others played on still counts (the points are the team's).
   const statOf = (k) => {
     for (const p of match.players.values()) if (p.key === k) return { kills: p.kills, score: p.score, here: 1, at: 0 };
     const g = T.gone.get(k);
-    return { kills: 0, score: g?.score || 0, here: 0, at: g?.at || 0 };
+    return { kills: g?.kills || 0, score: g?.score || 0, here: 0, at: g?.at || 0 };
   };
   const rows = [];
   if (match.ffa) {
