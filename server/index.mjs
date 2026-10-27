@@ -4,7 +4,7 @@
 import http from 'node:http';
 import { createModeration, cleanDevice, levelOf } from './moderation.mjs';
 import { createMailer, codeEmail } from './mailer.mjs';
-import { createOps } from './ops.mjs';
+import { createOps, DLC } from './ops.mjs';
 import { createTourneys, T_FFA_MAX } from './tourneys.mjs';
 import { loadLos } from './los.mjs';
 import zlib from 'node:zlib';
@@ -1810,14 +1810,24 @@ function kickClient(c, msg) {
 const mod = createModeration({
   DATA_DIR, accounts, saveAccounts, online, clients, statusOf, keyOf, userOf, nameOf, scrypt, now, log, send,
   chat: chatAdmin, kick: kickClient, kickKey: (key, msg) => (REGIONS.length ? regionKick(key, msg) : Promise.resolve(0)), saveOf: (key) => saves[key]?.blob || null, spectateOffer, replaySave, replayLoad, sendTo: (key, msg) => sendTo(key, msg),
-  putSave(key, blob) {
-    const cur = saves[key] || { rev: 0 };
-    saves[key] = { rev: cur.rev + 1, at: now(), blob };
-    if (!savesTimer) savesTimer = setTimeout(writeSaves, 1500);
-    sendTo(key, { type: 'data', rev: saves[key].rev, at: saves[key].at, blob, admin: true });
-    return saves[key].rev;
-  },
+  putSave: (key, blob) => putSaveFor(key, blob),
 });
+// the server changes an account's cloud save (the console, tournament rewards): their game picks it up straight away
+function putSaveFor(key, blob) {
+  const cur = saves[key] || { rev: 0 };
+  saves[key] = { rev: cur.rev + 1, at: now(), blob };
+  if (!savesTimer) savesTimer = setTimeout(writeSaves, 1500);
+  sendTo(key, { type: 'data', rev: saves[key].rev, at: saves[key].at, blob, admin: true });
+  return saves[key].rev;
+}
+function saveAddXp(key, xp) {
+  let cur = null;
+  try { cur = JSON.parse(saves[key]?.blob || 'null'); } catch { cur = null; }
+  if (!cur || typeof cur !== 'object' || Array.isArray(cur)) cur = { v: 1, progression: null, records: null, settings: {} };
+  if (!cur.progression || typeof cur.progression !== 'object') cur.progression = { version: 1, xp: 0, kills: 0, headshots: 0, deaths: 0, weapons: {}, grenadeType: 'frag' };
+  cur.v = 1, cur.progression.version = 1, cur.progression.xp = Math.max(0, Math.floor(Number(cur.progression.xp) || 0)) + Math.max(0, Math.floor(xp));
+  return putSaveFor(key, JSON.stringify(cur));
+}
 mod.kickNow = (c, b) => kickClient(c, mod.bannedMsg(b));
 // ---------- operations: announcements, maintenance, Steam, developers, latest build (see ops.mjs) ----------
 const ops = createOps({ DATA_DIR, now, log, keyOf, nameOf, userOf, roleOf: (k) => mod.roleOf(k), ownerKey: () => mod.ownerKey(), env: process.env });
@@ -1827,6 +1837,8 @@ if (ops.state.release) raiseLatest(ops.state.release.build, ops.state.release.la
 // ticket for the tournament's match server (this one, or a regional one), whose tournament queue starts a match as
 // soon as two whole teams are waiting (Duo and Squad), or 2 to 8 solo players after a short wait (Solo). Results go
 // back to the main server.
+// Release 1.0: tournament rewards go out this many seconds after the last round ends (the last matches are in by then)
+const TOURNEY_REWARD_GRACE_S = process.env.TOURNEY_REWARD_GRACE !== undefined && process.env.TOURNEY_REWARD_GRACE !== '' && Number.isFinite(Number(process.env.TOURNEY_REWARD_GRACE)) ? Math.max(0, Number(process.env.TOURNEY_REWARD_GRACE)) : 900;
 const TQ_FFA_WAIT = process.env.TOURNEY_FFA_WAIT !== undefined && process.env.TOURNEY_FFA_WAIT !== '' && Number.isFinite(Number(process.env.TOURNEY_FFA_WAIT)) ? Math.max(0, Number(process.env.TOURNEY_FFA_WAIT)) : 20;
 // Release 1.0: what tournament requirements look at: the lifetime level and the online career (from the account's
 // cloud save), how old the account is and whether its email is verified
@@ -1843,7 +1855,25 @@ function playerFacts(key) {
   }
   return { ...f, created: u?.created || 0, email: !!u?.emailVerified };
 }
-const tourneys = REGIONAL ? null : createTourneys({ DATA_DIR, now, log, nameOf, keyOf, userOf, staff: (k) => ops.staff(k), modeName: shortName, regions: () => REGIONS, mainRegion: { id: REGION, name: REGION_NAMES[REGION] || REGION }, facts: playerFacts, party: (k) => partyKeys(k).members });
+const tourneys = REGIONAL ? null : createTourneys({ DATA_DIR, now, log, nameOf, keyOf, userOf, staff: (k) => ops.staff(k), modeName: shortName, regions: () => REGIONS, mainRegion: { id: REGION, name: REGION_NAMES[REGION] || REGION }, facts: playerFacts, party: (k) => partyKeys(k).members,
+  dlcs: () => Object.fromEntries(Object.values(DLC).map((x) => [x.id, x.name])), rewardGrace: TOURNEY_REWARD_GRACE_S * 1000 });
+// Release 1.0: tournament rewards by placement: a DLC pack (unlocked in their game straight away) and/or XP (added to
+// their cloud save), for every player on the teams in each tier's places, once the tournament is over
+function tourneyRewards() {
+  if (!tourneys) return;
+  for (const { t, grants } of tourneys.finalize()) {
+    for (const g of grants) {
+      try {
+        if (g.dlc) { const r = ops.dlcEdit(g.key, g.dlc, true); if (!r.error) for (const c of online.get(g.key) || []) send(c, { type: 'dlc', dlc: ops.dlcOf(g.key) }); }
+        if (g.xp) saveAddXp(g.key, g.xp);
+        sendTo(g.key, { type: 'tourney_reward', id: t.id, name: t.name, place: g.place, dlc: g.dlc, dlcName: g.dlc ? DLC[g.dlc]?.name || g.dlc : null, xp: g.xp });
+      } catch (e) { log(`tournament reward error (${g.name}): ${e.message}`); }
+    }
+    log(`tournament ${t.name}: rewards given to ${grants.length} player(s)${grants.length ? `: ${grants.map((g) => `${g.name} #${g.place}${g.dlc ? ` ${g.dlc}` : ''}${g.xp ? ` +${g.xp} XP` : ''}`).join(', ')}` : ''}`);
+    for (const k of new Set(grants.map((g) => g.key))) tourneyListTo(k);
+  }
+}
+if (tourneys) { setInterval(tourneyRewards, 10e3).unref?.(); setTimeout(tourneyRewards, 3e3); }
 function tourneyListTo(key) { if (tourneys) sendTo(key, { type: 'tourneys', list: tourneys.listFor(key) }); }
 // the owner changed a tournament: every game with the Tournaments screen open asks for the list again
 if (tourneys) mod.attachTourneys({ ...tourneys, changed(keys) { broadcastAll({ type: 'tourneys_changed' }); for (const k of keys || []) tourneyListTo(k); } });

@@ -273,6 +273,7 @@ select.input option { background: #14181b; color: #e9ece6; }
 .vg-poster .live { position: absolute; z-index: 3; right: 4.5cqw; top: 4.5cqw; display: inline-flex; align-items: center; gap: 1.6cqw; padding: 1.4cqw 2.6cqw; background: #e8243c; color: #fff; font-size: 3.4cqw; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; box-shadow: 0 .8cqw 2cqw rgba(0,0,0,.35); }
 .vg-poster .live::before { content: ""; width: 1.8cqw; height: 1.8cqw; border-radius: 50%; background: #fff; box-shadow: 0 0 2cqw #fff; }
 .vg-poster .prize { position: absolute; z-index: 3; right: 4.5cqw; top: 13cqw; padding: 1.2cqw 2.4cqw; background: #f2c14e; color: #111; font-size: 3.4cqw; font-weight: 900; letter-spacing: .06em; }
+.vg-poster .rwd { position: absolute; z-index: 3; left: 4.5cqw; top: 13cqw; max-width: 60cqw; padding: 1.2cqw 2.4cqw; background: #8b5cf6; color: #fff; font-size: 3.2cqw; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vg-poster .prize.top { top: 4.5cqw; }
 .vg-th-gold { --bg: radial-gradient(ellipse at 50% 22%, #ffd76a, #e09a18 58%, #9c5a08); --dk: #4a2903; }
 .vg-th-crimson { --bg: radial-gradient(ellipse at 50% 22%, #ff6b7d, #d8263f 55%, #6d0a1b); --dk: #33030d; }
@@ -358,6 +359,8 @@ select.input option { background: #14181b; color: #e9ece6; }
 .tc-row .input.tc-num { flex: none; width: 110px; min-width: 0; }
 .tc-chk input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
 .tc-q { margin-top: 10px; }
+.tc-rw .tc-row select.input { flex: 1; min-width: 200px; }
+.rw-given { color: #7be08f; }
 .tc-req-sum { margin: 8px 0 0; color: var(--accent); font-weight: 700; letter-spacing: .02em; }
 .step { display: inline-flex; align-items: stretch; border: 1px solid var(--line-2); border-radius: var(--radius); overflow: hidden; }
 .step button { width: 42px; padding: 0; background: rgba(255,255,255,.04); border: 0; font-size: 18px; font-weight: 700; }

@@ -21,6 +21,10 @@
 // verified email, and a qualifier: having played in an earlier tournament, or having finished in its top N. Every
 // player on a team has to meet them whenever the team plays.
 //
+// Rewards (Release 1.0): up to 5 tiers, each for a range of places on the final leaderboard (e.g. 1st to 10th): a DLC
+// pack (e.g. the Halloween Pack) and/or XP. Given once, to every player on those teams, a little while after the last
+// round ends (when the last matches are in).
+//
 // Forfeits (Release 1.0): a team that leaves a match altogether before it ends (a Solo player who leaves) forfeits
 // it: no points at all from that match, and it still counts as one of the team's matches. Duo and Squad points are
 // the team's: a teammate who leaves while the others play on doesn't forfeit, and their eliminations still count.
@@ -88,12 +92,30 @@ function reqHave(m) {
   }
 }
 
+export const T_REWARD_TIERS = 5;
+// the reward tiers the owner set; dlcs: { id: name } of the packs that exist
+export function rewardsClean(list, dlcs = {}) {
+  if (!Array.isArray(list)) return { ok: [] };
+  const out = [];
+  for (const r of list.slice(0, T_REWARD_TIERS)) {
+    if (!r || typeof r !== 'object') continue;
+    const dlc = r.dlc ? String(r.dlc) : null, xp = Math.max(0, Math.min(1e6, Math.floor(Number(r.xp) || 0)));
+    if (!dlc && !xp) continue; // an empty tier
+    const from = Math.floor(Number(r.from)), to = Math.floor(Number(r.to ?? r.from));
+    if (!(from >= 1 && to >= from && to <= 1000)) return { error: 'Rewards: the places go from 1 up, e.g. 1st to 10th.' };
+    if (dlc && !dlcs[dlc]) return { error: 'Rewards: pick a DLC pack from the list.' };
+    out.push({ from, to, dlc, xp });
+  }
+  return { ok: out };
+}
+
 const clean = (v, n) => String(v ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f<>]+/g, ' ').replace(/[ \t]+/g, ' ').trim().slice(0, n);
 const cleanText = (v, n) => String(v ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f<>]+/g, ' ').trim().slice(0, n);
 
 export function createTourneys(d) {
   // d: { DATA_DIR, now, log, nameOf, keyOf, userOf, staff(key), modeName(mode), regions() -> [{ id, name, url }], mainRegion: { id, name },
-  //      facts(key) -> { level, matches, kills, deaths, created, email } (for the requirements), party(key) -> keys }
+  //      facts(key) -> { level, matches, kills, deaths, created, email } (for the requirements), party(key) -> keys,
+  //      dlcs() -> { id: name } (the packs a reward can be), rewardGrace (ms after the last round before rewards go out) }
   const FILE = pathMod.join(d.DATA_DIR, 'tournaments.json');
   const st = { list: [] };
   try {
@@ -104,7 +126,7 @@ export function createTourneys(d) {
   for (const t of st.list) {
     t.rounds ||= 1; t.every ||= 'day'; t.roundLen ||= Math.max(10 * 60e3, (t.endsAt || 0) - (t.startsAt || 0));
     t.art ||= t.format === 'squad' ? 'squad' : t.format === 'duo' ? 'duo' : 'vanguard'; t.theme ||= 'gold'; t.description ??= '';
-    t.prizePool ??= 0; t.participation ||= 'public'; t.invites ||= []; t.tz ??= null; t.req = reqClean(t.req);
+    t.prizePool ??= 0; t.participation ||= 'public'; t.invites ||= []; t.tz ??= null; t.req = reqClean(t.req); t.rewards ||= []; t.rewarded ??= null;
     for (const tm of Object.values(t.teams || {})) tm.rm ||= tm.matches ? { 0: tm.matches } : {};
   }
   let saveTimer = null;
@@ -197,7 +219,9 @@ export function createTourneys(d) {
     const req = reqClean(body.req);
     if (req.minLevel && req.maxLevel && req.maxLevel < req.minLevel) return { error: 'Requirements: the highest level has to be at least the lowest level.' };
     if (req.prevId && (!get(req.prevId) || req.prevId === old?.id)) return { error: 'Requirements: pick another tournament as the qualifier.' };
-    return { ok: true, v: { name, description, format, mode, region, art, theme, rounds, every, tz, startsAt, roundLen, endsAt, maxMatches, scoreLimit, prizePool, prize: clean(body.prize, 120), rules: cleanText(body.rules, 800), participation, invites, req } };
+    const rw = rewardsClean(body.rewards, d.dlcs?.() || {});
+    if (rw.error) return rw;
+    return { ok: true, v: { name, description, format, mode, region, art, theme, rounds, every, tz, startsAt, roundLen, endsAt, maxMatches, scoreLimit, prizePool, prize: clean(body.prize, 120), rules: cleanText(body.rules, 800), participation, invites, req, rewards: rw.ok } };
   }
   function upsert(by, body) {
     const old = body.id ? get(body.id) : null;
@@ -231,11 +255,13 @@ export function createTourneys(d) {
       regions: regionList().map((r) => ({ id: r.id, name: r.name })),
       formats: Object.entries(T_FORMATS).map(([id, f]) => ({ id, name: f.name, size: f.size, modes: T_MODES[id].map((m) => ({ id: m, name: d.modeName(m), scoreLimit: T_LIMITS[id][m] })) })),
       arts: T_ARTS.map(([id, name]) => ({ id, name })), themes: T_THEMES.map(([id, name]) => ({ id, name })), prizes: T_PRIZES,
+      dlcs: Object.entries(d.dlcs?.() || {}).map(([id, name]) => ({ id, name })), rewardTiers: T_REWARD_TIERS, rewardGraceMin: Math.round((d.rewardGrace ?? 15 * 60e3) / 60e3),
       // in date order: a tournament that's over keeps its place
       list: st.list.slice().sort((a, b) => a.startsAt - b.startsAt).map((t) => ({
         ...pub(t, n), invites: t.invites.map(d.nameOf), prize: t.prize,
         teams: ranked(t).map(({ tm, rank }) => ({ id: tm.id, name: teamName(tm), members: tm.members.map(d.nameOf), rank, points: tm.points, matches: tm.matches, wins: tm.wins, kills: tm.kills, registeredAt: tm.registeredAt })),
         results: (t.results || []).slice(-30).reverse(),
+        rewarded: t.rewarded ? { at: t.rewarded.at, grants: t.rewarded.grants.map((g) => ({ name: g.name, team: g.team, place: g.place, dlc: g.dlc, dlcName: g.dlc ? d.dlcs?.()[g.dlc] || g.dlc : null, xp: g.xp })) } : null,
       })),
     };
   }
@@ -249,6 +275,7 @@ export function createTourneys(d) {
       startsAt: t.startsAt, endsAt: t.endsAt, rounds: t.rounds, every: t.every, roundLen: t.roundLen, windows: ra.W, round: ra.cur, nextRound: ra.next,
       maxMatches: t.maxMatches, scoreLimit: t.scoreLimit, prizePool: t.prizePool, prize: t.prize, rules: t.rules, participation: t.participation,
       status: ra.cur != null ? 'live' : ra.next != null ? 'upcoming' : 'ended', teams: teamsOf(t).length,
+      rewards: (t.rewards || []).map((r) => ({ ...r, dlcName: r.dlc ? d.dlcs?.()[r.dlc] || r.dlc : null })), rewarded: !!t.rewarded,
       req: reqAny(t.req) ? { ...Object.fromEntries(Object.entries(t.req).filter(([, v]) => v)), ...(t.req.prevId ? { prevName: get(t.req.prevId)?.name || null } : {}) } : null,
     };
   }
@@ -289,7 +316,8 @@ export function createTourneys(d) {
     const tm = teamOf(t, key);
     if (!tm) return null;
     const row = ranked(t).find((x) => x.tm === tm), ra = roundAt(t), ri = ra.cur ?? ra.next;
-    return { teamId: tm.id, members: tm.members.map(d.nameOf), leader: d.nameOf(tm.leader), isLeader: tm.leader === key, points: tm.points, matches: tm.matches, wins: tm.wins, kills: tm.kills, rank: row?.rank ?? null, left: ri == null ? 0 : Math.max(0, t.maxMatches - (tm.rm?.[ri] || 0)) };
+    const won = (t.rewarded?.grants || []).filter((g) => g.key === key).map((g) => ({ place: g.place, dlc: g.dlc, dlcName: g.dlc ? d.dlcs?.()[g.dlc] || g.dlc : null, xp: g.xp }));
+    return { teamId: tm.id, members: tm.members.map(d.nameOf), leader: d.nameOf(tm.leader), isLeader: tm.leader === key, points: tm.points, matches: tm.matches, wins: tm.wins, kills: tm.kills, rank: row?.rank ?? null, left: ri == null ? 0 : Math.max(0, t.maxMatches - (tm.rm?.[ri] || 0)), ...(won.length ? { won } : {}) };
   }
   function listFor(key) {
     const n = d.now();
@@ -433,6 +461,24 @@ export function createTourneys(d) {
     return { ok: true, tournament: t, teams: out };
   }
 
+  // Release 1.0: rewards: once a tournament with rewards is over (and the last matches are in), the teams in each tier's
+  // places get its rewards. Returns [{ t, grants: [{ key, name, team, place, dlc, xp }] }] for the server to give out.
+  function finalize(n = d.now()) {
+    const out = [];
+    for (const t of st.list) {
+      if (t.rewarded || !t.rewards?.length || status(t, n) !== 'ended' || n < t.endsAt + (d.rewardGrace ?? 15 * 60e3)) continue;
+      const grants = [];
+      for (const { tm, rank } of ranked(t)) {
+        if (!rank) continue;
+        for (const r of t.rewards) if (rank >= r.from && rank <= r.to) for (const k of tm.members) grants.push({ key: k, name: d.nameOf(k), team: teamName(tm), place: rank, dlc: r.dlc, xp: r.xp });
+      }
+      t.rewarded = { at: n, grants };
+      out.push({ t, grants });
+    }
+    if (out.length) save(true);
+    return out;
+  }
+
   // Release 1.0: watching a live tournament: which server its matches are on
   function watch(id) {
     const t = get(id);
@@ -441,5 +487,5 @@ export function createTourneys(d) {
     const region = regionOf(t);
     return region ? { ok: true, tournament: t, region } : { error: "That tournament's servers aren't available." };
   }
-  return { get, status, upsert, remove, removeTeam, adminView, listFor, board, register, unregister, play, ticketCheck, result, teamOf, membersOf: (t) => teamsOf(t).flatMap((tm) => tm.members), pub, mine, watch, reqMiss };
+  return { get, status, upsert, remove, removeTeam, adminView, listFor, board, register, unregister, play, ticketCheck, result, teamOf, membersOf: (t) => teamsOf(t).flatMap((tm) => tm.members), pub, mine, watch, reqMiss, finalize };
 }
