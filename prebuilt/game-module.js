@@ -59446,12 +59446,18 @@ var VG_TOUR_PERSON = '<svg viewBox="0 0 10 14" aria-hidden="true"><circle cx="5"
 var VG_TOUR_FMT = { solo: "Solo", duo: "Duo", squad: "Squad" };
 var vgTourMoney = (n) => n ? `$${Number(n).toLocaleString("en-US")}` : "";
 // a tournament poster (the carousel, and the console's Tournament Creator draws the same one)
+// Release 1.0: you don't meet a tournament's requirements (yet): its poster and card are locked
+var vgTourLocked = (t) => !!(t?.req && t.reqMe?.length);
+var VG_TOUR_LOCK = '<span class="vg-lock" role="img" aria-label="Locked"><svg viewBox="0 0 24 28" aria-hidden="true"><path d="M6.2 12.5V8.4a5.8 5.8 0 0 1 11.6 0v4.1" fill="none" stroke="#fff" stroke-width="3.4"/><rect x="2" y="11.4" width="20" height="15.6" rx="2.4" fill="#fff"/><circle cx="12" cy="17.6" r="2.7" fill="#0b0d10"/><path d="M10.5 18.6h3l.8 5.2h-4.6z" fill="#0b0d10"/></svg></span>';
 function vgTourPoster(t, opt = {}) {
   const words = String(t.name || "").split(/\s+/), long = Math.max(0, ...words.map((w) => w.length));
   const art = VG_POSTERS[t.art] || VG_POSTERS.vanguard;
-  return `<div class="vg-poster vg-th-${vgEsc(t.theme || "gold")}${long > 11 ? " tl" : long > 9 ? " tm" : ""}"><img class="art" src="${art}" alt="" draggable="false"><span class="fmt">${VG_TOUR_PERSON.repeat(t.size || 1)}${VG_TOUR_FMT[t.format] || ""}</span>${t.status === "live" ? '<span class="live">Live</span>' : ""}${t.prizePool ? `<span class="prize${t.status === "live" ? "" : " top"}">${vgTourMoney(t.prizePool)}</span>` : ""}<div class="tt"><b translate="no">${vgEsc(t.name)}</b>${t.description ? `<small translate="no">${vgEsc(t.description)}</small>` : ""}<i>${vgEsc(vgTourDates(t))}</i></div>${opt.extra || ""}</div>`;
+  return `<div class="vg-poster vg-th-${vgEsc(t.theme || "gold")}${long > 11 ? " tl" : long > 9 ? " tm" : ""}${vgTourLocked(t) ? " locked" : ""}"><img class="art" src="${art}" alt="" draggable="false">${vgTourLocked(t) ? VG_TOUR_LOCK : ""}<span class="fmt">${VG_TOUR_PERSON.repeat(t.size || 1)}${VG_TOUR_FMT[t.format] || ""}</span>${t.status === "live" ? '<span class="live">Live</span>' : ""}${t.prizePool ? `<span class="prize${t.status === "live" ? "" : " top"}">${vgTourMoney(t.prizePool)}</span>` : ""}<div class="tt"><b translate="no">${vgEsc(t.name)}</b>${t.description ? `<small translate="no">${vgEsc(t.description)}</small>` : ""}<i>${vgEsc(vgTourDates(t))}</i></div>${opt.extra || ""}</div>`;
 }
 var vgPosterCss = `
+.vg-lock { position: absolute; z-index: 3; left: 50%; top: 47%; width: 31cqw; aspect-ratio: 1; display: grid; place-items: center; transform: translate(-50%, -50%); pointer-events: none; }
+.vg-lock::before { content: ""; position: absolute; inset: 0; background: #0b0d10; transform: rotate(45deg); box-shadow: 0 1cqw 4cqw rgba(0,0,0,.35); }
+.vg-lock svg { position: relative; width: 52%; height: auto; filter: drop-shadow(0 .4cqw .8cqw rgba(0,0,0,.4)); }
 .vg-poster { --bg: #333; --dk: #000; position: relative; aspect-ratio: 3 / 4; overflow: hidden; background: var(--bg); color: #fff; container-type: inline-size; isolation: isolate; box-shadow: 0 1.2cqw 4cqw rgba(0,0,0,.45); text-align: center; }
 .vg-poster::before { content: ""; position: absolute; inset: 0; z-index: 0; background: radial-gradient(ellipse 70% 45% at 50% 30%, rgba(255,255,255,.32), transparent 70%), linear-gradient(112deg, transparent 0 14%, rgba(255,255,255,.18) 14% 15.6%, transparent 15.6% 24%, rgba(255,255,255,.1) 24% 24.8%, transparent 24.8% 76%, rgba(255,255,255,.16) 76% 77.6%, transparent 77.6% 84%, rgba(255,255,255,.09) 84% 84.8%, transparent 84.8%); }
 .vg-poster::after { content: ""; position: absolute; inset: 0; z-index: 2; background: linear-gradient(180deg, transparent 50%, color-mix(in srgb, var(--dk) 55%, transparent) 78%, color-mix(in srgb, var(--dk) 88%, transparent)); pointer-events: none; }
@@ -59605,6 +59611,8 @@ var vgTourCss = `
 // points once it's picked
 var vgGmCss = `
 .od-mode-row > .vg-gm-t { flex-basis: calc(var(--u) * 440); }
+.vg-gm-t .vg-lock { z-index: 3; left: 50%; top: 42%; width: calc(var(--u) * 62); transform: translate(-50%, -50%); }
+.vg-gm-t .vg-lock::before { box-shadow: 0 calc(var(--u) * 4) calc(var(--u) * 12) rgba(0,0,0,.4); }
 .vg-gm-t .od-mode-thumb { background: var(--bg); isolation: isolate; }
 .vg-gm-t .od-mode-thumb::before { content: ""; position: absolute; inset: 0; z-index: 0; background: radial-gradient(ellipse 50% 90% at 78% 30%, rgba(255,255,255,.3), transparent 70%), linear-gradient(112deg, transparent 0 46%, rgba(255,255,255,.18) 46% 47.4%, transparent 47.4% 53%, rgba(255,255,255,.1) 53% 53.7%, transparent 53.7%); }
 .vg-gm-t .od-mode-thumb::after { content: ""; position: absolute; inset: 0; z-index: 2; background: linear-gradient(90deg, color-mix(in srgb, var(--dk) 72%, transparent), transparent 62%), linear-gradient(180deg, transparent 55%, color-mix(in srgb, var(--dk) 70%, transparent)); pointer-events: none; }
@@ -59752,7 +59760,7 @@ function vgTourScreen(opt) {
   const fx = '<div class="fx" aria-hidden="true"><i></i><i></i><i></i><i></i></div>';
   // the line under the carousel: your team (once it has played) or when the event is on
   const underTxt = (T) => T?.my?.matches ? `<small><b>✓</b> <span>Your team · ${T.my.members.map(vgEsc).join(" · ")}</span>${T.my.rank ? ` · <span>Rank #${T.my.rank}</span>` : ""} · <span>${T.my.points} PTS</span></small>` : `<small>${vgEsc(vgTourWhen(T).txt)}</small>`;
-  const keyOf = () => JSON.stringify(list().map((t) => [t.id, t.name, t.description, t.art, t.theme, t.status, t.prizePool, t.format, t.round]));
+  const keyOf = () => JSON.stringify(list().map((t) => [t.id, t.name, t.description, t.art, t.theme, t.status, t.prizePool, t.format, t.round, vgTourLocked(t)]));
   // ---- the carousel: every poster is built once, then slides into place when you pick another one
   const buildList = (anim) => {
     const P = vgTourParty(), L = list();
@@ -61568,7 +61576,7 @@ function cJ(A) {
   vgTour.ui = typeof document > "u" ? null : (() => {
     if (!document.getElementById("vg-gm-style")) {
       const st = document.createElement("style");
-      st.id = "vg-gm-style", st.textContent = vgPosterCss.split("\n").filter((l) => l.startsWith(".vg-th-")).join("\n") + vgGmCss + vgGmCss2, document.head.appendChild(st);
+      st.id = "vg-gm-style", st.textContent = vgPosterCss.split("\n").filter((l) => l.startsWith(".vg-th-") || l.startsWith(".vg-lock")).join("\n") + vgGmCss + vgGmCss2, document.head.appendChild(st);
     }
     const sec = NA("div", "od-mode-section vg-gm-tsec");
     eA.insertBefore(sec, eA.firstChild), NA("div", "od-mode-group", sec).textContent = "Live tournaments";
@@ -62812,11 +62820,11 @@ function cJ(A) {
   function vgGmPaint() {
     const g = vgTour.ui;
     if (!g) return;
-    const L = vgGmLive(), key = JSON.stringify(L.map((t) => [t.id, t.name, t.art, t.theme, t.format, t.modeName, t.prizePool, t.round, t.rounds, t.my?.points]));
+    const L = vgGmLive(), key = JSON.stringify(L.map((t) => [t.id, t.name, t.art, t.theme, t.format, t.modeName, t.prizePool, t.round, t.rounds, t.my?.points, vgTourLocked(t)]));
     if (key !== g.key) {
       g.key = key;
       const foc = g.row.contains(document.activeElement) ? document.activeElement.dataset.tourney : null;
-      g.row.innerHTML = L.map((t) => `<button type="button" class="od-mode-option vg-gm-t" data-tourney="${vgEsc(t.id)}" aria-pressed="false"><span class="od-mode-thumb vg-th-${vgEsc(t.theme || "gold")}"><img class="art" src="${VG_POSTERS[t.art] || VG_POSTERS.vanguard}" alt="" draggable="false"><span class="tg"><span class="lv">Live</span><span class="fm">${VG_TOUR_PERSON.repeat(t.size || 1)}${VG_TOUR_FMT[t.format] || ""}</span>${t.prizePool ? `<span class="pz">${vgTourMoney(t.prizePool)}</span>` : ""}</span><span class="od-mode-mark"><span>${vgGmRound(t)}</span> · <span data-cd>${vgGmCd(vgGmEnd(t) - Date.now())}</span></span></span><span class="od-mode-info"><span class="od-mode-name" translate="no">${vgEsc(t.name)}</span><span class="od-mode-desc"><span>${VG_TOUR_FMT[t.format] || ""}</span> · <span>${vgEsc(t.modeName)}</span>${t.my ? ` · <b>${t.my.points}</b> <span>PTS</span>` : ""}</span><span class="od-mode-team">${VG_TOUR_PERSON.repeat(t.size || 1)}<span>${VG_TOUR_FMT[t.format] || ""}</span></span></span></button>`).join("");
+      g.row.innerHTML = L.map((t) => `<button type="button" class="od-mode-option vg-gm-t${vgTourLocked(t) ? " locked" : ""}" data-tourney="${vgEsc(t.id)}" aria-pressed="false"><span class="od-mode-thumb vg-th-${vgEsc(t.theme || "gold")}"><img class="art" src="${VG_POSTERS[t.art] || VG_POSTERS.vanguard}" alt="" draggable="false">${vgTourLocked(t) ? VG_TOUR_LOCK : ""}<span class="tg"><span class="lv">Live</span><span class="fm">${VG_TOUR_PERSON.repeat(t.size || 1)}${VG_TOUR_FMT[t.format] || ""}</span>${t.prizePool ? `<span class="pz">${vgTourMoney(t.prizePool)}</span>` : ""}</span><span class="od-mode-mark"><span>${vgGmRound(t)}</span> · <span data-cd>${vgGmCd(vgGmEnd(t) - Date.now())}</span></span></span><span class="od-mode-info"><span class="od-mode-name" translate="no">${vgEsc(t.name)}</span><span class="od-mode-desc"><span>${VG_TOUR_FMT[t.format] || ""}</span> · <span>${vgEsc(t.modeName)}</span>${t.my ? ` · <b>${t.my.points}</b> <span>PTS</span>` : ""}</span><span class="od-mode-team">${VG_TOUR_PERSON.repeat(t.size || 1)}<span>${VG_TOUR_FMT[t.format] || ""}</span></span></span></button>`).join("");
       const vh = g.hi;
       if (vh && !vh.isConnected && vh.dataset.tourney) {
         const nb = [...g.row.children].find((b) => b.dataset.tourney === vh.dataset.tourney);
