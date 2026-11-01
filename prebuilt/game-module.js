@@ -46046,11 +46046,12 @@ function T9(A) {
       south: []
     };
     const DA = O.bounds, UA = O.map?.center?.[0] ?? (DA ? (DA.min.x + DA.max.x) * 0.5 : 0), $A = O.map?.center?.[1] ?? (DA ? (DA.min.z + DA.max.z) * 0.5 : 0), KA = Math.max(1, ...fA.map((Ne) => Math.hypot(Ne.position.x - UA, Ne.position.z - $A))), he = KA * 0.68, se = fA.filter((Ne) => Math.hypot(Ne.position.x - UA, Ne.position.z - $A) >= he), Qe = se.length ? se : fA, te = Math.max(6, KA * 0.3);
-    let ye = Qe.filter((Ne) => Ne.position.z < $A - te).sort((Ne, ke) => Ne.position.z - ke.position.z), de = Qe.filter((Ne) => Ne.position.z > $A + te).sort((Ne, ke) => ke.position.z - Ne.position.z);
+    const sax = O.map?.spawnAxis === "x", Pz = (Ne) => sax ? Ne.position.x : Ne.position.z, Cz = sax ? UA : $A;
+    let ye = Qe.filter((Ne) => Pz(Ne) < Cz - te).sort((Ne, ke) => Pz(Ne) - Pz(ke)), de = Qe.filter((Ne) => Pz(Ne) > Cz + te).sort((Ne, ke) => Pz(ke) - Pz(Ne));
     if (ye.length < 2 || de.length < 2) {
       // Not enough spawns at both far ends (long maps like the Freighter, or an off-centre map): split all
       // spawn points by position into two separate ends, so the two teams never share a spawn area.
-      const srt = fA.slice().sort((Ne, ke) => Ne.position.z - ke.position.z), n = srt.length, k = Math.max(1, Math.min(Math.floor(n / 2), Math.max(2, Math.ceil(n / 3))));
+      const srt = fA.slice().sort((Ne, ke) => Pz(Ne) - Pz(ke)), n = srt.length, k = Math.max(1, Math.min(Math.floor(n / 2), Math.max(2, Math.ceil(n / 3))));
       ye = srt.slice(0, k), de = srt.slice(n - k).reverse();
     }
     return {
@@ -51397,6 +51398,11 @@ body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .o
         A.reportError?.("extras", "lifts", err);
       }
       try {
+        vgMLTick(A, dt);
+      } catch (err) {
+        A.reportError?.("extras", "map-lights", err);
+      }
+      try {
         typeof vgReplay < "u" && vgReplay.tick?.(A, dt);
       } catch (err) {
         A.reportError?.("extras", "replay", err);
@@ -54537,7 +54543,7 @@ function wmLayout(def) {
     Pl = { ...wmOrig.Pl }, hs = { ...wmOrig.hs }, Tu = wmOrig.Tu, h4 = wmOrig.h4, d4 = wmOrig.d4, f4 = wmOrig.f4, I4 = wmOrig.I4, DD = { ...wmOrig.DD, center: [0, 0] }, wmPatches = null, wmWalks = [];
     return;
   }
-  Pl = { min: -def.size, max: def.size }, hs = def.plaza ? { ...def.plaza, y: 0.15 } : { x0: 1e9, x1: -1e9, z0: 1e9, z1: -1e9, y: 0.15 }, Tu = def.streets, h4 = def.buildings, d4 = def.oob, f4 = def.playerSpawns, I4 = def.aiSpawns, wmPatches = def.patches.map((p) => [p.x0, p.x1, p.z0, p.z1]), wmWalks = wmWalkRects(def), DD = { id: def.id, name: def.name, center: def.center ? [...def.center] : [0, 0], flags: def.flags, navY: def.navY, navProbe: def.navProbe, mmTop: def.mmTop, intro: def.intro };
+  Pl = { min: -def.size, max: def.size }, hs = def.plaza ? { ...def.plaza, y: 0.15 } : { x0: 1e9, x1: -1e9, z0: 1e9, z1: -1e9, y: 0.15 }, Tu = def.streets, h4 = def.buildings, d4 = def.oob, f4 = def.playerSpawns, I4 = def.aiSpawns, wmPatches = def.patches.map((p) => [p.x0, p.x1, p.z0, p.z1]), wmWalks = wmWalkRects(def), DD = { id: def.id, name: def.name, center: def.center ? [...def.center] : [0, 0], flags: def.flags, navY: def.navY, navProbe: def.navProbe, mmTop: def.mmTop, intro: def.intro, spawnAxis: def.spawnAxis, sunOff: !!def.sunOff };
 }
 function wmKit(A) {
   const e = A.B, n = qM, ledge = (x0, z0, x1, z1, h) => A.ledges.push({ a: new b(x0, h, z0), b: new b(x1, h, z1), height: h }), ledgeRot = (x, z, rot, len, h) => {
@@ -55401,10 +55407,15 @@ function wmDefHalden() {
     yMin: -9,
     yMax: 12,
     navY: 2.6,
+    // underground: the sun can't reach in (the daylight through the hole is its own light), so no sun and no sun shadows
+    sunOff: !0,
+    // the teams' ends are west and east (the map is long along x)
+    spawnAxis: "x",
     // where the bots look for the floor: under the tunnels' roofs, just over the service stairs, else the hall's
     navProbe: (x, z) => {
       const ax = Math.abs(x);
-      if (ax > 48.4 && Math.abs(z) < 13.6) return TB + 3.7;
+      // (from the end wall's face: a probe from above starts inside the wall over the portal)
+      if (ax > 47.7 && Math.abs(z) < 13.6) return TB + 3.7;
       if (z > 13.5 && z < 17.2 && ax > 37.9 && ax < 53.7) return Math.max(TB, Math.min(0, -(ax - 39) / 12 * 6.7)) + 1.7;
       return 2.6;
     },
@@ -55417,7 +55428,7 @@ function wmDefHalden() {
     center: [0, 2],
     intro: { from: [44, -2.2, -3.2], to: [20, -3.4, -1.4], lookFrom: [-10, -3.6, 2.5], lookTo: [-30, -4.4, 0] },
     playerSpawns: [{ p: [39, 0], yaw: Math.PI / 2 }, { p: [37, -3], yaw: Math.PI / 2 }, { p: [37, 3], yaw: Math.PI / 2 }, { p: [45, -1], yaw: Math.PI / 2 }, { p: [45, 10], yaw: Math.PI / 2 }],
-    aiSpawns: [{ p: [-39, 0] }, { p: [-37, -3] }, { p: [-45, 1] }, { p: [-45, -10] }, { p: [-58, 9] }, { p: [-30, 15.5] }, { p: [-11, 28] }, { p: [11, 25] }, { p: [30, 15.5] }, { p: [58, -9] }, { p: [45, -10] }, { p: [0, 11.5] }, { p: [-6, -11.5] }, { p: [3, 30] }],
+    aiSpawns: [{ p: [-39, 0] }, { p: [-37, -3] }, { p: [-45, 1] }, { p: [-45, -10] }, { p: [-58, 9] }, { p: [-30, 15.5] }, { p: [-11, 28] }, { p: [11, 25] }, { p: [30, 15.5] }, { p: [54, -9.6] }, { p: [45, -10] }, { p: [0, 11.5] }, { p: [-6, -11.5] }, { p: [3, 30] }],
     flags: [[-31, 0.5], [0, 26.5], [31, 0.5]],
     zones: () => ({ plaza: new ct(new b(-16, -1, 18), new b(16, 4, 32)), "ticket hall": new ct(new b(-16, -1, 18), new b(16, 4, 32)), gallery: new ct(new b(-38, -1, 13), new b(38, 4, 18.4)), platform: new ct(new b(-44, -6, -6.6), new b(44, 4, 6.6)), "north track": new ct(new b(-48, -7, 6.6), new b(48, -1, 13)), "south track": new ct(new b(-48, -7, -13), new b(48, -1, -6.6)), tunnels: new ct(new b(48, -7, -13), new b(63, -1, 13)), "west tunnels": new ct(new b(-63, -7, -13), new b(-48, -1, 13)) }),
     shapes: [{ t: "rect", r: [-62, 62, -13, 13], c: "#34312c" }, { t: "rect", r: [-42, 42, -6.6, 6.6], c: "#8a867c" }, { t: "rect", r: [-48, 48, 7.6, 8.9], c: "#5a4a3c" }, { t: "rect", r: [-48, 48, -8.9, -7.6], c: "#5a4a3c" }, { t: "rect", r: [-31, 4.6, 6.75, 9.75], c: "#6f7a80" }, { t: "rect", r: [14, 31.4, -9.9, -6.7], c: "#6f7a80" }, { t: "rect", r: [-38, 38, 13, 18.4], c: "#77736a" }, { t: "rect", r: [-16, 16, 18.4, 32], c: "#7f7b70" }, { t: "rect", r: [-5.2, 5.2, 32, 43], c: "#6a665d" }, { t: "rect", r: [38, 53, 13.6, 17], c: "#5d5a52" }, { t: "rect", r: [-53, -38, 13.6, 17], c: "#5d5a52" }, { t: "rect", r: [-21, -13, -8.5, -0.5], c: "#a39c8a" }],
@@ -55820,10 +55831,8 @@ function wmDefHalden() {
       }
       // the light itself: dim cold fill, the working lamps, the fire, the tunnels' red, the daylight
       add(new Eb(9083823, 0.22), "halden:fill");
-      const L = (col, I, d, x, y, z) => {
-        const l = new Su(col, I, d, 2);
-        return l.position.set(x, y, z), l.castShadow = !1, add(l, "halden:light");
-      };
+      // (13 lamps, 4 real lights between them: see vgMLSetup)
+      const lamps = [], L = (col, I, d, x, y, z, fl) => lamps.push({ col, I, d, x, y, z, fl });
       for (const x of [-38.5, -24.5, 3.5, 24.5]) L(16764044, 44, 26, x, -0.3, 0);
       L(13431807, 30, 22, -24, 1.8, 16), L(13431807, 30, 22, 24, 1.8, 16), L(13431807, 34, 24, 0, 2.6, 25);
       for (const s of [1, -1]) {
@@ -55832,14 +55841,12 @@ function wmDefHalden() {
         m.position.set(s * 59.5, TB + 3.6, 0), add(m, "halden:worklamp");
       }
       L(14217983, 95, 28, -17, 4.5, -4.6), L(14217983, 24, 12, 0, 6.6, 42.6);
-      const fl = L(16748848, 16, 14, 0.6, PL + 1.6, -1.2);
       // the fire flickers; one of the platform lamps does too
-      const flick = L(16764044, 30, 22, 38.5, -0.3, 0);
+      L(16748848, 16, 14, 0.6, PL + 1.6, -1.2, (t) => 0.78 + 0.22 * Math.sin(t * 13.1) * Math.sin(t * 7.3 + 1) + 0.1 * Math.sin(t * 31));
+      L(16764044, 30, 22, 38.5, -0.3, 0, (t) => Math.sin(t * 3.1) + Math.sin(t * 17.3) * 0.6 + Math.sin(t * 0.7) * 1.4 > 1.6 ? 0.07 : 1);
+      vgMLSetup(ctx, root, 4, lamps);
       fire.onBeforeRender = () => {
-        const t = performance.now() / 1e3;
-        fl.intensity = 16 * (0.78 + 0.22 * Math.sin(t * 13.1) * Math.sin(t * 7.3 + 1) + 0.1 * Math.sin(t * 31)), fire.scale.y = 0.55 + 0.12 * Math.sin(t * 9.7);
-        const f = Math.sin(t * 3.1) + Math.sin(t * 17.3) * 0.6 + Math.sin(t * 0.7) * 1.4;
-        flick.intensity = f > 1.6 ? 2 : 30;
+        fire.scale.y = 0.55 + 0.12 * Math.sin(performance.now() / 1e3 * 9.7);
       };
     }
   };
@@ -55851,6 +55858,58 @@ function wmDefHalden() {
 // open when the car is at that floor and someone is at them or just called it, and close before it moves. Online,
 // each game runs its own lifts: a car follows another player who rides it, and comes for one waiting at its doors,
 // so what everyone sees matches closely enough. Bots don't use them (their walk map ends at the doors).
+// Release 1.0: a map's lamps as "virtual" lights. Every point light in the scene is computed for every pixel of every
+// lit surface, so a map with a dozen lamps cost several times what the others do. Here a map lists its lamps and gets a
+// few real point lights (the same few all the time, so no shader has to be rebuilt) that are given to the lamps that
+// light what you see: the nearest to the camera (relative to each lamp's reach), the ones in front first. A lamp that
+// stops being one of them fades out before its light moves on, and the new one fades in. The lamp's own glowing bulb or
+// globe stays lit whether or not it has a light.
+//   lamps: [{ col, I, d, x, y, z, fl?: (t) => intensity multiplier }]
+var vgSunOff = !1;
+var vgML = { pool: null, list: [], root: null, last: 0, t: 0 };
+function vgMLSetup(ctx, root, K, lamps) {
+  const pool = [];
+  for (let i = 0; i < K; i++) {
+    const L = new Su(16777215, 0, 10, 2);
+    L.castShadow = !1, L.name = "map:lamp-light", root.add(L), pool.push({ L, src: null, w: 0, want: !1 });
+  }
+  vgML.pool = pool, vgML.list = lamps, vgML.root = root, vgML.last = -1, vgML.cp = vgML.cp || new b(), vgML.cf = vgML.cf || new b();
+  return pool;
+}
+function vgMLTick(A, dt) {
+  const P = vgML.pool;
+  if (!P || !vgML.root?.parent || !A.camera) return;
+  vgML.t += dt;
+  const cp = vgML.cp, cf = vgML.cf;
+  // every quarter second: which lamps should have the lights
+  if (vgML.t - vgML.last > 0.25) {
+    vgML.last = vgML.t, A.camera.getWorldPosition(cp), A.camera.getWorldDirection(cf);
+    const best = [];
+    for (const s of vgML.list) {
+      const dx = s.x - cp.x, dy = s.y - cp.y, dz = s.z - cp.z, d = Math.hypot(dx, dy, dz) || 1e-3;
+      if (d > s.d * 2.2) continue;
+      // (a lamp on another level, e.g. the hall over your head, lights little of what you see: it counts for less)
+      const held = P.some((p) => p.src === s && p.want), behind = (dx * cf.x + dy * cf.y + dz * cf.z) / d < -0.3 && d > s.d * 0.4, level = Math.abs(dy) > 4;
+      best.push([d / s.d * (behind ? 1.7 : 1) * (level ? 1.6 : 1) * (held ? 0.85 : 1), s]);
+    }
+    best.sort((a, c) => a[0] - c[0]);
+    const pick = best.slice(0, P.length).map((x) => x[1]);
+    for (const p of P) p.want = !!p.src && pick.includes(p.src);
+    const free = pick.filter((s) => !P.some((p) => p.src === s));
+    for (const p of P) if (!p.src && free.length) {
+      const s = free.shift();
+      p.src = s, p.want = !0, p.w = 0, p.L.position.set(s.x, s.y, s.z), p.L.color.setHex(s.col), p.L.distance = s.d;
+    }
+  }
+  const k = Math.min(1, dt * 5);
+  for (const p of P) {
+    p.w += ((p.want ? 1 : 0) - p.w) * k;
+    // faded out: free the light for the next lamp
+    !p.want && p.w < 0.02 && (p.src = null, p.w = 0);
+    const s = p.src;
+    p.L.intensity = s ? s.I * p.w * (s.fl ? s.fl(vgML.t) : 1) : 0;
+  }
+}
 var vgLift = { list: [], inter: !1, A: null };
 function vgLiftSetup(ctx, root, M, defs) {
   vgLift.list = [], vgLift.A = ctx;
@@ -56081,6 +56140,8 @@ function wmDefMeridian() {
     yMin: -1,
     yMax: 32,
     navY: 2.8,
+    // the teams' ends: the tower (west) and the building next door (east)
+    spawnAxis: "x",
     mmTop: 3.2,
     streets: [],
     patches: [],
@@ -56096,7 +56157,10 @@ function wmDefMeridian() {
     shapes: [{ t: "rect", r: [AX0, AX1, -AZ, AZ], c: "#77736c" }, { t: "rect", r: [-24, -10, -7, 7], c: "#4b4c4f" }, { t: "rect", r: [AX1, 14, -AZ, AZ], c: "#7a6a52" }, { t: "rect", r: [14, BX0, -3, 3], c: "#8fa2ad" }, { t: "rect", r: [14, BX0, 13.5, 15.5], c: "#8a7454" }, { t: "rect", r: [BX0, BX1, BZ0, BZ1], c: "#5b5e60" }],
     build(A) {
       const K = wmKit2(A, wmCommon(A, this)), e = A.B, r = A.rng.fork("meridian"), nc = { col: !1, shadow: !1 }, ns = { col: !1 }, nm = { move: !1 };
-      const box = (m, x0, x1, y0, y1, z0, z1, o) => x1 - x0 > 1e-3 && y1 - y0 > 1e-3 && z1 - z0 > 1e-3 && e.box(m, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, x1 - x0, y1 - y0, z1 - z0, o);
+      // (inside the tower, below the ceiling, smaller than a room: furniture, which casts no sun shadow; walls, columns and
+      // the slabs still do, so the light through the windows still falls in shadowed patches)
+      const furn = (x0, x1, y1, z0, z1) => x0 >= AX0 + 0.25 && x1 <= AX1 - 0.25 && z0 >= -AZ + 0.25 && z1 <= AZ - 0.25 && y1 <= 3 && Math.max(x1 - x0, z1 - z0) < 6;
+      const box = (m, x0, x1, y0, y1, z0, z1, o) => x1 - x0 > 1e-3 && y1 - y0 > 1e-3 && z1 - z0 > 1e-3 && e.box(m, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, x1 - x0, y1 - y0, z1 - z0, furn(x0, x1, y1, z0, z1) ? { ...o, shadow: !1 } : o);
       const at = (x, y, z, yaw, f) => (e.pushTR(x, y, z, yaw), f(), e.pop());
       const stairs = (m, x0, x1, z0, z1, y0, y1, axis, dir, base = y0) => {
         const n = Math.max(1, Math.round((y1 - y0) / 0.175)), L = axis === "x" ? x1 - x0 : z1 - z0, tr = L / n, rise = (y1 - y0) / n;
@@ -56458,12 +56522,11 @@ function wmDefMeridian() {
         ctx.reportError?.("world", "lifts", err);
       }
       // the light: the office's ceiling lights, the stairwell
-      const L = (col, I, d, x, y, z) => {
-        const l = new Su(col, I, d, 2);
-        return l.position.set(x, y, z), l.castShadow = !1, add(l, "meridian:light");
-      };
+      // (6 lamps, 3 real lights between them: see vgMLSetup)
+      const lamps = [], L = (col, I, d, x, y, z) => lamps.push({ col, I, d, x, y, z });
       for (const [x, z] of [[-32, 11], [-32, -11], [-5, 11], [-5, -11], [-17, 0]]) L(16773344, 42, 20, x, 3.1, z);
       L(16769216, 18, 14, -19, 7, -5);
+      vgMLSetup(ctx, root, 3, lamps);
       add(new Eb(12570848, 0.2), "meridian:fill");
     }
   };
@@ -68199,7 +68262,7 @@ function kJ(A) {
     const IA = $.sun.color;
     w.setRGB(IA[0] * W.sunTint[0], IA[1] * W.sunTint[1], IA[2] * W.sunTint[2]);
     const pA = Math.max(w.r, w.g, w.b);
-    w.multiplyScalar(1 / pA), a.color.copy(w), a.intensity = X, a.position.copy(y).multiplyScalar(100), a.updateMatrixWorld(), a.shadow.radius = W.shadow.penumbra, a.shadow.intensity = W.shadow.intensity;
+    w.multiplyScalar(1 / pA), a.color.copy(w), a.intensity = vgSunOff ? 0 : X, a.position.copy(y).multiplyScalar(100), a.updateMatrixWorld(), a.shadow.radius = W.shadow.penumbra, a.shadow.intensity = W.shadow.intensity;
     const BA = Math.atan2(y.z, y.x), Z = $.sun.u - BA / (2 * Math.PI), nA = $.sun.elevationDeg * xl, j = Math.abs(Math.sin(2 * K)) > 1e-3 ? (K - nA) / Math.sin(2 * K) : 0;
     for (const WA of [n, o]) {
       const ie = WA.uniforms;
@@ -68294,11 +68357,15 @@ function kJ(A) {
       cur && cur.length === sp.length && cur.some((x, i) => x !== sp[i]) && sp.forEach((x, i) => cur[i] = x);
     } catch {
     }
-    a && a.shadow.mapSize.x !== tA && (a.shadow.mapSize.set(tA, tA), a.shadow.map?.dispose(), a.shadow.map = null), D.steps = V.steps, Si[24] = D.steps, t.shadowMap.enabled = W !== "low" && A.settings.get("graphics.shadows", !0) !== !1, a && (a.castShadow = t.shadowMap.enabled);
+    a && a.shadow.mapSize.x !== tA && (a.shadow.mapSize.set(tA, tA), a.shadow.map?.dispose(), a.shadow.map = null), D.steps = V.steps, Si[24] = D.steps, t.shadowMap.enabled = W !== "low" && A.settings.get("graphics.shadows", !0) !== !1, a && (a.castShadow = t.shadowMap.enabled && !vgSunOff);
   }
   const _ = {
     get sun() {
       return a;
+    },
+    // Release 1.0: after a map loads: an underground map turns the sun (and its shadows) off, the others back on
+    vgApplySun() {
+      a && (a.castShadow = t.shadowMap.enabled && !vgSunOff, a.intensity = vgSunOff ? 0 : m);
     },
     getSunDirection(W = new b()) {
       return W.copy(y);
@@ -96052,7 +96119,7 @@ function _K(A) {
     for (const S of I4) {
       const U = o.nearest(S.p[0], S.p[1], 20), G = U >= 0 ? o.cx(U % o.n) : S.p[0], P = U >= 0 ? o.cx(U / o.n | 0) : S.p[1];
       h.ai.push({
-        position: new b(G, U >= 0 && C.navY != null ? o.h[U] : i.groundHeight(G, P, 3), P),
+        position: new b(G, U >= 0 && C.navY != null ? o.h[U] : i.groundHeight(G, P, C.navProbe?.(G, P) ?? C.navY ?? 3), P),
         yaw: Q(G, P, 0, 0)
       });
     }
@@ -96074,6 +96141,10 @@ function _K(A) {
     try {
       const sk = A.scene.getObjectByName("lighting.skyline");
       sk && (sk.visible = !wmMap(E).noSkyline);
+    } catch {
+    }
+    try {
+      vgSunOff = !!wmMap(E).sunOff, A.services.lighting?.vgApplySun?.();
     } catch {
     }
     try {
