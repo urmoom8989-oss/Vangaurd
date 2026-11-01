@@ -29,7 +29,7 @@ const LOBBY_NEXT_S = process.env.LOBBY_NEXT !== undefined && process.env.LOBBY_N
 // Release 1.0: tournament spectators see the match this many seconds late (so it can't be used to cheat)
 const CASTER_DELAY_MS = (process.env.CASTER_DELAY !== undefined && process.env.CASTER_DELAY !== '' && Number.isFinite(Number(process.env.CASTER_DELAY)) ? Math.max(0, Number(process.env.CASTER_DELAY)) : 10) * 1000;
 const VOTE_S = process.env.MAP_VOTE_SECONDS !== undefined && process.env.MAP_VOTE_SECONDS !== '' && Number.isFinite(Number(process.env.MAP_VOTE_SECONDS)) ? Math.max(0, Number(process.env.MAP_VOTE_SECONDS)) : 10;
-const MAPS = ['vardanek', 'kessel', 'foundry', 'freighter', 'airfield', 'lindenhof'];
+const MAPS = ['vardanek', 'kessel', 'foundry', 'freighter', 'airfield', 'lindenhof', 'halden', 'meridian'];
 // Release 1.0 anti-cheat: the walls of every map, for the server's line-of-sight check (see los.mjs)
 const HERE_DIR = pathMod.dirname(decodeURIComponent(new URL(import.meta.url).pathname));
 const LOS = loadLos(pathMod.join(HERE_DIR, 'los-maps.json'));
@@ -1238,6 +1238,7 @@ function onHit(c, msg) {
   if (!match.ffa && target.team === attacker.team) return; // no friendly fire
   if (now() - target.spawnedAt < SPAWN_PROTECT_MS) return; // fresh spawn
   if (match.startAt && now() < match.startAt) return; // the intro: the match hasn't started yet
+  if (attacker.fin && attacker.fin.v === attacker.id && now() < attacker.fin.until) return; // being finished
   const amount = Math.max(0, Math.min(250, num(msg.amount)));
   if (!amount) return;
   // Release 1.0 anti-cheat: the server checks the shot's distance, line of sight, damage, fire rate and aim
@@ -1249,18 +1250,21 @@ function onHit(c, msg) {
   broadcast(match, { type: 'player_damaged', matchId: match.id, attackerId: attacker.id, targetId: target.id, amount, health: target.health, zone });
   recEvent(match, ['d', attacker.id, target.id, amount, zone, chk.wall ? 1 : 0, Math.round(chk.d || 0)]);
   if (target.health > 0) return;
-  recEvent(match, ['k', attacker.id, target.id]);
   if (!streak) {
     const ac = acOf(attacker);
     ac.kills++, zone === 'head' && ac.hsKills++;
     !ac.once.hs && ac.kills >= 15 && ac.hsKills / ac.kills >= 0.8 && (ac.once.hs = true, acFlag(match, attacker, 'headshots', `${ac.hsKills} of ${ac.kills} kills were headshots`));
   }
+  killPlayer(match, attacker, target, zone, streak ? { streak: msg.streak } : {});
+}
+function killPlayer(match, attacker, target, zone, extra = {}) {
+  recEvent(match, ['k', attacker.id, target.id]);
   target.alive = false;
   target.diedAt = now();
   target.deaths++;
   attacker.kills++;
   if (match.tourney) tourneyLive(match, attacker);
-  broadcast(match, { type: 'player_killed', matchId: match.id, attackerId: attacker.id, targetId: target.id, zone, attackerName: attacker.name, targetName: target.name, ...(streak ? { streak: msg.streak } : {}) });
+  broadcast(match, { type: 'player_killed', matchId: match.id, attackerId: attacker.id, targetId: target.id, zone, attackerName: attacker.name, targetName: target.name, ...extra });
   if (match.mode !== 'gg') gunSpawn(match, target.state?.variant, target.pos);
   if (match.mode === 'kc') {
     const pos = target.pos || { x: 0, y: 0, z: 0 };
@@ -1272,6 +1276,40 @@ function onHit(c, msg) {
   } else {
     addScore(match, attacker.team, 1);
   }
+}
+// ---------- Release 1.0: finishing moves ----------
+// A player who melees an enemy from behind asks for one. The server checks it: both alive, the attacker within reach
+// behind the victim (the victim looking away), nothing in between. Then it tells everyone in the match (every game
+// plays the same takedown, the victim's from the same camera), and two seconds later the victim dies: the attacker's
+// kill, weapon "finisher". Meanwhile the victim's own hits don't count. Someone else can still kill them first.
+const FIN_KILL_MS = 2020, FIN_REACH = 2.0;
+function onFinisher(c, msg) {
+  const match = matches.get(c.matchId), no = (why) => send(c, { type: 'finisher_no', reason: why });
+  if (!match || match.ended || match.phase !== 'live' || (match.startAt && now() < match.startAt)) return no('match');
+  const a = match.players.get(c.id), v = match.players.get(String(msg.targetId)), t = now();
+  if (!a || !v || !a.alive || !v.alive || a.id === v.id) return no('player');
+  if (a.fin && t < a.fin.until || v.fin && t < v.fin.until) return no('busy');
+  if (!match.ffa && a.team === v.team) return no('team');
+  if (t - v.spawnedAt < SPAWN_PROTECT_MS) return no('spawn');
+  const ap = a.pos, vp = v.pos;
+  if (!ap || !vp) return no('pos');
+  const dx = ap.x - vp.x, dz = ap.z - vp.z, d = Math.hypot(dx, dz);
+  if (d > FIN_REACH || Math.abs((ap.y || 0) - (vp.y || 0)) > 0.8) return no('reach');
+  // behind: the victim looks away from the attacker (a player's yaw looks along (-sin, -cos))
+  const vy = num(v.state?.yaw), fx = -Math.sin(vy), fz = -Math.cos(vy);
+  if ((fx * dx + fz * dz) / Math.max(d, 1e-3) > -0.2) return no('front');
+  if (LOS.blocked(match.mapId, { x: ap.x, y: (ap.y || 0) + 1.2, z: ap.z }, { x: vp.x, y: (vp.y || 0) + 1.2, z: vp.z }, 0.3) === true) return no('wall');
+  a.fin = v.fin = { by: a.id, v: v.id, until: t + FIN_KILL_MS + 500 };
+  broadcast(match, { type: 'finisher', matchId: match.id, attackerId: a.id, victimId: v.id, vx: vp.x, vy: vp.y || 0, vz: vp.z, vyaw: vy, ax: ap.x, ay: ap.y || 0, az: ap.z, at: t });
+  recEvent(match, ['f', a.id, v.id]);
+  setTimeout(() => {
+    const A2 = match.players.get(a.id) || a, V2 = match.players.get(v.id);
+    a.fin = v.fin = null;
+    if (match.ended || !V2 || !V2.alive) return;
+    V2.health = 0;
+    broadcast(match, { type: 'player_damaged', matchId: match.id, attackerId: A2.id, targetId: V2.id, amount: 100, health: 0, zone: 'torso' });
+    killPlayer(match, A2, V2, 'torso', { weapon: 'finisher' });
+  }, FIN_KILL_MS);
 }
 // ---------- Release 1.0 anti-cheat: shot checks and cheat flags ----------
 // Every hit is checked against where the server last saw both players: too far for the gun, or claimed from somewhere
@@ -2272,6 +2310,7 @@ function handle(c, raw) {
     case 'leave_match': leaveMatch(c, true); break;
     case 'player_state': onState(c, msg); break;
     case 'player_hit': onHit(c, msg); break;
+    case 'finisher': onFinisher(c, msg); break;
     case 'player_respawn': onRespawn(c, msg); break;
     case 'tag_pickup': onTagPickup(c, msg); break;
     case 'gun_pickup': onGunPickup(c, msg); break;

@@ -6,7 +6,7 @@ const URL = process.argv[2] || 'ws://127.0.0.1:8099/ws';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failures = 0;
 const check = (cond, label) => { console.log(`${cond ? 'PASS' : 'FAIL'} ${label}`); if (!cond) failures++; };
-const MAPS = ['vardanek', 'kessel', 'foundry', 'freighter', 'airfield', 'lindenhof'];
+const MAPS = ['vardanek', 'kessel', 'foundry', 'freighter', 'airfield', 'lindenhof', 'halden', 'meridian'];
 
 function client(name) {
   const ws = new WebSocket(URL);
