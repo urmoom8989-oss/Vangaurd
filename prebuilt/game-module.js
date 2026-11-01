@@ -43639,7 +43639,7 @@ function w9(A) {
     } catch {
       return "Melee";
     }
-    return v === "melee" ? "Melee" : Ip(t, v).name || String(v);
+    return v === "melee" ? "Melee" : v === "finisher" ? vgT("Finishing move") : Ip(t, v).name || String(v);
   }
   function B(v) {
     A.settings.get("gameplay.hitmarkers", !0) !== !1 && A.services.hud.hitmarker(v);
@@ -48254,7 +48254,7 @@ function J9(A = "default", e = 1, t = 0) {
 }
 function F3(A = "", e = "") {
   const t = String(A || "").toLowerCase(), i = String(e || "").toLowerCase();
-  return i === "explosion" || /frag|grenade|explo|rocket/.test(t) ? GM : i === "melee" || /knife|melee/.test(t) ? U3 : /pistol|p9|kestrel|sidearm|handgun/.test(t) ? G3 : i === "fall" || i === "fire" ? N3 : R3;
+  return i === "explosion" || /frag|grenade|explo|rocket/.test(t) ? GM : i === "melee" || /knife|melee|finisher/.test(t) ? U3 : /pistol|p9|kestrel|sidearm|handgun/.test(t) ? G3 : i === "fall" || i === "fire" ? N3 : R3;
 }
 var Ds, R3, G3, GM, k3, U3, V9, H3, N3, rl, L3, T3, P3, kM, Y3, _3, R2, G2, J3, nm = YA((() => {
   Ds = (A, e, t = "") => `<svg class="od-ico ${t}" viewBox="${A}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${e}</svg>`, R3 = Ds("0 0 100 30", `<path fill="currentColor" d="
@@ -51389,7 +51389,7 @@ body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .o
       try {
         vgFinTick(A, dt);
       } catch (err) {
-        A.reportError?.("extras", "finisher", err), vgFinEnd(A);
+        vgFinNote(`tick error ${err?.message} ${String(err?.stack).split("\n")[1]?.trim().slice(0, 80)}`), A.reportError?.("extras", "finisher", err), vgFinEnd(A);
       }
       try {
         vgLiftTick(A, dt);
@@ -51416,7 +51416,7 @@ body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .o
       try {
         vgFinLate(A);
       } catch (err) {
-        A.reportError?.("extras", "finisher-cam", err);
+        vgFinNote(`late error ${err?.message} ${String(err?.stack).split("\n")[1]?.trim().slice(0, 80)}`), A.reportError?.("extras", "finisher-cam", err);
       }
       try {
         vgIntroLate(A, dt);
@@ -51736,7 +51736,8 @@ function vgGunsPicked(A, variant) {
 // ragdoll at the end. Offline the victim is a bot; online the server says who executes whom, and every game in the
 // match plays it (the victim sees it from the same camera).
 var vgFin = { on: !1, t: 0, clock: 0, dur: 2.7, A: null, slowUntil: 0, shakeT: -1, hitsDone: 0, killed: !1, el: null, knife: null, vmWas: null };
-var VG_FIN_HITS = [0.66, 1.08], VG_FIN_KILL = 2.02;
+var VG_FIN_HITS = [0.66, 1.08], VG_FIN_KILL = 2.02, vgFinLog = [];
+var vgFinNote = (s) => (vgFinLog.push(`${(performance.now() / 1e3).toFixed(2)} ${s}`), vgFinLog.length > 40 && vgFinLog.shift());
 // ---- small helpers
 var vgFinV = Array.from({ length: 14 }, () => new b()), vgFinQ = Array.from({ length: 8 }, () => new Oe()), vgFinE = new ga(0, 0, 0, "YXZ"), vgFinUp = new b(0, 1, 0);
 function vgFinSm(x) {
@@ -51809,13 +51810,14 @@ var VG_FIN_TRACKS = {
     chest: [[0, [0.06, 0, 0]], [0.28, [0.02, 0, 0]], [0.46, [-0.42, 0.12, 0.06]], [0.66, [-0.36, 0.1, 0.04]], [0.71, [-0.12, 0.04, 0]], [0.9, [-0.3, 0.1, 0.05]], [1.08, [-0.28, 0.1, 0.06]], [1.13, [-0.08, 0.05, 0.03]], [1.4, [0.18, 0.18, 0.1]], [1.85, [0.55, 0.26, 0.16]], [2.1, [0.62, 0.3, 0.2]]],
     head: [[0, [0, 0, 0]], [0.28, [-0.05, 0.05, 0]], [0.46, [-0.55, -0.32, 0.05]], [0.66, [-0.5, -0.28, 0.08]], [0.72, [-0.25, -0.15, 0.05]], [1.08, [-0.35, -0.2, 0.12]], [1.4, [0.35, 0.22, 0.2]], [1.85, [0.62, 0.38, 0.28]], [2.1, [0.7, 0.4, 0.3]]],
     handL: [[0, [0.04, 1.08, 0.42]], [0.3, [0.12, 1.12, 0.36]], [0.46, [0.22, 1.42, 0.08]], [0.7, [0.17, 1.48, 0.02]], [1.08, [0.2, 1.42, 0.06]], [1.4, [0.3, 0.98, 0.18]], [1.85, [0.36, 0.42, 0.4]], [2.1, [0.38, 0.32, 0.46]]],
-    handR: [[0, [-0.14, 1.02, 0.18]], [0.3, [-0.18, 1.08, 0.28]], [0.46, [-0.26, 1.34, 0.12]], [0.66, [-0.2, 1.22, 0.26]], [0.74, [-0.12, 1.12, 0.32]], [1.08, [-0.16, 1.1, 0.3]], [1.4, [-0.34, 0.86, 0.16]], [1.85, [-0.36, 0.34, 0.36]], [2.1, [-0.38, 0.28, 0.42]]],
+    // the right hand: up at the arm over its face, then clutching the wound, then down to break the fall
+    handR: [[0, [-0.14, 1.02, 0.18]], [0.3, [-0.18, 1.1, 0.22]], [0.46, [-0.15, 1.32, 0.14]], [0.62, [-0.1, 1.22, 0.14]], [0.74, [-0.03, 1.02, 0.17]], [1.08, [-0.04, 1.0, 0.16]], [1.18, [-0.02, 0.98, 0.18]], [1.4, [-0.2, 0.84, 0.2]], [1.85, [-0.36, 0.34, 0.36]], [2.1, [-0.38, 0.28, 0.42]]],
     footL: [[0, [0.11, 0, 0.02]], [1.4, [0.11, 0, 0.0]], [1.85, [0.15, 0, -0.18]]],
     footR: [[0, [-0.11, 0, -0.02]], [0.46, [-0.12, 0, -0.1]], [1.4, [-0.12, 0, -0.08]], [1.85, [-0.16, 0, -0.3]]],
     footPitch: [[0, 0], [1.4, 0], [1.85, -0.6]]
   },
   a: {
-    pelvis: [[0, [0, 0, 0]], [0.24, [0, -0.06, 0.02]], [0.75, [0, -0.07, 0.03]], [1.4, [0, -0.2, 0.06]], [1.85, [0, -0.36, 0.12]], [2.3, [0, -0.05, 0.02]], [2.7, [0, 0, 0]]],
+    pelvis: [[0, [0, 0, 0]], [0.24, [0, -0.06, 0.02]], [0.75, [0, -0.07, 0.03]], [1.4, [0, -0.24, 0.06]], [1.85, [0, -0.46, 0.14]], [2.3, [0, -0.06, 0.02]], [2.7, [0, 0, 0]]],
     prot: [[0, [0.12, 0, 0]], [0.24, [0.18, -0.08, 0]], [0.46, [0.04, -0.06, 0]], [0.66, [0.14, 0.1, 0]], [1.4, [0.3, 0.05, 0]], [1.85, [0.45, 0, 0]], [2.3, [0.1, 0, 0]], [2.7, [0.04, 0, 0]]],
     chest: [[0, [0.1, 0, 0]], [0.24, [0.2, -0.22, -0.04]], [0.46, [0.0, -0.18, -0.06]], [0.56, [0.02, -0.38, -0.05]], [0.66, [0.22, 0.32, 0.04]], [0.84, [0.1, 0.05, 0]], [0.98, [0.04, -0.3, -0.04]], [1.08, [0.22, 0.3, 0.04]], [1.4, [0.32, 0.12, 0]], [1.85, [0.6, 0.02, 0]], [2.3, [0.08, 0, 0]], [2.7, [0.04, 0, 0]]],
     head: [[0, [0.15, 0, 0]], [0.46, [0.22, 0.12, 0]], [1.4, [0.3, 0.1, 0]], [1.85, [0.42, 0, 0]], [2.3, [0.1, 0, 0]]],
@@ -51829,27 +51831,29 @@ var VG_FIN_TRACKS = {
     footR: [[0, [-0.12, 0, -0.1]], [0.3, [-0.13, 0, -0.18]], [1.85, [-0.16, 0, -0.42]], [2.4, [-0.12, 0, -0.08]]],
     knife: [[0, 0], [0.12, 0], [0.22, 1], [2.35, 1], [2.55, 0]]
   },
-  // the camera: start at your eyes, out to the left of you and round to the victim's side, then back
-  cam: [[0, [0, 0, 0]], [0.32, [1.75, 1.62, -1.55]], [0.66, [1.62, 1.5, -0.95]], [1.08, [1.78, 1.42, -0.2]], [1.5, [1.95, 1.3, 0.55]], [2.0, [1.9, 1.15, 0.9]]],
-  look: [[0, [0, 1.45, 0]], [0.32, [0.0, 1.45, -0.15]], [1.08, [0.02, 1.32, 0.05]], [1.5, [0.0, 1.1, 0.1]], [2.0, [0.0, 0.85, 0.2]]],
-  fov: [[0, 0], [0.32, 50], [0.66, 46], [0.7, 52], [1.08, 47], [1.12, 52], [2.0, 55]]
+  // the camera: from your eyes out over your shoulder on the knife side (x: that side), round to the victim's face,
+  // down with the fall, then back to your eyes
+  cam: [[0, [0, 0, 0]], [0.32, [1.4, 1.7, -1.2]], [0.66, [1.45, 1.54, -0.55]], [1.08, [1.5, 1.42, 0.22]], [1.5, [1.55, 1.26, 0.82]], [2.0, [1.45, 1.08, 1.1]]],
+  look: [[0, [0, 1.45, 0]], [0.32, [-0.05, 1.5, -0.2]], [0.66, [0, 1.42, -0.1]], [1.08, [0, 1.3, 0]], [1.5, [0, 1.04, 0.05]], [2.0, [0, 0.78, 0.15]]],
+  fov: [[0, 0], [0.32, 48], [0.66, 44], [0.7, 50], [1.08, 45], [1.12, 50], [2.0, 54]]
 };
 // ---- the knife: a short blade, guard and grip
 function vgFinKnife(A) {
   if (vgFin.knife) return vgFin.knife;
   const g = new yt(), steel = new Vt({ color: 13421772, metalness: 1, roughness: 0.22 }), dark = new Vt({ color: 1513239, metalness: 0.2, roughness: 0.7 });
-  const blade = new Le(new wi(0.006, 0.032, 0.16), steel);
-  blade.position.set(0, 0, 0.12);
-  const tip = new Le(new wi(0.006, 0.022, 0.05), steel);
-  tip.position.set(0, 0.005, 0.215), tip.rotation.x = 0.35;
-  const guard = new Le(new wi(0.016, 0.06, 0.012), dark);
+  const blade = new Le(new wi(0.007, 0.036, 0.19), steel);
+  blade.position.set(0, 0, 0.135);
+  const tip = new Le(new wi(0.007, 0.026, 0.06), steel);
+  tip.position.set(0, 0.006, 0.255), tip.rotation.x = 0.35;
+  const guard = new Le(new wi(0.018, 0.07, 0.014), dark);
   guard.position.set(0, 0, 0.035);
-  const grip = new Le(new wi(0.026, 0.032, 0.105), dark);
+  const grip = new Le(new wi(0.03, 0.036, 0.11), dark);
   grip.position.set(0, 0, -0.02), g.add(blade, tip, guard, grip), g.name = "vg-fin-knife";
   return g.traverse((m) => (m.castShadow = !0, m.layers.set(A.layers.WORLD))), vgFin.knife = g;
 }
 var vgFinCss = `
-.vg-fin { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+.vg-fin { position: fixed; inset: 0; pointer-events: none; z-index: 65; }
+body.vg-fin-on .vg-ks, body.vg-fin-on .vg-ks-target, body.vg-fin-on .vg-ks-jam, body.vg-fin-on .vg-marks, body.vg-fin-on .vg-mount { visibility: hidden !important; }
 .vg-fin .bar { position: absolute; left: 0; right: 0; height: 9vh; background: #000; transform: scaleY(0); transition: transform .35s cubic-bezier(.2,.8,.2,1); }
 .vg-fin .bar.t { top: 0; transform-origin: top; } .vg-fin .bar.b { bottom: 0; transform-origin: bottom; }
 .vg-fin.on .bar { transform: scaleY(1); }
@@ -51890,25 +51894,24 @@ function vgFinTarget(A) {
   return best;
 }
 // called when melee is pressed: start one if someone is there (true: the normal melee doesn't happen)
-// (still being finished: on only for testing, vangaurd.maps.wip = 1)
-var VG_FIN_ON = !1;
+var VG_FIN_ON = !0;
 function vgFinTry(A) {
   if (!VG_FIN_ON && !wmWip()) return !1;
   try {
     const t = vgFinTarget(A);
-    if (!t) return !1;
+    if (vgFinNote(`try ${t ? t.kind : "none"}`), !t) return !1;
     const N = A.services.network;
     if (t.kind === "net") return A.events.emit("network:send", { type: "finisher", targetId: t.id }), vgFin.asked = performance.now(), !0;
     return vgFinStart(A, { kind: "ai", agent: t.agent, me: !0 }), !0;
   } catch (err) {
-    return A.reportError?.("finisher", "try", err), !1;
+    return vgFinNote(`try error ${err?.message}`), A.reportError?.("finisher", "try", err), !1;
   }
 }
 // role: me (I attack), victim (I'm finished), watch (two others). a / v: the bodies.
 function vgFinStart(A, o) {
   const S = A.services, F = vgFin;
   vgFinEnd(A, !0);
-  F.A = A, F.on = !0, F.t = 0, F.clock = performance.now() / 1e3, F.hitsDone = 0, F.killed = !1, F.slowUntil = 0, F.shakeT = -1, F.role = o.me ? "me" : o.victimMe ? "victim" : "watch", F.o = o;
+  F.A = A, F.on = !0, F.t = 0, F.clock = 0, F.hitsDone = 0, F.killed = !1, F.slowUntil = 0, F.shakeT = -1, F.role = o.me ? "me" : o.victimMe ? "victim" : "watch", F.o = o;
   // the victim's body and where it stands
   let vb = null, vpos = null, vyaw = 0;
   const ps = S.player?.state;
@@ -51924,7 +51927,7 @@ function vgFinStart(A, o) {
     }
     A.scene.add(act.group), act.group.visible = !0, act.place({ pos: ps.position, yaw: ps.yaw, pitch: 0 }), F.vActor = act, vb = act.body, vpos = ps.position.clone(), vyaw = ps.yaw + Math.PI;
   }
-  if (!vb) return F.on = !1, null;
+  if (!vb) return vgFinNote("start: no victim body"), F.on = !1, null;
   // online, everyone uses where the server saw them
   o.vPos && (vpos = o.vPos.clone()), Number.isFinite(o.vYaw) && (vyaw = o.vYaw);
   F.V = vpos, F.yaw = vyaw, F.vb = vb;
@@ -51932,7 +51935,7 @@ function vgFinStart(A, o) {
   if (o.aSol) o.aSol.vgFin = !0, F.ab = o.aSol.body, F.aSol = o.aSol;
   else {
     const act = S.ai?.netSoldier?.(`fin-${o.me ? "me" : "a"}`, 3);
-    if (!act) return vgFinEnd(A), null;
+    if (!act) return vgFinNote("start: no actor"), vgFinEnd(A), null;
     try {
       vgOpApply(act, o.aOp || vgOpCurrent());
     } catch {
@@ -51970,18 +51973,24 @@ function vgFinStart(A, o) {
         st.id = "vg-fin-style", st.textContent = vgFinCss, document.head.appendChild(st);
       }
       const d = F.el = document.createElement("div");
-      d.className = "vg-fin", d.innerHTML = `<div class="bar t"></div><div class="bar b"></div><div class="flash"></div><div class="lab">${vgEsc(vgT(F.role === "victim" ? "Finished" : "Finishing move"))}</div>`, document.body.appendChild(d), requestAnimationFrame(() => d.classList.add("on"));
+      d.className = "vg-fin", d.innerHTML = `<div class="bar t"></div><div class="bar b"></div><div class="flash"></div><div class="lab">${vgEsc(vgT(F.role === "victim" ? "Finished" : "Finishing move"))}</div>`, document.body.appendChild(d), document.body.classList.add("vg-fin-on"), void d.offsetWidth, d.classList.add("on");
     }
+  }
+  F.side = -1, F.arm = 1;
+  if (F.role !== "watch") try {
+    const sc = (side) => [0.32, 0.66, 1.08, 1.5, 2.0].reduce((n, t) => n + (vgFinCamClear(A, vgFinCamAt(t, side), vgFinPivot()) ? 1 : 0), 0);
+    sc(1) > sc(-1) && (F.side = 1);
+  } catch {
   }
   const kn = vgFinKnife(A);
   A.scene.add(kn), kn.visible = !1;
   S.audio?.play?.("fin_grab", { bus: "sfx", volume: 0.9 }), S.audio?.play?.("cloth_rustle", { bus: "sfx", volume: 0.6 });
-  return F;
+  return vgFinNote(`start ${F.role} side ${F.side}`), F;
 }
 function vgFinEnd(A, quiet = !1) {
   const F = vgFin;
   if (!F.on && !F.aActor && !F.el) return;
-  F.on = !1;
+  vgFinNote(`end t=${F.t.toFixed(2)} killed=${F.killed}${quiet ? " quiet" : ""} ${new Error().stack.split("\n")[2]?.trim().slice(0, 60)}`), F.on = !1;
   A = A || F.A;
   const S = A?.services;
   F.vAgent && (F.vAgent.vgFin = !1), F.vSol && (F.vSol.vgFin = !1), F.aSol && (F.aSol.vgFin = !1);
@@ -52003,6 +52012,7 @@ function vgFinEnd(A, quiet = !1) {
     const el = F.el;
     F.el = null, el.classList.remove("on"), setTimeout(() => el.remove(), quiet ? 0 : 450);
   }
+  typeof document < "u" && document.body.classList.remove("vg-fin-on");
   F.vAgent = F.vSol = F.aSol = null;
 }
 // online: the server says who finishes whom; every game in the match plays it
@@ -52040,8 +52050,10 @@ function vgFinTick(A, dt) {
   if (F.vAgent && !F.vAgent.alive && !F.killed || F.vSol && F.vSol.dead && !F.killed) return vgFinEnd(A);
   if (F.role === "victim" && (!S.player?.state?.alive || F.t > VG_FIN_KILL + 0.4)) return vgFinEnd(A);
   if (F.role === "me" && !S.player?.state?.alive) return vgFinEnd(A);
-  const now = performance.now() / 1e3;
   dt = Math.min(0.1, Math.max(0, dt || 0));
+  // the finisher's own clock (game time, so the hit-stop and shake don't depend on the frame rate)
+  F.clock += dt;
+  const now = F.clock;
   F.t += now < F.slowUntil ? dt * 0.12 : dt;
   const t = F.t, T = VG_FIN_TRACKS, yaw = F.yaw, V = F.V, sy = Math.sin(yaw), cy = Math.cos(yaw);
   const W = (l, out) => out.set(V.x + l[0] * cy + l[2] * sy, V.y + l[1], V.z - l[0] * sy + l[2] * cy);
@@ -52072,12 +52084,12 @@ function vgFinTick(A, dt) {
   const chest = F.vb.pose.p[ZA.chest], cq = F.vb.pose.q[ZA.chest], stab = vgFinV[12].set(-0.04, -0.04, 0.16).applyQuaternion(cq).add(chest), sw = vgFinK(Ak.strike, t);
   const hR = AL(vgFinK(Ak.handR, t), new b()).lerp(stab, sw), fla = vgFinK(Ak.footL, t), fra = vgFinK(Ak.footR, t);
   const ap = F.Pa;
-  vgFinPose(ap, { G: aG, yaw, pelvis: vgFinK(Ak.pelvis, t), prot: vgFinK(Ak.prot, t), chest: vgFinK(Ak.chest, t), head: vgFinK(Ak.head, t), hand: { L: hL, R: hR }, pole: { L: new b(cy * 0.9 + sy * -0.2, -0.3, -sy * 0.9 + cy * -0.2), R: new b(-cy * 0.9 + sy * -0.3, -0.5, sy * 0.9 + cy * -0.3) }, wrist: { L: [0.3, 0, 0], R: [-1.25, 0, 0.2] }, foot: { L: AL([fla[0], fla[1] + 0.085, fla[2]], new b()), R: AL([fra[0], fra[1] + 0.085, fra[2]], new b()) }, footPitch: { L: 0, R: 0 }, weapon: { p: vgFinV[13].set(0, 0.06, -0.24).applyQuaternion(ap.q[ZA.chest] || vgFinQ[0]).add(ap.p[ZA.chest] || aG), q: new Oe().setFromAxisAngle(vgFinUp, yaw).multiply(vgFinEuler(vgFinQ[7], 0, Math.PI / 2, 1.05)) } });
-  // (the gun sits across the back: computed from last frame's chest; good enough after the first)
+  vgFinPose(ap, { G: aG, yaw, pelvis: vgFinK(Ak.pelvis, t), prot: vgFinK(Ak.prot, t), chest: vgFinK(Ak.chest, t), head: vgFinK(Ak.head, t), hand: { L: hL, R: hR }, pole: { L: new b(cy * 0.9 + sy * -0.2, -0.3, -sy * 0.9 + cy * -0.2), R: new b(-cy * 0.9 + sy * -0.3, -0.5, sy * 0.9 + cy * -0.3) }, wrist: { L: [0.3, 0, 0], R: [-1.25, 0, 0.2] }, foot: { L: AL([fla[0], fla[1] + 0.085, fla[2]], new b()), R: AL([fra[0], fra[1] + 0.085, fra[2]], new b()) }, footPitch: { L: 0, R: 0 }, weapon: null });
+  vgFinSling(ap);
   vgFinBlend(F.P0a, ap, t), F.ab.pose.copy(ap), F.ab.group.position.copy(aG), F.ab.group.rotation.set(0, 0, 0), F.ab.applyPose(), F.ab.updateHitboxes();
   // the knife in the right hand
   const kn = F.knife, kv = vgFinK(Ak.knife, t);
-  kn && (kn.visible = kv > 0.5, kn.position.copy(F.ab.pose.p[ZA.handR]).add(vgFinV[11].set(0, -0.07, 0.035).applyQuaternion(F.ab.pose.q[ZA.handR])), kn.quaternion.copy(F.ab.pose.q[ZA.handR]).multiply(vgFinEuler(vgFinQ[7], Math.PI / 2, 0, 0)), kn.updateMatrixWorld(!0));
+  kn && (kn.visible = kv > 0.5 && (!F.aActor || F.aActor.group.visible), kn.position.copy(F.ab.pose.p[ZA.handR]).add(vgFinV[11].set(0, -0.07, 0.035).applyQuaternion(F.ab.pose.q[ZA.handR])), kn.quaternion.copy(F.ab.pose.q[ZA.handR]).multiply(vgFinEuler(vgFinQ[7], Math.PI / 2, 0, 0)), kn.updateMatrixWorld(!0));
   // the strikes: hit-stop, blood, sound, the screen's red edge
   for (let k = F.hitsDone; k < VG_FIN_HITS.length && t >= VG_FIN_HITS[k]; k++) {
     F.hitsDone = k + 1, F.slowUntil = now + 0.075, F.shakeT = now;
@@ -52109,11 +52121,49 @@ function vgFinTick(A, dt) {
   }
   t >= F.dur && vgFinEnd(A);
 }
+// the gun on its sling across the back, in the chest's frame (x left, y up, z forward; the barrel is the gun's +z)
+var vgFinSlingQ = (() => {
+  const z = new b(0.5, -0.86, 0).normalize(), y = new b(0, 0, -1), x = new b().crossVectors(y, z).normalize();
+  return new Oe().setFromRotationMatrix(new ne().makeBasis(x, y.crossVectors(z, x).normalize(), z));
+})();
+function vgFinSling(P) {
+  const c = ZA.chest, w = ZA.weapon;
+  P.p[w].set(-0.1, -0.1, -0.27).applyQuaternion(P.q[c]).add(P.p[c]), P.q[w].copy(P.q[c]).multiply(vgFinSlingQ), P.fk(ZA.mag), P.q[ZA.mag].copy(P.q[w]);
+}
 // blend from the pose they stood in, over the first 0.2 s
 function vgFinBlend(P0, P, t) {
   const w = vgFinSm(t / 0.2);
   if (w >= 1) return;
   for (let i = 0; i < P.p.length; i++) P.p[i].lerpVectors(P0.p[i], P.p[i], w), P.q[i].slerpQuaternions(P0.q[i], P.q[i], w);
+}
+// the camera's point at time t on a side (world), the point it turns round (the pair's middle), and whether the line
+// between them is clear of walls
+function vgFinCamAt(t, side) {
+  const F = vgFin, c = vgFinK(VG_FIN_TRACKS.cam, Math.max(0.32, t)), sy = Math.sin(F.yaw), cy = Math.cos(F.yaw), x = c[0] * side;
+  return new b(F.V.x + x * cy + c[2] * sy, F.V.y + c[1], F.V.z - x * sy + c[2] * cy);
+}
+function vgFinPivot() {
+  const F = vgFin, sy = Math.sin(F.yaw), cy = Math.cos(F.yaw);
+  return new b(F.V.x - 0.25 * sy, F.V.y + 1.35, F.V.z - 0.25 * cy);
+}
+function vgFinCamClear(A, p, from) {
+  return !!A.services.world.lineOfSight(from, p);
+}
+// pull the camera in towards the pivot until nothing is between them (smoothed; in fast, out slowly)
+function vgFinArm(A, pos, dt) {
+  const F = vgFin, C = vgFinPivot();
+  let f = 1;
+  if (!vgFinCamClear(A, pos, C)) {
+    let lo = 0.12, hi = 1;
+    const q = new b();
+    for (let i = 0; i < 6; i++) {
+      const m = (lo + hi) / 2;
+      vgFinCamClear(A, q.lerpVectors(C, pos, m), C) ? lo = m : hi = m;
+    }
+    f = Math.max(0.12, lo * 0.9);
+  }
+  F.arm = f < F.arm ? f + (F.arm - f) * Math.exp(-dt * 30) : f + (F.arm - f) * Math.exp(-dt * 4);
+  return pos.lerpVectors(C, pos, F.arm);
 }
 // after everything else: the camera
 function vgFinLate(A) {
@@ -52122,17 +52172,23 @@ function vgFinLate(A) {
   const cam = A.camera, T = VG_FIN_TRACKS, t = F.t, yaw = F.yaw, V = F.V, sy = Math.sin(yaw), cy = Math.cos(yaw);
   const W = (l, out) => out.set(V.x + l[0] * cy + l[2] * sy, V.y + l[1], V.z - l[0] * sy + l[2] * cy);
   // the shot: out from the eye, round, and back to the eye where you'll be (blend 2.15 – 2.7)
-  const c = vgFinK(T.cam, Math.max(0.32, t)), lk = vgFinK(T.look, t), pos = W(c, new b()), tgt = W(lk, new b());
-  if (F.role === "victim") pos.copy(W([-c[0], c[1], c[2]], new b()));
+  const lk = vgFinK(T.look, t), side = F.side || -1, tgt = W([lk[0] * side, lk[1], lk[2]], new b());
+  const dtc = Math.min(0.1, Math.max(0, F.clock - (F.lateClock ?? F.clock)));
+  F.lateClock = F.clock;
+  const pos = vgFinArm(A, vgFinCamAt(t, side), dtc || 1 / 60);
   const q = new Oe().setFromRotationMatrix(new ne().lookAt(pos, tgt, vgFinUp));
   let fov = vgFinK(T.fov, t) || F.cam0.fov, outW = vgFinSm(t / 0.32), backW = vgFinSm((t - 2.15) / 0.5);
   const eyeP = cam.getWorldPosition(new b()), eyeQ = cam.getWorldQuaternion(new Oe());
   // the start: from where your eyes were; the end: to where they are now
   const wp = F.cam0.p.clone().lerp(pos, outW), wq = F.cam0.q.clone().slerp(q, outW);
   F.role === "me" && backW > 0 && (wp.lerp(eyeP, backW), wq.slerp(eyeQ, backW)), fov = F.cam0.fov + (fov - F.cam0.fov) * outW * (1 - backW);
+  if (F.role === "me" && backW > 0) {
+    F.aActor?.group.visible && wp.distanceTo(eyeP) < 0.5 && (F.aActor.group.visible = !1);
+    backW > 0.85 && F.vmWas && (cam.layers.enable(A.layers.VIEWMODEL), F.vmWas = null);
+  }
   // the shake after each strike
-  const now = performance.now() / 1e3;
-  if (F.shakeT > 0 && now - F.shakeT < 0.35) {
+  const now = F.clock;
+  if (F.shakeT >= 0 && now - F.shakeT < 0.35) {
     const k = (1 - (now - F.shakeT) / 0.35) ** 2 * 0.035;
     wp.x += Math.sin(now * 91) * k, wp.y += Math.sin(now * 77 + 1) * k, wp.z += Math.sin(now * 83 + 2) * k;
   }
@@ -52144,7 +52200,7 @@ function vgFinLate(A) {
   } else cam.position.copy(wp), cam.quaternion.copy(wq);
   Math.abs(cam.fov - fov) > 1e-3 && (cam.fov = fov, cam.updateProjectionMatrix()), cam.updateMatrixWorld(!0);
 }
-typeof window < "u" && (window.__VGFIN__ = { state: () => ({ on: vgFin.on, t: +vgFin.t.toFixed(3), role: vgFin.role, killed: vgFin.killed, hits: vgFin.hitsDone }), target: () => {
+typeof window < "u" && (window.__VGFIN__ = { trace: () => vgFinLog.slice(), state: () => ({ on: vgFin.on, t: +vgFin.t.toFixed(3), role: vgFin.role, killed: vgFin.killed, hits: vgFin.hitsDone }), target: () => {
   const t = vgFin.A || pgCtx;
   return t ? !!vgFinTarget(t) : null;
 } });
