@@ -83,7 +83,7 @@
         "nsis",
         "zip"
       ],
-      "artifactName": "${productName}-Release-1.0-win.${ext}"
+      "artifactName": "${productName}-Release-1.01-win.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -91,9 +91,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "${productName}-Release-1.0-Setup.${ext}"
+      "artifactName": "${productName}-Release-1.01-Setup.${ext}"
     },
     "afterPack": "desktop/after-pack.cjs",
-    "artifactName": "${productName}-Release-1.0-${arch}.${ext}"
+    "artifactName": "${productName}-Release-1.01-${arch}.${ext}"
   }
 }
