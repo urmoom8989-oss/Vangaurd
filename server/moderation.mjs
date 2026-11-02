@@ -779,6 +779,17 @@ export function createModeration(d) {
         send(res, 200, { ok: true, ...ops.view() });
         return true;
       }
+      // Release 1.0: the live event countdown (the owner sets it up; anyone on the console can see it)
+      case 'ops/event': case 'ops/event/hide': case 'ops/event/clear': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;
+        if (action === 'ops/event/clear') { ops.eventClear(); addLog(by, 'event_clear', null); save(false); send(res, 200, { ok: true, ...ops.view() }); return true; }
+        const hide = action === 'ops/event/hide', r = hide ? ops.eventHidden(body.hidden !== false) : ops.event(by, body);
+        if (need(!r.error, r.error)) return true;
+        addLog(by, hide ? (r.event.hidden ? 'event_hide' : 'event_show') : 'event_set', null, hide ? r.event.title : `${r.event.title}: zero at ${new Date(r.event.zeroAt).toISOString()}${r.event.maps.length ? ` on ${r.event.maps.join(', ')}` : ' on every map'}`); save(false);
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
       case 'ops/dlc/app': {
         if (need(post, 'Use POST.', 405)) return true;
         if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;

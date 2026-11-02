@@ -20,7 +20,7 @@ export const DLC = {
 export function createOps(d) {
   // d: { DATA_DIR, now, log, keyOf, nameOf, userOf, roleOf, ownerKey, env }
   const FILE = pathMod.join(d.DATA_DIR, 'ops.json');
-  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null, dlc: {}, dlcApps: {}, weekly: null, early: {} };
+  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null, dlc: {}, dlcApps: {}, weekly: null, early: {}, event: null };
   try {
     const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     if (raw && typeof raw === 'object') for (const k of Object.keys(st)) if (raw[k] !== undefined) st[k] = raw[k];
@@ -32,6 +32,7 @@ export function createOps(d) {
   if (!st.dlcApps || typeof st.dlcApps !== 'object') st.dlcApps = {};
   if (typeof st.weekly !== 'string') st.weekly = null; // Release 1.0: a weekly mode the owner pinned (null = automatic)
   if (!st.early || typeof st.early !== 'object') st.early = {}; // Release 1.0: early access to unreleased versions, by account
+  if (!st.event || typeof st.event !== 'object' || !(st.event.zeroAt > 0)) st.event = null; // Release 1.0: the live event countdown
   function save() {
     try {
       fs.mkdirSync(d.DATA_DIR, { recursive: true });
@@ -184,6 +185,35 @@ export function createOps(d) {
     n && save();
     return n;
   }
+  // ---------- Release 1.0: the live event countdown
+  // A countdown board with spinning red warning lights in the middle of the chosen maps (all of them when none are
+  // picked). The owner sets when it appears (showAt; none = straight away), when it hits zero (zeroAt) and when it
+  // disappears afterwards (hideAt; none = it stays at zero until hidden). It can be hidden and shown again by hand.
+  function eventView() {
+    const e = st.event;
+    return e ? { id: e.id, title: e.title, showAt: e.showAt || null, zeroAt: e.zeroAt, hideAt: e.hideAt || null, hidden: !!e.hidden, maps: [...(e.maps || [])], at: e.at } : null;
+  }
+  function setEvent(by, body, allMaps) {
+    const num = (v) => (v === null || v === undefined || v === '' ? null : Math.floor(Number(v)));
+    const showAt = num(body.showAt), zeroAt = num(body.zeroAt), hideAt = num(body.hideAt), t = d.now();
+    if (!(zeroAt > 0)) return { error: 'Pick when the countdown hits zero.' };
+    if (showAt !== null && !(showAt > 0)) return { error: 'Pick a date for when the board appears, or leave it empty.' };
+    if (hideAt !== null && !(hideAt > 0)) return { error: 'Pick a date for when the board disappears, or leave it empty.' };
+    if (zeroAt > t + 366 * 864e5) return { error: 'That is more than a year away.' };
+    if (showAt !== null && showAt >= zeroAt) return { error: 'The board has to appear before the countdown hits zero.' };
+    if (hideAt !== null && hideAt < zeroAt) return { error: 'The board can only disappear once the countdown has hit zero.' };
+    const maps = Array.isArray(body.maps) ? [...new Set(body.maps.map(String))].filter((m) => allMaps.includes(m)) : [];
+    if (Array.isArray(body.maps) && body.maps.length && !maps.length) return { error: 'Pick at least one map.' };
+    st.event = { id: `e${t.toString(36)}`, title: clean(body.title, 32) || 'Countdown', showAt, zeroAt, hideAt, hidden: false, maps: maps.length === allMaps.length ? [] : maps, at: t, by };
+    save();
+    return { event: eventView() };
+  }
+  function setEventHidden(hidden) {
+    if (!st.event) return { error: 'There is no countdown.' };
+    st.event.hidden = !!hidden, save();
+    return { event: eventView() };
+  }
+  function clearEvent() { st.event = null; save(); }
   const names = (keys) => keys.map((k) => ({ name: d.nameOf(k) || k }));
   function view() {
     return {
@@ -211,6 +241,7 @@ export function createOps(d) {
     setSteamRequired: (on) => { st.steam.required = !!on; save(); },
     dlcOf, dlcEdit, dlcApps, setDlcApp,
     earlyBuild, earlyEdit, earlyPrune,
+    eventView, setEvent, setEventHidden, clearEvent,
     setWeekly: (mode) => { st.weekly = typeof mode === 'string' && /^[a-z]{2,12}$/.test(mode) ? mode : null; save(); },
     steamVerify,
   };

@@ -51341,6 +51341,10 @@ body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .o
       }), ev.on("ai:death", (o) => o?.agent?.key && K.botK.delete(o.agent.key)), ev.on("network:message", (m) => m?.type === "streak" && onRemote(m)), ev.on("loadout:changed", () => ui(!0));
       ev.on("world:map-changed", () => setTimeout(() => {
         try {
+          vgEvMap();
+        } catch {
+        }
+        try {
           vgDecorate(A);
         } catch (err) {
           A.reportError?.("extras", "halloween", err);
@@ -51401,6 +51405,11 @@ body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .o
         vgMLTick(A, dt);
       } catch (err) {
         A.reportError?.("extras", "map-lights", err);
+      }
+      try {
+        vgEvTick(A, dt);
+      } catch (err) {
+        A.reportError?.("extras", "event", err);
       }
       try {
         typeof vgReplay < "u" && vgReplay.tick?.(A, dt);
@@ -63046,6 +63055,256 @@ typeof window < "u" && (vgNet.listeners.push((m) => {
   const st = document.createElement("style");
   st.textContent = `.vg-weekly { position: relative; } .vg-weekly::after { content: attr(data-weekly); position: absolute; right: 10px; top: 8px; padding: 3px 7px; background: #f2c14e; color: #121212; font: 800 9.5px/1 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; pointer-events: none; }`, document.head.appendChild(st);
 })(), window.__VGWEEKLY__ = () => vgWeekly);
+/* ------------------------------------------------------------------ Release 1.0: the live event countdown */
+// The owner sets it up in the /admin console (Server > Live event countdown): when the board appears, when the
+// countdown hits zero, whether and when it disappears afterwards, and which maps it's on. The server sends it with the
+// sign-in and again whenever it changes, with its own clock, so every player's board shows the same second.
+// On each of those maps a countdown board stands (or hangs, under a roof) where most of the map can see it. It turns
+// to face you (around its upright only, it never tips), red warning beacons spin on top of it, and an alarm sounds
+// across the map every minute, and for longer at zero. At zero it stays up at 00:00:00 until the owner hides it.
+// Spots, picked per map where most of the map can see the board: x, z; y = what it stands on (default: the ground
+// there); h = how high the middle of the screen is above that; w = screen width; hang = the ceiling it hangs from.
+var VG_EV_SPOTS = {};
+var vgEv = { st: null, off: 0, b: null, map: null, sec: null, min: null, cp: null, cr: null, t: 0, kit: null };
+const vgEvNow = () => Date.now() + vgEv.off;
+function vgEvSet(e, serverNow) {
+  Number.isFinite(+serverNow) && +serverNow > 0 && (vgEv.off = +serverNow - Date.now());
+  if (!e || typeof e != "object" || !(+e.zeroAt > 0)) return vgEv.st = null;
+  vgEv.st = { id: String(e.id || ""), title: String(e.title || "Countdown").slice(0, 32), showAt: +e.showAt || 0, zeroAt: +e.zeroAt, hideAt: +e.hideAt || 0, hidden: !!e.hidden, maps: Array.isArray(e.maps) ? e.maps.map(String) : [] };
+}
+// is the board up on this map right now
+function vgEvUp(mapId, t = vgEvNow()) {
+  const e = vgEv.st;
+  return !!e && !!mapId && !e.hidden && (!e.maps.length || e.maps.includes(mapId)) && t >= (e.showAt || 0) && !(e.hideAt && t >= e.hideAt);
+}
+// where it goes on this map: the hand-picked spot, or (a map without one) the middle of where the fighting is
+function vgEvSpot(W) {
+  const S = VG_EV_SPOTS[W.mapId];
+  let x, z, y, h, w, hang;
+  if (S) x = S.x, z = S.z, y = S.y, h = S.h, w = S.w, hang = S.hang;
+  else {
+    const pts = [...W.spawnPoints?.player || [], ...W.spawnPoints?.ai || []].map((p) => p?.position).filter(Boolean);
+    if (!pts.length) return null;
+    let x0 = 1 / 0, x1 = -1 / 0, z0 = 1 / 0, z1 = -1 / 0;
+    for (const q of pts) x0 = Math.min(x0, q.x), x1 = Math.max(x1, q.x), z0 = Math.min(z0, q.z), z1 = Math.max(z1, q.z);
+    x = (x0 + x1) / 2, z = (z0 + z1) / 2;
+  }
+  if (!Number.isFinite(y)) {
+    const g = W.groundHeight?.(x, z, 400);
+    y = Number.isFinite(g) ? g : 0;
+  }
+  w = w || 8;
+  if (!S) {
+    // under a roof: hang it from the ceiling
+    const o = new b(x, y + 2, z), up = W.raycast?.(o, new b(0, 1, 0), 60);
+    up && (hang = y + 2 + (up.distance ?? 20), w = Math.min(w, 6));
+  }
+  const H = w * 0.5;
+  return hang ? { x, z, y, w, H, hang, mid: hang - H / 2 - 1.1 } : { x, z, y, w, H, mid: y + (h || Math.max(11, H + 7)) };
+}
+// the shared pieces (made once)
+function vgEvKit() {
+  if (vgEv.kit) return vgEv.kit;
+  const cv = (wd, ht, f) => {
+    const c = document.createElement("canvas");
+    c.width = wd, c.height = ht, f(c.getContext("2d"), wd, ht);
+    const t = new _u(c);
+    return t.colorSpace = Ii, t;
+  };
+  // a beam: bright where it leaves the lamp, fading out
+  const beam = cv(8, 128, (g, wd, ht) => {
+    const gr = g.createLinearGradient(0, 0, 0, ht);
+    gr.addColorStop(0, "#ff3a26"), gr.addColorStop(0.35, "#701008"), gr.addColorStop(1, "#000"), g.fillStyle = gr, g.fillRect(0, 0, wd, ht);
+  });
+  const flare = cv(64, 64, (g) => {
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, "#ffd2c8"), gr.addColorStop(0.18, "#ff3a26"), gr.addColorStop(0.5, "#5a0a04"), gr.addColorStop(1, "#000"), g.fillStyle = gr, g.fillRect(0, 0, 64, 64);
+  });
+  const add = (map, o = {}) => new ha({ map, transparent: !0, blending: 2, depthWrite: !1, side: 2, fog: !1, toneMapped: !1, ...o });
+  return vgEv.kit = {
+    metal: new Vt({ color: 1513244, roughness: 0.55, metalness: 0.6 }),
+    dark: new Vt({ color: 789776, roughness: 0.7, metalness: 0.3 }),
+    lens: new ha({ color: new ue(1, 0.09, 0.05), transparent: !0, opacity: 0.92, fog: !1, toneMapped: !1 }),
+    beamM: add(beam, { opacity: 0.55 }),
+    flareM: add(flare),
+    beamG: (() => {
+      const g = new iu(1.15, 7, 20, 1, !0);
+      return g.rotateZ(Math.PI / 2), g.translate(3.5, 0, 0), g;
+    })(),
+    flareG: new zs(1, 1),
+    baseG: new ta(0.3, 0.34, 0.2, 18),
+    domeG: new ta(0.22, 0.24, 0.42, 18),
+    capG: new Kn(0.22, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)
+  };
+}
+// the board's screen: the title, the time left in big red digits, hazard stripes
+function vgEvDraw(B, rem, t) {
+  const g = B.g, W2 = B.cv.width, H2 = B.cv.height, e = vgEv.st, zero = rem <= 0, s = Math.max(0, Math.ceil(rem / 1e3));
+  const d = Math.floor(s / 86400), parts = d > 0 ? [[d, "Days"], [Math.floor(s % 86400 / 3600), "Hours"], [Math.floor(s % 3600 / 60), "Minutes"], [s % 60, "Seconds"]] : [[Math.floor(s / 3600), "Hours"], [Math.floor(s % 3600 / 60), "Minutes"], [s % 60, "Seconds"]];
+  g.fillStyle = "#0a0a0b", g.fillRect(0, 0, W2, H2);
+  const vg = g.createRadialGradient(W2 / 2, H2 * 0.55, 40, W2 / 2, H2 * 0.55, W2 * 0.62);
+  vg.addColorStop(0, "rgba(120,14,8,0.35)"), vg.addColorStop(1, "rgba(0,0,0,0)"), g.fillStyle = vg, g.fillRect(0, 0, W2, H2);
+  const stripes = (y, h) => {
+    g.save(), g.beginPath(), g.rect(0, y, W2, h), g.clip(), g.fillStyle = "#16090a", g.fillRect(0, y, W2, h), g.fillStyle = "#d4281c";
+    for (let x = -h; x < W2 + h; x += 44) g.beginPath(), g.moveTo(x, y + h), g.lineTo(x + 22, y + h), g.lineTo(x + 22 + h, y), g.lineTo(x + h, y), g.fill();
+    g.restore();
+  };
+  stripes(0, 22), stripes(H2 - 22, 22);
+  const font = '"Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", sans-serif';
+  g.textAlign = "center", g.textBaseline = "middle", g.fillStyle = "#f2f2ee", g.font = `700 58px ${font}`;
+  const title = (e?.title || "Countdown").toUpperCase();
+  g.fillText(title.split("").join(String.fromCharCode(8202)), W2 / 2, 76);
+  // the digits, each in its own cell so they don't shift as they change
+  const blink = zero && Math.floor(t / 500) % 2, dig = parts.map(([v]) => String(Math.min(99, v)).padStart(2, "0")), cells = dig.length * 2, sepW = 46, cw = Math.min(118, (W2 - 90 - (dig.length - 1) * sepW) / cells);
+  const total = cells * cw + (dig.length - 1) * sepW;
+  let x = (W2 - total) / 2;
+  const cy = 252;
+  g.font = `700 ${Math.round(cw * 1.72)}px ${font}`, g.shadowColor = "rgba(255,40,24,0.85)", g.shadowBlur = 26;
+  for (let i = 0; i < dig.length; i++) {
+    // the unlit segments behind, like a real display
+    for (const ch of dig[i]) g.fillStyle = "rgba(255,60,40,0.08)", g.shadowBlur = 0, g.fillText("8", x + cw / 2, cy), g.fillStyle = blink ? "#5a0d08" : "#ff3324", g.shadowBlur = blink ? 0 : 26, g.fillText(ch, x + cw / 2, cy), x += cw;
+    g.shadowBlur = 0, g.font = `600 22px ${font}`, g.fillStyle = "#9c9c98", g.fillText(parts[i][1].toUpperCase(), x - cw, cy + cw * 1.02), g.font = `700 ${Math.round(cw * 1.72)}px ${font}`;
+    if (i < dig.length - 1) g.fillStyle = blink ? "#5a0d08" : "#ff3324", g.shadowBlur = blink ? 0 : 20, g.fillText(":", x + sepW / 2, cy - 8), x += sepW;
+  }
+  g.shadowBlur = 0;
+  // scanlines
+  g.fillStyle = "rgba(0,0,0,0.18)";
+  for (let y = 0; y < H2; y += 4) g.fillRect(0, y, W2, 1);
+  B.tex.needsUpdate = !0;
+}
+function vgEvBuild(A) {
+  const W = A.services.world, S = vgEvSpot(W);
+  if (!S) return null;
+  const K = vgEvKit(), root = new yt(), head = new yt();
+  root.name = "event_countdown", root.position.set(S.x, 0, S.z), head.position.y = S.mid, root.add(head);
+  const w = S.w, H = S.H, k = w / 8;
+  // the screen and its frame
+  const frame = new Le(new wi(w + 0.5 * k, H + 0.5 * k, 0.5 * k), K.metal);
+  head.add(frame);
+  const cv = document.createElement("canvas");
+  cv.width = 1024, cv.height = 512;
+  const tex = new _u(cv);
+  tex.colorSpace = Ii, tex.anisotropy = 4;
+  const scr = new Le(new zs(w, H), new ha({ map: tex, fog: !1, toneMapped: !1 }));
+  scr.position.z = 0.26 * k, head.add(scr);
+  // what holds it up: a mast from the ground, or a rod from the ceiling
+  if (S.hang) {
+    const len = Math.max(0.3, S.hang - (S.mid + H / 2 + 0.25 * k)), rod = new Le(new ta(0.07 * k, 0.07 * k, len, 8), K.dark);
+    rod.position.y = S.mid + H / 2 + 0.25 * k + len / 2, root.add(rod);
+    const plate = new Le(new wi(0.9 * k, 0.12, 0.9 * k), K.dark);
+    plate.position.y = S.hang - 0.06, root.add(plate);
+  } else {
+    const top = S.mid - H / 2 - 0.25 * k, len = Math.max(0.5, top - S.y), mast = new Le(new wi(0.55 * k, len, 0.55 * k), K.dark);
+    mast.position.y = S.y + len / 2, root.add(mast);
+    const foot = new Le(new wi(2.2 * k, 0.4, 2.2 * k), K.metal);
+    foot.position.y = S.y + 0.2, root.add(foot);
+  }
+  // the warning beacons along the top, each with a lamp that turns inside it
+  const beacons = [];
+  for (let i = 0; i < 4; i++) {
+    const bc = new yt(), bx = (i - 1.5) * (w / 3.4);
+    bc.position.set(bx, H / 2 + 0.25 * k, 0), bc.scale.setScalar(Math.max(1, k * 1.15)), head.add(bc);
+    const base = new Le(K.baseG, K.dark);
+    base.position.y = 0.1, bc.add(base);
+    const dome = new Le(K.domeG, K.lens);
+    dome.position.y = 0.41, bc.add(dome);
+    const cap = new Le(K.capG, K.lens);
+    cap.position.y = 0.62, bc.add(cap);
+    const rotor = new yt();
+    rotor.position.y = 0.42, bc.add(rotor);
+    for (const a of [0, Math.PI]) {
+      const bm = new Le(K.beamG, K.beamM);
+      bm.rotation.y = a, bm.renderOrder = 5, rotor.add(bm);
+    }
+    const fl = new Le(K.flareG, K.flareM.clone());
+    fl.position.set(0, 0.42, 0.3), fl.renderOrder = 6, bc.add(fl);
+    beacons.push({ rotor, fl, ph: i * 1.7 });
+  }
+  return A.scene.add(root), root.visible = !1, { root, head, scr, tex, cv, g: cv.getContext("2d"), beacons, S, last: -1 };
+}
+function vgEvDrop() {
+  const B = vgEv.b;
+  if (!B) return;
+  const K = vgEv.kit, shared = new Set(K ? [K.beamG, K.flareG, K.baseG, K.domeG, K.capG, K.metal, K.dark, K.lens, K.beamM, K.flareM] : []);
+  B.root.removeFromParent(), B.root.traverse((o) => {
+    o.isMesh && (shared.has(o.geometry) || o.geometry.dispose(), shared.has(o.material) || o.material.dispose?.());
+  }), B.tex.dispose(), vgEv.b = null;
+}
+// a new map: the board is made again when it's needed there
+function vgEvMap() {
+  vgEvDrop(), vgEv.map = null, vgEv.sec = null, vgEv.min = null;
+}
+// The alarm: a klaxon, low and heavy with a mid-range edge (a sawtooth with a sub an octave down and a square an
+// octave up, through a low-pass), three blasts, or six and a long one at zero. It comes from the board: louder close
+// to it and from its side.
+function vgEvAlarm(final = !1, near = 1, pan = 0) {
+  const B = vgSndBus("sfx");
+  if (!B) return !1;
+  try {
+    const ac = B.ac;
+    ac.state === "suspended" && ac.resume?.();
+    const t0 = ac.currentTime + 0.03, n = final ? 6 : 3, on = 0.62, gap = 0.26, out = ac.createGain();
+    out.gain.value = 0.5 * (0.45 + 0.55 * near);
+    const pn = ac.createStereoPanner?.();
+    pn ? (pn.pan.value = Math.max(-0.75, Math.min(0.75, pan)), out.connect(pn), pn.connect(B.out)) : out.connect(B.out);
+    const lp = ac.createBiquadFilter();
+    lp.type = "lowpass", lp.frequency.value = 1600, lp.Q.value = 2.2, lp.connect(out);
+    const sh = ac.createWaveShaper(), cu = new Float32Array(256);
+    for (let i = 0; i < 256; i++) cu[i] = Math.tanh((i / 127.5 - 1) * 2.2);
+    sh.curve = cu, sh.connect(lp);
+    const blast = (s, len, f0, f1) => {
+      const env = ac.createGain();
+      env.gain.setValueAtTime(0, s), env.gain.linearRampToValueAtTime(0.9, s + 0.04), env.gain.setValueAtTime(0.9, s + len - 0.12), env.gain.linearRampToValueAtTime(0, s + len), env.connect(sh);
+      for (const [type, mul, gv] of [["sawtooth", 1, 0.7], ["square", 2, 0.3], ["sine", 0.5, 0.5]]) {
+        const o = ac.createOscillator(), og = ac.createGain();
+        o.type = type, og.gain.value = gv, o.frequency.setValueAtTime(f0 * mul, s), o.frequency.exponentialRampToValueAtTime(f1 * mul, s + len), o.connect(og), og.connect(env), o.start(s), o.stop(s + len + 0.03);
+      }
+    };
+    for (let i = 0; i < n; i++) blast(t0 + i * (on + gap), on, 178, 142);
+    return final && blast(t0 + n * (on + gap), 2.2, 150, 118), !0;
+  } catch {
+    return !1;
+  }
+}
+function vgEvTick(A, dt) {
+  const W = A.services?.world, id = W?.mapId;
+  if (!id || !A.camera) return;
+  id !== vgEv.map && (vgEvDrop(), vgEv.map = id, vgEv.sec = null, vgEv.min = null);
+  const t = vgEvNow(), up = vgEvUp(id, t);
+  if (!up) {
+    vgEv.b && (vgEv.b.root.visible = !1), vgEv.min = null;
+    return;
+  }
+  const B = vgEv.b || (vgEv.b = vgEvBuild(A));
+  if (!B) return;
+  B.root.visible = !0, vgEv.t += dt;
+  const e = vgEv.st, rem = e.zeroAt - t;
+  // turn to face you, around its upright only
+  const cp = vgEv.cp || (vgEv.cp = new b()), cr = vgEv.cr || (vgEv.cr = new b());
+  A.camera.getWorldPosition(cp), B.head.rotation.y = Math.atan2(cp.x - B.S.x, cp.z - B.S.z);
+  // the screen: once a second (and twice a second while it blinks at zero)
+  const step = rem > 0 ? Math.ceil(rem / 1e3) : -Math.floor(t / 500);
+  step !== B.last && (B.last = step, vgEvDraw(B, rem, t));
+  // the lamps go round; each flashes when a beam sweeps past you (you're always in front of the board)
+  for (const c of B.beacons) {
+    const a = vgEv.t * 4.4 + c.ph;
+    c.rotor.rotation.y = a;
+    const f = Math.pow(Math.max(Math.max(0, -Math.sin(a)), Math.max(0, Math.sin(a))), 10);
+    c.fl.material.opacity = 0.3 + 0.7 * f, c.fl.scale.setScalar(1.4 + 2.6 * f);
+  }
+  // the alarm: every whole minute left, and at zero (only while you're in the match, not in the menus)
+  const mi = rem > 0 ? Math.ceil(rem / 6e4) : 0, inGame = !A.services.hud?.menu || A.services.hud.menu === "none";
+  if (vgEv.min !== null && mi !== vgEv.min && inGame) {
+    const dx = B.S.x - cp.x, dz = B.S.z - cp.z, dist = Math.hypot(dx, B.S.mid - cp.y, dz);
+    A.camera.matrixWorld.extractBasis(cr, vgEv.cr2 || (vgEv.cr2 = new b()), vgEv.cr3 || (vgEv.cr3 = new b()));
+    const pan = (cr.x * dx + cr.z * dz) / (Math.hypot(dx, dz) || 1);
+    vgEvAlarm(mi === 0, Math.max(0, 1 - dist / 160), pan);
+  }
+  vgEv.min = mi;
+}
+typeof window < "u" && (vgNet.listeners.push((m) => {
+  (m?.type === "connected" && "event" in m || m?.type === "event") && vgEvSet(m.event, m.serverNow);
+}), window.__VGEV__ = { state: () => vgEv.st, set: (e, serverNow) => vgEvSet(e, serverNow), drop: () => vgEvDrop(), board: () => vgEv.b && { ...vgEv.b.S, visible: vgEv.b.root.visible, yaw: vgEv.b.head.rotation.y }, spot: () => pgCtx?.services?.world && vgEvSpot(pgCtx.services.world), alarm: (f) => vgEvAlarm(!!f), spots: VG_EV_SPOTS });
 /* ------------------------------------------------------------------ Beta 1.3: regions */
 // The main server (NA East) lists any regional match servers (e.g. Europe). Matches use the closest one by ping;
 // "vangaurd.region" (a region id) overrides it. With one region nothing changes. (A server switch in Settings

@@ -836,6 +836,84 @@
   }
 
   // ---------- server: lobby announcement, maintenance, Steam, developers, game version ----------
+  // ---------- Release 1.0: the live event countdown ----------
+  // A board with a countdown and spinning red warning lights, standing in the middle of the chosen maps. The owner
+  // picks when it appears, when it hits zero (or how long it counts down for) and when (or whether) it disappears
+  // afterwards; it can also be hidden and shown again by hand.
+  const EV_MAP_NAMES = { vardanek: 'Vardanek', kessel: 'Kessel Yard', foundry: 'Foundry', freighter: 'Freighter', airfield: 'Airfield', lindenhof: 'Lindenhof', halden: 'Halden Station', meridian: 'Meridian', range: 'Firing Range' };
+  const evLocal = (t) => { if (!t) return ''; const d = new Date(t), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+  const evLeft = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)), dd = Math.floor(s / 86400), p = (n) => String(n).padStart(2, '0'); return `${dd ? `${dd}d ` : ''}${p(Math.floor(s % 86400 / 3600))}:${p(Math.floor(s % 3600 / 60))}:${p(s % 60)}`; };
+  function evPhase(e, t) {
+    if (!e) return { k: 'none', label: 'None' };
+    if (e.hidden) return { k: 'hidden', label: 'Hidden' };
+    if (e.showAt && t < e.showAt) return { k: 'soon', label: 'Scheduled' };
+    if (t < e.zeroAt) return { k: 'live', label: 'Counting down' };
+    if (e.hideAt && t >= e.hideAt) return { k: 'over', label: 'Ended' };
+    return { k: 'zero', label: 'At zero · showing' };
+  }
+  function evPane(o, owner) {
+    const e = o.event, maps = o.eventMaps || Object.keys(EV_MAP_NAMES), on = (m) => !e || !e.maps.length || e.maps.includes(m);
+    const ph = evPhase(e, Date.now()), zone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ''; } })();
+    const mapNames = e ? (e.maps.length ? e.maps.map((m) => EV_MAP_NAMES[m] || m).join(', ') : 'Every map') : '';
+    return `<section class="pane evpane"><header><span class="k">Live event countdown</span><span class="sp"></span><span class="tag ${ph.k === 'live' || ph.k === 'zero' ? 'hot' : ''}">${esc(ph.label)}</span></header>
+      <p>A countdown board with spinning red warning lights stands in the middle of each event map, turned to face every player, with an alarm every minute and a longer one at zero. At zero it stays up at 00:00:00 until you hide it (or until the time you set).</p>
+      ${e ? `<div class="evnow"><div class="evclock" data-evclock>${esc(e.title)}</div><dl>
+        <dt>Board appears</dt><dd>${e.showAt ? esc(fmt(e.showAt)) : 'Straight away'}</dd>
+        <dt>Hits zero</dt><dd>${esc(fmt(e.zeroAt))}</dd>
+        <dt>Disappears</dt><dd>${e.hideAt ? esc(fmt(e.hideAt)) : 'When you hide it'}</dd>
+        <dt>Maps</dt><dd>${esc(mapNames)}</dd></dl></div>` : ''}
+      ${owner ? `<form id="evf" class="newsform evform">
+        <label class="evrow"><span>Title on the board</span><input class="input" name="title" maxlength="32" value="${esc(e?.title || 'Countdown')}" placeholder="Countdown" autocomplete="off"></label>
+        <label class="evrow"><span>Board appears</span><input class="input" type="datetime-local" name="showAt" value="${esc(evLocal(e?.showAt))}"><small>Empty: straight away</small></label>
+        <label class="evrow"><span>Countdown hits zero</span><input class="input" type="datetime-local" name="zeroAt" value="${esc(evLocal(e?.zeroAt))}" required></label>
+        <div class="evrow"><span>…or counts down for</span><span class="evdur"><input class="input" type="number" name="dd" min="0" max="365" placeholder="0" aria-label="Days"> d <input class="input" type="number" name="hh" min="0" max="23" placeholder="0" aria-label="Hours"> h <input class="input" type="number" name="mi" min="0" max="59" placeholder="0" aria-label="Minutes"> min</span><small>From when it appears; fills in the zero time</small></div>
+        <div class="evrow"><span>After zero</span><span class="seg" role="group" aria-label="After zero"><button type="button" data-evkeep="1" class="${e?.hideAt ? '' : 'on'}">Keep it up until I hide it</button><button type="button" data-evkeep="0" class="${e?.hideAt ? 'on' : ''}">Hide it at a set time</button></span></div>
+        <label class="evrow" data-evhideat ${e?.hideAt ? '' : 'hidden'}><span>Disappears at</span><input class="input" type="datetime-local" name="hideAt" value="${esc(evLocal(e?.hideAt))}"></label>
+        <fieldset class="evmaps"><legend>Maps</legend><label class="evall"><input type="checkbox" data-evall ${!e || !e.maps.length ? 'checked' : ''}> Every map</label>${maps.map((m) => `<label><input type="checkbox" name="map" value="${esc(m)}" ${on(m) ? 'checked' : ''}> ${esc(EV_MAP_NAMES[m] || m)}</label>`).join('')}</fieldset>
+        <p class="hint">Times are in your time zone${zone ? ` (${esc(zone)})` : ''}. Changes reach every signed-in game straight away.</p>
+        <div class="evbtns"><button class="btn pri" type="submit">${e ? 'Update the countdown' : 'Start the countdown'}</button>${e ? `<button class="btn" type="button" id="evhide">${e.hidden ? 'Show it again' : 'Hide it now'}</button><button class="btn ghost-danger" type="button" id="evclear">Remove</button>` : ''}</div>
+      </form>` : '<p class="hint">Only the owner can set up the countdown.</p>'}
+    </section>`;
+  }
+  function evWire(o, v) {
+    const e = o.event, clock = $('[data-evclock]', v);
+    if (clock && e) {
+      const tick = () => {
+        if (!clock.isConnected) return clearInterval(iv);
+        const t = Date.now(), ph = evPhase(e, t);
+        clock.innerHTML = `<small>${esc(e.title)}</small><b>${esc(ph.k === 'soon' ? `appears in ${evLeft(e.showAt - t)}` : evLeft(e.zeroAt - t))}</b>`;
+      }, iv = setInterval(tick, 1000);
+      tick();
+    }
+    const f = $('#evf', v);
+    if (!f) return;
+    const at = (s) => (s ? new Date(s).getTime() : null);
+    // a duration fills in the zero time (from when the board appears, or from now)
+    const dur = () => {
+      const ms = ((+f.dd.value || 0) * 1440 + (+f.hh.value || 0) * 60 + (+f.mi.value || 0)) * 60e3;
+      if (ms > 0) f.zeroAt.value = evLocal((at(f.showAt.value) || Date.now()) + ms);
+    };
+    ['dd', 'hh', 'mi'].forEach((n) => { f[n].oninput = dur; });
+    f.showAt.onchange = dur;
+    let keep = !e?.hideAt;
+    $$('[data-evkeep]', f).forEach((b) => { b.onclick = () => { keep = b.dataset.evkeep === '1'; $$('[data-evkeep]', f).forEach((x) => x.classList.toggle('on', x === b)); $('[data-evhideat]', f).hidden = keep; }; });
+    const all = $('[data-evall]', f), boxes = $$('input[name=map]', f);
+    all.onchange = () => boxes.forEach((b) => { b.checked = all.checked; });
+    boxes.forEach((b) => { b.onchange = () => { all.checked = boxes.every((x) => x.checked); }; });
+    f.onsubmit = async (ev) => {
+      ev.preventDefault();
+      const picked = boxes.filter((b) => b.checked).map((b) => b.value);
+      if (!picked.length) return toast('Pick at least one map.', true);
+      const body = { title: f.title.value, showAt: at(f.showAt.value), zeroAt: at(f.zeroAt.value), hideAt: keep ? null : at(f.hideAt.value), maps: all.checked ? [] : picked };
+      if (!keep && !body.hideAt) return toast('Pick when it disappears, or keep it up until you hide it.', true);
+      try { await api('ops/event', { body }); toast(e ? 'Countdown updated.' : 'Countdown started.'); viewServer(); } catch (err) { fail(err); }
+    };
+    const hb = $('#evhide', v);
+    if (hb) hb.onclick = async () => { try { await api('ops/event/hide', { body: { hidden: !e.hidden } }); toast(e.hidden ? 'The board is showing again.' : 'The board is hidden.'); viewServer(); } catch (err) { fail(err); } };
+    const cb = $('#evclear', v);
+    if (cb) cb.onclick = async () => { if (!confirm('Remove the countdown from every map?')) return; try { await api('ops/event/clear', { body: {} }); toast('Countdown removed.'); viewServer(); } catch (err) { fail(err); } };
+  }
+
   async function viewServer() {
     const v = $('#view'), owner = ui.role === 'owner';
     let o;
@@ -869,6 +947,7 @@
       ${o.weekly ? `<section class="pane"><header><span class="k">Weekly mode</span><span class="sp"></span><span class="tag hot">${esc(o.weekly.name)}</span></header>
         <p>Online play always has Team Deathmatch plus this week's mode. It changes every Monday at 00:00 UTC (next change ${esc(fmt(o.weekly.endsAt))}) and goes round ${esc(o.weekly.pool.map((m) => m.name).join(', then '))}. ${o.weekly.pinned ? '<b>Pinned by you</b>: it stays until you set it back to automatic.' : 'It is on automatic.'}</p>
         ${owner ? `<div class="seg" role="group" aria-label="Weekly mode"><button type="button" data-weekly="" class="${o.weekly.pinned ? '' : 'on'}">Automatic</button>${o.weekly.pool.map((m) => `<button type="button" data-weekly="${esc(m.id)}" class="${o.weekly.pinned && o.weekly.mode === m.id ? 'on' : ''}">${esc(m.name)}</button>`).join('')}</div>` : ''}</section>` : ''}
+      ${evPane(o, owner)}
       ${(() => {
         const vs = o.versions || [], open = vs.filter((v) => !v.released), early = o.early || [];
         const opt = (v) => `<option value="${esc(v.build)}" data-url="${esc(v.url || '')}"${v.released ? ' disabled' : ''}>${esc(v.label)} · build ${esc(v.build)}${v.released ? ' · released' : v.prerelease ? ' · pre-release' : ''}${v.seen && !v.tag ? ' · seen in a game' : ''}</option>`;
@@ -932,6 +1011,7 @@
       }
       $$('[data-rm-early]', v).forEach((b) => { b.onclick = async () => { try { await api('ops/early', { body: { name: b.dataset.rmEarly, add: false } }); toast(`${b.dataset.rmEarly} no longer has early access.`); viewServer(); } catch (e) { fail(e); } }; });
     }
+    evWire(o, v);
     $$('[data-weekly]', v).forEach((b) => { b.onclick = async () => { try { await api('ops/weekly', { body: { mode: b.dataset.weekly || null } }); toast(b.dataset.weekly ? `${b.textContent} is pinned as this week's mode.` : 'The weekly mode is back on automatic.'); viewServer(); } catch (e) { fail(e); } }; });
     $$('form.dlcapp', v).forEach((f) => { f.onsubmit = async (ev) => { ev.preventDefault(); try { await api('ops/dlc/app', { body: { dlc: f.dataset.dlc, appId: f.appId.value } }); toast('Steam App ID saved. Games pick it up when they next connect.'); viewServer(); } catch (e) { fail(e); } }; });
     const rf = $('#relf');
@@ -964,7 +1044,7 @@
   }
 
   // ---------- activity ----------
-  const ACT = { early_grant: 'gave early access', early_revoke: 'took away early access', weekly: 'changed the weekly mode', announce: 'posted a lobby announcement', announce_clear: 'cleared the lobby announcement', maintenance_on: 'started maintenance', maintenance_off: 'ended maintenance', steam_required: 'turned on "Steam required"', steam_optional: 'turned off "Steam required"', steam_allow_add: 'let this player play without Steam:', steam_allow_remove: 'removed from the no-Steam list:', dev_add: 'made a developer:', dev_remove: 'removed developer', dlc_grant: 'granted DLC to', dlc_revoke: 'took DLC back from', dlc_app: 'set a DLC Steam App ID', release: 'set the latest game build', spectate: 'spectated', news_add: 'posted news', news_delete: 'deleted a news post', bugs_close: 'closed', bugs_reopen: 'reopened', bugs_delete: 'deleted', progress: 'changed the progress of', ban: 'banned', unban: 'unbanned', kick: 'disconnected', dismiss: 'dismissed reports against', reopen: 'reopened reports against', mod_add: 'made a moderator:', mod_remove: 'removed moderator', setup: 'set up the console', ban_expired: 'ban ended for' };
+  const ACT = { event_set: 'set up the event countdown', event_hide: 'hid the event countdown', event_show: 'showed the event countdown again', event_clear: 'removed the event countdown', early_grant: 'gave early access', early_revoke: 'took away early access', weekly: 'changed the weekly mode', announce: 'posted a lobby announcement', announce_clear: 'cleared the lobby announcement', maintenance_on: 'started maintenance', maintenance_off: 'ended maintenance', steam_required: 'turned on "Steam required"', steam_optional: 'turned off "Steam required"', steam_allow_add: 'let this player play without Steam:', steam_allow_remove: 'removed from the no-Steam list:', dev_add: 'made a developer:', dev_remove: 'removed developer', dlc_grant: 'granted DLC to', dlc_revoke: 'took DLC back from', dlc_app: 'set a DLC Steam App ID', release: 'set the latest game build', spectate: 'spectated', news_add: 'posted news', news_delete: 'deleted a news post', bugs_close: 'closed', bugs_reopen: 'reopened', bugs_delete: 'deleted', progress: 'changed the progress of', ban: 'banned', unban: 'unbanned', kick: 'disconnected', dismiss: 'dismissed reports against', reopen: 'reopened reports against', mod_add: 'made a moderator:', mod_remove: 'removed moderator', setup: 'set up the console', ban_expired: 'ban ended for' };
   const logItem = (l) => `<div class="item"><time title="${esc(fmt(l.at))}">${esc(fmt(l.at))}</time><div><b>${esc(l.by)}</b> ${esc(ACT[l.action] || l.action)} ${l.action === 'setup' ? '' : `<b>${esc(l.target || '')}</b>`}${l.detail && l.action !== 'setup' ? ` <span class="muted">· ${esc(l.detail)}</span>` : ''}</div></div>`;
   async function viewActivity() {
     const v = $('#view');
