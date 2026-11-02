@@ -51341,6 +51341,10 @@ body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .o
       }), ev.on("ai:death", (o) => o?.agent?.key && K.botK.delete(o.agent.key)), ev.on("network:message", (m) => m?.type === "streak" && onRemote(m)), ev.on("loadout:changed", () => ui(!0));
       ev.on("world:map-changed", () => setTimeout(() => {
         try {
+          vgStDrop(), vgSt.map = null;
+        } catch {
+        }
+        try {
           vgDecorate(A);
         } catch (err) {
           A.reportError?.("extras", "halloween", err);
@@ -51401,6 +51405,11 @@ body.vg-drone-clean .vg-rec, body.vg-drone-clean .vg-net, body.vg-drone-clean .o
         vgMLTick(A, dt);
       } catch (err) {
         A.reportError?.("extras", "map-lights", err);
+      }
+      try {
+        vgStTick(A);
+      } catch (err) {
+        A.reportError?.("extras", "season-countdown", err);
       }
       try {
         typeof vgReplay < "u" && vgReplay.tick?.(A, dt);
@@ -61231,7 +61240,7 @@ var vgSpCss = `
 .vg-sp .echo .stt { font-weight: 700; font-style: italic; font-size: 20px; text-transform: uppercase; color: #7fe3d4; }
 .vg-sp .echo.shake { animation: vgSpShake .36s; }
 @keyframes vgSpShake { 20% { transform: translateX(-7px); } 45% { transform: translateX(7px); } 70% { transform: translateX(-3px); } }
-.vg-sp .knife { position: absolute; left: 1150px; top: 210px; width: 660px; height: 240px; transform: rotate(-30deg); filter: drop-shadow(0 0 60px rgba(240,192,72,.35)); pointer-events: none; animation: vgSpKnife 1s cubic-bezier(.2,.8,.2,1) .18s backwards, vgSpFloat 6s ease-in-out 1.18s infinite; }
+.vg-sp .knife { position: absolute; left: 1150px; top: 250px; width: 660px; height: 240px; transform: rotate(-30deg); filter: drop-shadow(0 0 60px rgba(240,192,72,.35)); pointer-events: none; animation: vgSpKnife 1s cubic-bezier(.2,.8,.2,1) .18s backwards, vgSpFloat 6s ease-in-out 1.18s infinite; }
 @keyframes vgSpKnife { from { opacity: 0; transform: translate(120px, -60px) rotate(-44deg); } }
 @keyframes vgSpFloat { 50% { transform: translateY(-12px) rotate(-28.5deg); } }
 .vg-sp .feat { position: absolute; right: 40px; bottom: 64px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-style: italic; text-transform: uppercase; }
@@ -61241,6 +61250,14 @@ var vgSpCss = `
 .vg-sp .back { position: absolute; left: 120px; bottom: 34px; display: flex; align-items: center; gap: 14px; height: 52px; padding: 0 24px 0 10px; background: rgba(10,12,11,.55); border: 2px solid rgba(236,238,232,.22); color: #eef1ec; font-weight: 700; font-size: 22px; letter-spacing: .16em; text-transform: uppercase; transition: border-color .2s, background .2s, transform .25s cubic-bezier(.2,.8,.2,1); }
 .vg-sp .back:hover { border-color: #f0c048; background: rgba(240,192,72,.1); transform: translateX(-4px); }
 .vg-sp .back kbd { padding: 4px 9px; border: 2px solid rgba(236,238,232,.5); font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: .08em; }
+.vg-sp .ends { position: absolute; right: 40px; top: 44px; display: flex; flex-direction: column; align-items: flex-end; font-style: italic; text-transform: uppercase; translate: 0 var(--gy, 0px); }
+.vg-sp .ends[hidden] { display: none; }
+.vg-sp .ends .k { font-weight: 700; font-size: 22px; letter-spacing: .14em; color: #f0c048; }
+.vg-sp .ends .tm { display: flex; align-items: flex-start; gap: 4px; margin-top: 4px; font-style: normal; }
+.vg-sp .ends .g { display: flex; flex-direction: column; align-items: center; }
+.vg-sp .ends .g b { font-weight: 700; font-size: 58px; line-height: 1; font-variant-numeric: tabular-nums; color: #f4f6f2; text-shadow: 0 0 18px rgba(150,200,255,.55); }
+.vg-sp .ends .g small { margin-top: 2px; font-weight: 700; font-size: 15px; letter-spacing: .2em; color: rgba(244,246,242,.7); }
+.vg-sp .ends .c { font-weight: 700; font-size: 50px; line-height: 1; color: rgba(244,246,242,.85); }
 .vg-sp .foot { position: absolute; right: 40px; bottom: 26px; margin: 0; font-weight: 600; font-size: 15px; line-height: 1.45; color: rgba(236,240,234,.5); }
 @media (prefers-reduced-motion: reduce) { .vg-sp, .vg-sp *, .vg-sp *::after { animation: none !important; transition: none !important; } }
 `;
@@ -61285,6 +61302,7 @@ function vgSpScreen() {
 <svg class="knife" viewBox="0 0 640 220" aria-hidden="true"><defs><linearGradient id="vgspBlade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6d6"/><stop offset="0.45" stop-color="#f0c048"/><stop offset="1" stop-color="#9c6414"/></linearGradient><linearGradient id="vgspGrip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b423e"/><stop offset="1" stop-color="#161a18"/></linearGradient></defs><path d="M240 76 L520 76 L612 108 L520 132 Q400 140 240 126 Z" fill="url(#vgspBlade)"/><path d="M262 98 H500" stroke="#7c4f10" stroke-width="5" stroke-linecap="round"/><path d="M520 76 L612 108" stroke="#fffbe8" stroke-width="3"/><rect x="218" y="52" width="24" height="108" fill="#2a302d" stroke="#f0c048" stroke-width="3"/><rect x="70" y="82" width="150" height="48" fill="url(#vgspGrip)"/><path d="M92 82 V130 M114 82 V130 M136 82 V130 M158 82 V130 M180 82 V130 M202 82 V130" stroke="#4a524e" stroke-width="3"/><rect x="44" y="76" width="28" height="60" fill="#f0c048"/></svg>
 <div class="feat an r" style="--d:460ms"><h2>Finishing Moves</h2><p>New in Release 1.0</p><small>Get behind an enemy and press melee.</small></div>
 <button type="button" class="back an" style="--d:520ms" data-a="back" aria-label="Back to the menu"><kbd>Esc</kbd><span>Back</span></button>
+<div class="ends an r" style="--d:200ms" role="timer" aria-live="off" hidden><span class="k">Season ${VG_PASS.season} ends in</span><span class="tm"></span></div>
 <p class="foot">Vangaurd · ${vgEsc(VGD.label)} · Build ${VGD.build}</p>
 </div>`;
   const st = root.querySelector(".st"), fit = () => {
@@ -61331,6 +61349,15 @@ function vgSpScreen() {
     const H2 = tile.clientHeight, y = H2 * (1 - pct / 100), h = pc.offsetHeight, bot = tile.querySelector(".bot"), story = tile.querySelector(".story"), top = tile.querySelector(".top");
     (y + h / 2 > bot.offsetTop + story.offsetTop - 4 || y - h / 2 < top.offsetTop + top.offsetHeight + 4) && (pc.hidden = !0, tile.querySelector(".stt").textContent = `${n} / ${goal} · ${status}`);
   }
+  // the season countdown (top right), ticking once a second while the page is open
+  const ends = root.querySelector(".ends"), endsTick = () => {
+    if (gone || !root.isConnected) return clearInterval(endsIv);
+    const up = vgStUp(null);
+    if (ends.hidden = !up, !up) return;
+    const P = vgStParts(vgSt.st.endsAt - vgStNow()), L2 = ["Day", "Hrs", "Min", "Sec"];
+    ends.querySelector(".tm").innerHTML = P.map((v, i) => `<span class="g"><b>${String(v).padStart(2, "0")}</b><small>${L2[i]}</small></span>`).join('<span class="c">:</span>');
+  }, endsIv = setInterval(endsTick, 1e3);
+  endsTick();
   // then the bars fill (CSS transitions) and the count rolls up with them
   requestAnimationFrame(() => requestAnimationFrame(() => {
     if (gone) return;
@@ -63046,6 +63073,158 @@ typeof window < "u" && (vgNet.listeners.push((m) => {
   const st = document.createElement("style");
   st.textContent = `.vg-weekly { position: relative; } .vg-weekly::after { content: attr(data-weekly); position: absolute; right: 10px; top: 8px; padding: 3px 7px; background: #f2c14e; color: #121212; font: 800 9.5px/1 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; pointer-events: none; }`, document.head.appendChild(st);
 })(), window.__VGWEEKLY__ = () => vgWeekly);
+/* ------------------------------------------------------------------ Release 1.01: the season countdown */
+// The time left in the season. The owner sets it up in the /admin console (Server > Season countdown): when the season
+// ends, when the countdown appears, whether it stays at zero until hidden or disappears at a set time, and which maps
+// it floats over. The server sends it with the sign-in and whenever it changes, with its own clock, so everyone's
+// countdown shows the same second.
+// In each of those maps it floats high in the sky over the middle of the map (under the roof, on a map without a sky):
+// big white digits, days : hours : minutes : seconds, on a dark dotted haze, with a faint beam of light up to it from
+// the ground. It turns to face you around its upright only (it never tips). At zero it stays at 00:00:00:00 until the
+// owner hides it. The Season Pass page shows the same countdown.
+// Per-map adjustments, if a map needs one: x, z (the middle), y (height of the middle of the digits), w (width).
+// (Halden Station: over the north track beside the gallery, under the vault, so the gallery and the north side
+// of the hall can see it over the footbridges)
+var VG_ST_SPOTS = { halden: { x: 0, z: 8.25, y: 3.3, w: 6 } };
+var vgSt = { st: null, off: 0, b: null, map: null, cp: null };
+const vgStNow = () => Date.now() + vgSt.off;
+function vgStSet(e, serverNow) {
+  Number.isFinite(+serverNow) && +serverNow > 0 && (vgSt.off = +serverNow - Date.now());
+  vgSt.st = e && typeof e == "object" && +e.endsAt > 0 ? { endsAt: +e.endsAt, showAt: +e.showAt || 0, hideAt: +e.hideAt || 0, hidden: !!e.hidden, maps: Array.isArray(e.maps) ? e.maps.map(String) : [] } : null;
+  for (const f of vgSt.on || []) try {
+    f();
+  } catch {
+  }
+}
+// is the countdown showing (on this map, when one is given)
+function vgStUp(mapId, t = vgStNow()) {
+  const e = vgSt.st;
+  return !!e && !e.hidden && (mapId == null || !e.maps.length || e.maps.includes(mapId)) && t >= (e.showAt || 0) && !(e.hideAt && t >= e.hideAt);
+}
+// days, hours, minutes, seconds left (all zero once it's over)
+function vgStParts(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1e3));
+  return [Math.floor(s / 86400), Math.floor(s % 86400 / 3600), Math.floor(s % 3600 / 60), s % 60];
+}
+// where it floats on this map: over the middle of where the fighting is, well above the rooftops (under the roof on
+// a map without a sky)
+function vgStSpot(W) {
+  const S = VG_ST_SPOTS[W.mapId] || {}, pts = [...W.spawnPoints?.player || [], ...W.spawnPoints?.ai || []].map((p) => p?.position).filter(Boolean);
+  if (!pts.length) return null;
+  let x0 = 1 / 0, x1 = -1 / 0, z0 = 1 / 0, z1 = -1 / 0;
+  for (const q of pts) x0 = Math.min(x0, q.x), x1 = Math.max(x1, q.x), z0 = Math.min(z0, q.z), z1 = Math.max(z1, q.z);
+  const x = S.x ?? (x0 + x1) / 2, z = S.z ?? (z0 + z1) / 2, ext = Math.max(40, x1 - x0, z1 - z0);
+  const gy = (px, pz) => {
+    const g = W.groundHeight?.(px, pz, 400);
+    return Number.isFinite(g) ? g : null;
+  };
+  const ground = gy(x, z) ?? 0;
+  let indoor = !1;
+  try {
+    indoor = !!wmMap(W.mapId)?.sunOff;
+  } catch {
+  }
+  if (indoor) {
+    // the floor where people play (not the street over the station), and the roof over it
+    const ys = pts.map((q) => q.y).sort((a, c) => a - c), my = ys[Math.floor(ys.length / 2)], fl = W.groundHeight?.(x, z, my + 2.5), floor = Number.isFinite(fl) ? fl : my;
+    const hit = W.raycast?.(new b(x, floor + 1.8, z), new b(0, 1, 0), 40), ceil = floor + 1.8 + (hit?.distance ?? 4), w = S.w || 6, H = w * 0.3125;
+    return { x, z, ground: floor, w, y: S.y ?? Math.max(floor + 2.4 + H / 2, ceil - H / 2 - 0.25), beam: !1 };
+  }
+  // the tallest thing near the middle
+  let top = ground;
+  const r = ext * 0.35, st = Math.max(4, ext / 14);
+  for (let px = x - r; px <= x + r; px += st) for (let pz = z - r; pz <= z + r; pz += st) {
+    const g = gy(px, pz);
+    g !== null && g < ground + 80 && (top = Math.max(top, g));
+  }
+  const w = S.w || Math.max(22, Math.min(42, ext * 0.28));
+  return { x, z, ground, w, y: S.y ?? Math.max(ground + 34, top + 18 + w * 0.16), beam: !0 };
+}
+// the digits on their dark, dotted haze (the canvas is redrawn once a second)
+function vgStDraw(B, rem, t) {
+  const g = B.g, W2 = B.cv.width, H2 = B.cv.height, zero = rem <= 0, P = vgStParts(rem);
+  // the haze: dots, darkest in the middle, fading out to the edges (drawn once, then copied)
+  if (!B.haze) {
+    const hc = B.haze = document.createElement("canvas"), hg = hc.getContext("2d");
+    hc.width = W2, hc.height = H2, hg.fillStyle = "#050a14";
+    for (let y = 6, row = 0; y < H2; y += 12, row++) for (let x = 6 + row % 2 * 6; x < W2; x += 12) {
+      const dx = (x - W2 / 2) / (W2 * 0.43), dy = (y - H2 * 0.47) / (H2 * 0.5), d = dx * dx + dy * dy;
+      if (d >= 1) continue;
+      hg.globalAlpha = 0.95 * Math.pow(1 - d, 1.25), hg.beginPath(), hg.arc(x, y, 4.3, 0, 7), hg.fill();
+    }
+  }
+  g.clearRect(0, 0, W2, H2), g.drawImage(B.haze, 0, 0);
+  const font = '"Bahnschrift SemiCondensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", sans-serif';
+  const dig = P.map((v, i) => String(i ? v : Math.min(999, v)).padStart(2, "0")), labels = ["Day", "Hrs", "Min", "Sec"];
+  const cw = 76, sep = 40, total = dig.reduce((n, d) => n + d.length * cw, 0) + sep * 3, cy = H2 * 0.44;
+  let x = (W2 - total) / 2;
+  g.textAlign = "center", g.textBaseline = "middle";
+  const blink = zero && Math.floor(t / 600) % 2;
+  for (let i = 0; i < 4; i++) {
+    const x0 = x;
+    g.font = `700 132px ${font}`, g.fillStyle = blink ? "rgba(244,246,242,0.45)" : "#f4f6f2", g.shadowColor = "rgba(150,200,255,0.9)", g.shadowBlur = 24;
+    for (const ch of dig[i]) g.fillText(ch, x + cw / 2, cy), x += cw;
+    g.shadowBlur = 0, g.font = `700 26px ${font}`, g.fillStyle = "rgba(244,246,242,0.82)", g.fillText(labels[i].toUpperCase().split("").join(String.fromCharCode(8202)), (x0 + x) / 2, cy + 92);
+    if (i < 3) g.font = `700 120px ${font}`, g.fillStyle = "#f4f6f2", g.shadowBlur = 16, g.fillText(":", x + sep / 2, cy - 8), g.shadowBlur = 0, x += sep;
+  }
+  B.tex.needsUpdate = !0;
+}
+function vgStBuild(A) {
+  const W = A.services.world, S = vgStSpot(W);
+  if (!S) return null;
+  const root = new yt(), head = new yt(), H = S.w * 0.3125;
+  root.name = "season_countdown", root.position.set(S.x, 0, S.z), head.position.y = S.y, root.add(head);
+  const cv = document.createElement("canvas");
+  cv.width = 1024, cv.height = 320;
+  const tex = new _u(cv);
+  tex.colorSpace = Ii, tex.anisotropy = 4;
+  const plane = new Le(new zs(S.w, H), new ha({ map: tex, transparent: !0, depthWrite: !1, fog: !1, toneMapped: !1 }));
+  plane.renderOrder = 8, head.add(plane);
+  // the beam: up from the ground to the digits, faint, brightest at the top
+  let beam = null;
+  if (S.beam) {
+    const bc = document.createElement("canvas");
+    bc.width = 4, bc.height = 128;
+    const bg = bc.getContext("2d"), gr = bg.createLinearGradient(0, 0, 0, 128);
+    gr.addColorStop(0, "rgba(0,0,0,0)"), gr.addColorStop(0.12, "#a9d2ff"), gr.addColorStop(0.7, "#2a4a70"), gr.addColorStop(1, "#000"), bg.fillStyle = gr, bg.fillRect(0, 0, 4, 128);
+    const bt = new _u(bc);
+    bt.colorSpace = Ii;
+    const len = Math.max(4, S.y - H * 0.4 - S.ground);
+    beam = new yt(), beam.position.y = S.ground + len / 2;
+    const bm = new Le(new zs(Math.max(1.2, S.w * 0.05), len), new ha({ map: bt, transparent: !0, blending: 2, depthWrite: !1, fog: !1, toneMapped: !1, opacity: 0.5 }));
+    bm.renderOrder = 7, beam.add(bm), root.add(beam);
+  }
+  return A.scene.add(root), root.visible = !1, { root, head, beam, plane, tex, cv, g: cv.getContext("2d"), S, last: null };
+}
+function vgStDrop() {
+  const B = vgSt.b;
+  if (!B) return;
+  B.root.removeFromParent(), B.root.traverse((o) => {
+    o.isMesh && (o.geometry.dispose(), o.material.map?.dispose(), o.material.dispose());
+  }), vgSt.b = null;
+}
+function vgStTick(A) {
+  const W = A.services?.world, id = W?.mapId;
+  if (!id || !A.camera) return;
+  id !== vgSt.map && (vgStDrop(), vgSt.map = id);
+  const t = vgStNow();
+  if (!vgStUp(id, t)) {
+    vgSt.b && (vgSt.b.root.visible = !1);
+    return;
+  }
+  const B = vgSt.b || (vgSt.b = vgStBuild(A));
+  if (!B) return;
+  B.root.visible = !0;
+  const cp = vgSt.cp || (vgSt.cp = new b());
+  A.camera.getWorldPosition(cp);
+  const yaw = Math.atan2(cp.x - B.S.x, cp.z - B.S.z);
+  B.head.rotation.y = yaw, B.beam && (B.beam.rotation.y = yaw);
+  const rem = vgSt.st.endsAt - t, step = rem > 0 ? Math.ceil(rem / 1e3) : -Math.floor(t / 600);
+  step !== B.last && (B.last = step, vgStDraw(B, rem, t));
+}
+typeof window < "u" && (vgNet.listeners.push((m) => {
+  (m?.type === "connected" && "seasonTimer" in m || m?.type === "season_timer") && vgStSet(m?.type === "season_timer" ? m.timer : m.seasonTimer, m.serverNow);
+}), window.__VGST__ = { state: () => vgSt.st, set: (e, serverNow) => vgStSet(e, serverNow), drop: () => vgStDrop(), spot: () => pgCtx?.services?.world && vgStSpot(pgCtx.services.world), shown: () => vgSt.b && { ...vgSt.b.S, visible: vgSt.b.root.visible, yaw: vgSt.b.head.rotation.y }, spots: VG_ST_SPOTS });
 /* ------------------------------------------------------------------ Beta 1.3: regions */
 // The main server (NA East) lists any regional match servers (e.g. Europe). Matches use the closest one by ping;
 // "vangaurd.region" (a region id) overrides it. With one region nothing changes. (A server switch in Settings
