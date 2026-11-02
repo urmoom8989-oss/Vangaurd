@@ -30,6 +30,8 @@ const LOBBY_NEXT_S = process.env.LOBBY_NEXT !== undefined && process.env.LOBBY_N
 const CASTER_DELAY_MS = (process.env.CASTER_DELAY !== undefined && process.env.CASTER_DELAY !== '' && Number.isFinite(Number(process.env.CASTER_DELAY)) ? Math.max(0, Number(process.env.CASTER_DELAY)) : 10) * 1000;
 const VOTE_S = process.env.MAP_VOTE_SECONDS !== undefined && process.env.MAP_VOTE_SECONDS !== '' && Number.isFinite(Number(process.env.MAP_VOTE_SECONDS)) ? Math.max(0, Number(process.env.MAP_VOTE_SECONDS)) : 10;
 const MAPS = ['vardanek', 'kessel', 'foundry', 'freighter', 'airfield', 'lindenhof', 'halden', 'meridian'];
+// Release 1.01: the maps the season countdown can float over (the online maps and the firing range)
+const TIMER_MAPS = [...MAPS, 'range'];
 // Release 1.0 anti-cheat: the walls of every map, for the server's line-of-sight check (see los.mjs)
 const HERE_DIR = pathMod.dirname(decodeURIComponent(new URL(import.meta.url).pathname));
 const LOS = loadLos(pathMod.join(HERE_DIR, 'los-maps.json'));
@@ -2178,6 +2180,9 @@ setInterval(() => { const n = ops.earlyPrune(latest.build); n && log(`early acce
 // Release 1.0: tell every game when the weekly mode changes (Monday 00:00 UTC, or the owner pinned one)
 let weeklyLast = null;
 function weeklyTell() { const w = weekly(); weeklyLast = w.mode; broadcastAll({ type: 'weekly', weekly: w }); }
+// Release 1.01: tell every game about the season countdown when the owner changes it (with this server's clock, so
+// every countdown shows the same second)
+function seasonTimerTell() { broadcastAll({ type: 'season_timer', timer: ops.seasonTimerView(), serverNow: now() }); }
 setInterval(() => { if (weekly().mode !== weeklyLast) weeklyLast === null ? (weeklyLast = weekly().mode) : (log(`weekly mode is now ${weekly().name}`), weeklyTell()); }, 60e3).unref?.();
 // Release 1.0: only offer regional servers that answer (checked every minute), so a region that is down or not
 // deployed yet is never picked; players then stay on this server.
@@ -2243,7 +2248,7 @@ function maintenanceKick() {
   return n;
 }
 mod.attachOps({
-  view: () => ({ ...ops.view(), weekly: weekly(), versions: recentVersions(), latest: { build: latest.build, label: latest.label, source: latest.source }, region: REGION, live: Object.fromEntries(Object.keys(MODES).map((m) => { const lm = modeMatch(m); return [m, { inMatch: lm ? lm.players.size : 0, waiting: queues[m].length, max: MAX_PLAYERS }]; })) }),
+  view: () => ({ ...ops.view(), seasonTimer: ops.seasonTimerView(), timerMaps: TIMER_MAPS, serverNow: now(), weekly: weekly(), versions: recentVersions(), latest: { build: latest.build, label: latest.label, source: latest.source }, region: REGION, live: Object.fromEntries(Object.keys(MODES).map((m) => { const lm = modeMatch(m); return [m, { inMatch: lm ? lm.players.size : 0, waiting: queues[m].length, max: MAX_PLAYERS }]; })) }),
   announce(by, body) {
     const r = ops.setAnnouncement(by, body);
     if (!r.error) broadcastAll({ type: 'announcement', announcement: r.announcement });
@@ -2277,6 +2282,17 @@ mod.attachOps({
     if (!r.error) for (const c of online.get(key) || []) send(c, { type: 'early_access', early: add ? { build: v.build, label: v.label } : null });
     return r;
   },
+  seasonTimer(by, body) {
+    const r = ops.setSeasonTimer(by, body, TIMER_MAPS);
+    if (!r.error) seasonTimerTell();
+    return r;
+  },
+  seasonTimerHidden(hidden) {
+    const r = ops.setSeasonTimerHidden(hidden);
+    if (!r.error) seasonTimerTell();
+    return r;
+  },
+  seasonTimerClear() { ops.clearSeasonTimer(); seasonTimerTell(); },
   weekly(mode) {
     if (mode && !WEEKLY_POOL.includes(mode)) return { error: 'That mode is not in the weekly rotation.' };
     ops.setWeekly(mode || null), weeklyTell();
@@ -2506,7 +2522,7 @@ wss.on('connection', (ws, req) => {
   });
   ws.on('error', () => {});
   send(c, {
-    type: 'connected', playerId: c.id, version: VERSION, weekly: weekly(), matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label, emailAuth: mailer.enabled, steamUpdates: !RELEASE_PAGE,
+    type: 'connected', playerId: c.id, version: VERSION, weekly: weekly(), seasonTimer: REGIONAL ? undefined : ops.seasonTimerView(), serverNow: now(), matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label, emailAuth: mailer.enabled, steamUpdates: !RELEASE_PAGE,
     region: REGION, regionName: REGION_NAMES[REGION] || REGION.toUpperCase(), regions: !REGIONAL && liveRegions().length ? [{ id: REGION, name: REGION_NAMES[REGION] || REGION, url: null }, ...liveRegions()] : null, announcement: ops.announcementView(), maintenance: ops.state.maintenance.on ? { message: ops.maintenanceMessage() } : null, requireSteam: !!ops.state.steam.required,
     dlcApps: ops.dlcApps(),
   });

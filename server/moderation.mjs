@@ -779,6 +779,17 @@ export function createModeration(d) {
         send(res, 200, { ok: true, ...ops.view() });
         return true;
       }
+      // Release 1.01: the season countdown (the owner sets it up; anyone on the console can see it)
+      case 'ops/season': case 'ops/season/hide': case 'ops/season/clear': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;
+        if (action === 'ops/season/clear') { ops.seasonTimerClear(); addLog(by, 'season_timer_clear', null); save(false); send(res, 200, { ok: true, ...ops.view() }); return true; }
+        const hide = action === 'ops/season/hide', r = hide ? ops.seasonTimerHidden(body.hidden !== false) : ops.seasonTimer(by, body);
+        if (need(!r.error, r.error)) return true;
+        addLog(by, hide ? (r.timer.hidden ? 'season_timer_hide' : 'season_timer_show') : 'season_timer_set', null, hide ? '' : `ends ${new Date(r.timer.endsAt).toISOString()}${r.timer.maps.length ? ` · over ${r.timer.maps.join(', ')}` : ' · over every map'}`); save(false);
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
       case 'ops/dlc/app': {
         if (need(post, 'Use POST.', 405)) return true;
         if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;

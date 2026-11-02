@@ -20,7 +20,7 @@ export const DLC = {
 export function createOps(d) {
   // d: { DATA_DIR, now, log, keyOf, nameOf, userOf, roleOf, ownerKey, env }
   const FILE = pathMod.join(d.DATA_DIR, 'ops.json');
-  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null, dlc: {}, dlcApps: {}, weekly: null, early: {} };
+  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null, dlc: {}, dlcApps: {}, weekly: null, early: {}, seasonTimer: null };
   try {
     const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     if (raw && typeof raw === 'object') for (const k of Object.keys(st)) if (raw[k] !== undefined) st[k] = raw[k];
@@ -32,6 +32,7 @@ export function createOps(d) {
   if (!st.dlcApps || typeof st.dlcApps !== 'object') st.dlcApps = {};
   if (typeof st.weekly !== 'string') st.weekly = null; // Release 1.0: a weekly mode the owner pinned (null = automatic)
   if (!st.early || typeof st.early !== 'object') st.early = {}; // Release 1.0: early access to unreleased versions, by account
+  if (!st.seasonTimer || typeof st.seasonTimer !== 'object' || !(st.seasonTimer.endsAt > 0)) st.seasonTimer = null; // Release 1.01: the season countdown
   function save() {
     try {
       fs.mkdirSync(d.DATA_DIR, { recursive: true });
@@ -184,6 +185,36 @@ export function createOps(d) {
     n && save();
     return n;
   }
+  // ---------- Release 1.01: the season countdown
+  // Time left in the season: on the Season Pass page, and floating over the middle of the chosen maps (all of them
+  // when none are picked). The owner sets when the season ends (endsAt), when the countdown appears (showAt; none =
+  // straight away) and when it disappears afterwards (hideAt; none = it stays at zero until hidden). It can be hidden
+  // and shown again by hand.
+  function seasonTimerView() {
+    const e = st.seasonTimer;
+    return e ? { id: e.id, endsAt: e.endsAt, showAt: e.showAt || null, hideAt: e.hideAt || null, hidden: !!e.hidden, maps: [...(e.maps || [])], at: e.at } : null;
+  }
+  function setSeasonTimer(by, body, allMaps) {
+    const num = (v) => (v === null || v === undefined || v === '' ? null : Math.floor(Number(v)));
+    const showAt = num(body.showAt), endsAt = num(body.endsAt), hideAt = num(body.hideAt), t = d.now();
+    if (!(endsAt > 0)) return { error: 'Pick when the season ends.' };
+    if (showAt !== null && !(showAt > 0)) return { error: 'Pick a date for when the countdown appears, or leave it empty.' };
+    if (hideAt !== null && !(hideAt > 0)) return { error: 'Pick a date for when the countdown disappears, or leave it empty.' };
+    if (endsAt > t + 366 * 864e5) return { error: 'That is more than a year away.' };
+    if (showAt !== null && showAt >= endsAt) return { error: 'The countdown has to appear before the season ends.' };
+    if (hideAt !== null && hideAt < endsAt) return { error: 'The countdown can only disappear once the season has ended.' };
+    const maps = Array.isArray(body.maps) ? [...new Set(body.maps.map(String))].filter((m) => allMaps.includes(m)) : [];
+    if (Array.isArray(body.maps) && body.maps.length && !maps.length) return { error: 'Pick at least one map.' };
+    st.seasonTimer = { id: `s${t.toString(36)}`, endsAt, showAt, hideAt, hidden: false, maps: maps.length === allMaps.length ? [] : maps, at: t, by };
+    save();
+    return { timer: seasonTimerView() };
+  }
+  function setSeasonTimerHidden(hidden) {
+    if (!st.seasonTimer) return { error: 'There is no season countdown.' };
+    st.seasonTimer.hidden = !!hidden, save();
+    return { timer: seasonTimerView() };
+  }
+  function clearSeasonTimer() { st.seasonTimer = null; save(); }
   const names = (keys) => keys.map((k) => ({ name: d.nameOf(k) || k }));
   function view() {
     return {
@@ -211,6 +242,7 @@ export function createOps(d) {
     setSteamRequired: (on) => { st.steam.required = !!on; save(); },
     dlcOf, dlcEdit, dlcApps, setDlcApp,
     earlyBuild, earlyEdit, earlyPrune,
+    seasonTimerView, setSeasonTimer, setSeasonTimerHidden, clearSeasonTimer,
     setWeekly: (mode) => { st.weekly = typeof mode === 'string' && /^[a-z]{2,12}$/.test(mode) ? mode : null; save(); },
     steamVerify,
   };
