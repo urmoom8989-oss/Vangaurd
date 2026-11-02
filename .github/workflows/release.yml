@@ -4,10 +4,12 @@ name: Build Vangaurd (Mac, Windows)
 # version.json that the desktop apps (auto-update) and the server (only the newest build plays online) read.
 # The game, the server and the desktop app all use BUILD_NUMBER. (No standalone HTML is published.)
 
+# Release 1.01 (the season countdown) is built from the release-1.01-season branch as its own pre-release, so
+# Release 1.0 (built from main) is left as it is and 1.01 can be deleted on its own.
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [release-1.01-season]
     paths:
       - 'prebuilt/**'
       - 'public/assets/**'
@@ -20,13 +22,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: release
+  group: release-1.01-season
   cancel-in-progress: true
 
 env:
-  BUILD_LABEL: "Release 1.0"
-  FILE_LABEL: "Release-1.0"
-  RELEASE_TAG: "release-1.0"
+  BUILD_LABEL: "Release 1.01"
+  FILE_LABEL: "Release-1.01"
+  RELEASE_TAG: "release-1.01-season"
   # Fixed per version (Beta 1.21 was build 25, Beta 1.3 was 26, Beta 1.31 was 27, Beta 1.32 was 28).
   BUILD_NUMBER: "29"
   # Installers need plain numbers: Release 1.0 build 29 is app version 2.0.29.
@@ -143,7 +145,10 @@ jobs:
           - **Windows**: \`Vangaurd-${FILE_LABEL}-Setup.exe\` installs the game; \`Vangaurd-${FILE_LABEL}-win.zip\` runs without installing. If SmartScreen appears, choose **More info → Run anyway**.
           - **Mac**: \`Vangaurd-${FILE_LABEL}-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-${FILE_LABEL}-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
 
-          What's new:
+          New in Release 1.01 (a preview on top of Release 1.0; Release 1.0 is unchanged):
+          - The season countdown: the time left in the season floats in the sky over the middle of every map (days, hours, minutes and seconds), turning to face you, and shows on the Season Pass page. The developers set when the season ends from the server.
+
+          Everything from Release 1.0:
           - A new Season Pass page, animated: your season and level with an angled XP bar, the Season 1 Season Pass Rewards (opens the reward track) and a secret operator.
           - The secret operator Echo: get 50 eliminations on Halden Station to unlock him. His tile fills in as you go.
           - The pass and your player level are one and the same: it's called Level everywhere, and each reward on the track shows the level it comes at.
