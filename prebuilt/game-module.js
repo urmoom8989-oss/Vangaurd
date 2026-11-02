@@ -60985,7 +60985,7 @@ var vgPassCss = `
 .vg-pass .tiers { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 10px; min-height: 0; }
 .vg-pass .tier { position: relative; display: flex; flex-direction: column; min-height: 0; padding: 10px; background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)); border: 1px solid rgba(236,240,234,.12); }
 .vg-pass .tier.op { border-color: rgba(196,167,255,.5); background: linear-gradient(180deg, rgba(139,92,246,.18), rgba(255,255,255,.02)); }
-.vg-pass .tier .n { display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; letter-spacing: .18em; color: #a9b0a8; }
+.vg-pass .tier .n { display: flex; flex-wrap: wrap; gap: 2px 8px; justify-content: space-between; font-size: 11px; font-weight: 800; letter-spacing: .18em; color: #a9b0a8; }
 .vg-pass .tier .n em { font-style: normal; color: #f2c14e; }
 .vg-pass .tier .art { flex: 1; min-height: 44px; margin: 8px 0; display: grid; place-items: center; background: rgba(0,0,0,.3) center / cover no-repeat; }
 .vg-pass .tier .art.icon { background-size: 58%; }
@@ -61051,13 +61051,13 @@ function vgPassScreen() {
   const kind = { op: "Operator", camo: "Weapon camo", charm: "Gun charm", sticker: "Gun sticker", xp: "Player XP", boost: "XP boost" };
   const render = () => {
     const S = vgPassState(), list = T.slice(page * per, page * per + per), n = S.unlocked ? S.got.length : 0, next = S.unlocked ? T.find((x) => !S.got.includes(x.tier)) : null, boost = vgBoostLeft();
-    $(".lvl").innerHTML = S.unlocked ? `<b>${n} of ${T.length} rewards unlocked</b><div class="bar"><i style="width:${(n / T.length * 100).toFixed(1)}%"></i></div><small>${next ? `Next: ${vgEsc(next.name)}, at your next level up.` : "Every reward is yours."}${boost ? ` Double XP: ${boost} min left.` : ""}</small>` : `<button type="button" class="unlock" data-unlock>Unlock Season Pass</button><small>Free. Everything up to your current level unlocks straight away.</small>`;
+    $(".lvl").innerHTML = S.unlocked ? `<b>Level ${pgLevel().level} · ${n} of ${T.length} rewards unlocked</b><div class="bar"><i style="width:${(n / T.length * 100).toFixed(1)}%"></i></div><small>${next ? `Next: ${vgEsc(next.name)}, at your next level up.` : "Every reward is yours."}${boost ? ` Double XP: ${boost} min left.` : ""}</small>` : `<button type="button" class="unlock" data-unlock>Unlock Season Pass</button><small>Free. Everything up to your current level unlocks straight away.</small>`;
     $(".soon").innerHTML = S.unlocked ? `${tick}<span><b>The pass follows your level.</b> Every level up unlocks the next reward on its own, so keep playing.</span>` : `${lock}<span><b>Unlock the pass to start levelling it up.</b> It follows your player level: the rewards up to your level are yours right away, and the rest unlock as you level up.</span>`;
     $(".soon").classList.toggle("on", !!S.unlocked);
     $(".ops").innerHTML = VG_PASS_OPS.map((o) => `<div class="opc${vgPassHas("op", o.id) ? " got" : ""}">${vgPassOpSvg(o)}<span><b>${vgEsc(o.name)}</b><small>${vgEsc(o.desc)}</small><em>${vgPassHas("op", o.id) ? `${tick}Unlocked · Operators` : `${lock}Locked`}</em></span></div>`).join("");
     grid.innerHTML = list.map((t) => {
       const got = S.unlocked && S.got.includes(t.tier);
-      return `<div class="tier${t.type === "op" ? " op" : ""}${got ? " got" : ""}">${t.type === "op" ? '<div class="n"><em>OPERATOR</em></div>' : ""}<div class="art${t.type === "charm" || t.type === "sticker" ? " icon" : ""}"${style(t)}>${art(t)}</div><b title="${vgEsc(t.name)}">${vgEsc(t.name)}</b><small>${kind[t.type]}</small><div class="st">${got ? `${tick}Unlocked` : `${lock}Locked`}</div></div>`;
+      return `<div class="tier${t.type === "op" ? " op" : ""}${got ? " got" : ""}"><div class="n"><span>Level ${t.tier}</span>${t.type === "op" ? "<em>Operator</em>" : ""}</div><div class="art${t.type === "charm" || t.type === "sticker" ? " icon" : ""}"${style(t)}>${art(t)}</div><b title="${vgEsc(t.name)}">${vgEsc(t.name)}</b><small>${kind[t.type]}</small><div class="st">${got ? `${tick}Unlocked` : `${lock}Locked`}</div></div>`;
     }).join("");
     pager.innerHTML = `<button type="button" data-pg="prev" ${page ? "" : "disabled"} aria-label="Previous page">‹</button>${Array.from({ length: pages }, (_, i) => `<button type="button" data-pg="${i}" class="${i === page ? "on" : ""}">${i + 1}</button>`).join("")}<button type="button" data-pg="next" ${page < pages - 1 ? "" : "disabled"} aria-label="Next page">›</button>`;
     pager.querySelectorAll("[data-pg]").forEach((b2) => b2.addEventListener("click", () => go(b2.dataset.pg === "prev" ? page - 1 : b2.dataset.pg === "next" ? page + 1 : +b2.dataset.pg)));
@@ -61086,89 +61086,173 @@ function vgPassScreen() {
   $(".back").addEventListener("click", close), window.addEventListener("keydown", key, !0), window.addEventListener("keyup", stop, !0), root.addEventListener("mousedown", (ev) => ev.stopPropagation()), document.body.appendChild(root), render(), setTimeout(() => ($("[data-unlock]") || pager.querySelector(".on"))?.focus(), 30);
   return { close, root, go: (n) => go(n), page: () => page };
 }
-/* ------------------------------------------------------------------ Release 1.01 (concept): the Season Pass tab */
-// Main menu -> Season Pass. A tab bar along the top (Play goes back to the menu, the others open their screens), the
-// season and your tier with an angled XP bar, and two tiles: Season Pass Rewards (opens the reward track) and the
-// secret operator. That tile is his progress bar: he fills in, in colour, from the bottom as you work through his one
-// challenge, and the part not reached yet stays grey. Once he's yours (or you're a developer) it opens Operators on
-// him. The page is laid out at 1920 x 1080 and scaled to fit the window.
+/* ------------------------------------------------------------------ Release 1.01: the level bar in game */
+// A thin bar along the whole bottom edge of the screen while you play: your level on the left, your XP in this level
+// on the right, and the bar filling as you earn XP. On a level up it fills to the end, flashes, rolls over to the new
+// level and carries on. It's part of the HUD layer, so it hides with the HUD (menus, death screen, replays). Prestige
+// levels take their prestige colour.
+var vgLvCss = `
+.od-lvbar { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 2; --lc0: var(--lc, var(--accent)); }
+.od-lvbar .rw { display: flex; justify-content: space-between; align-items: center; padding: 0 calc(var(--u) * 16) calc(var(--u) * 6); font-weight: 700; text-transform: uppercase; text-shadow: var(--ts); }
+.od-lvbar b { display: flex; align-items: center; gap: calc(var(--u) * 7); font-size: calc(var(--u) * 16); font-weight: 800; letter-spacing: .16em; color: var(--lc0); transform-origin: left center; transition: transform .35s cubic-bezier(.3,1.5,.5,1); }
+.od-lvbar b svg { width: calc(var(--u) * 18); height: calc(var(--u) * 18); }
+.od-lvbar span { font-size: calc(var(--u) * 13); letter-spacing: .14em; color: var(--fg2); }
+.od-lvbar .tr { position: relative; height: calc(var(--u) * 6); background: rgba(8,10,12,.55); box-shadow: inset 0 calc(var(--u) * 1) 0 rgba(236,240,234,.12); overflow: hidden; }
+.od-lvbar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--lc0) 62%, #000), var(--lc0)); box-shadow: 0 0 calc(var(--u) * 8) color-mix(in srgb, var(--lc0) 55%, transparent); transition: width .9s cubic-bezier(.22,.8,.2,1); }
+.od-lvbar i::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: calc(var(--u) * 3); background: #fff; opacity: .55; }
+.od-lvbar.gain i::after { animation: odLvGain .8s ease-out; }
+@keyframes odLvGain { from { opacity: 1; box-shadow: 0 0 calc(var(--u) * 16) calc(var(--u) * 3) #fff; } }
+.od-lvbar.up i { transition-duration: .5s; }
+.od-lvbar.up .tr { animation: odLvUp 1.2s ease-out; }
+@keyframes odLvUp { 0%, 45% { background: color-mix(in srgb, var(--lc0) 45%, rgba(8,10,12,.55)); box-shadow: 0 0 calc(var(--u) * 26) var(--lc0); } }
+.od-lvbar.up b { transform: scale(1.3); }
+@media (prefers-reduced-motion: reduce) { .od-lvbar *, .od-lvbar *::after { animation: none !important; transition: none !important; } }
+`;
+function vgLvBar(a) {
+  try {
+    if (!a?.layer || typeof document > "u" || a.layer.querySelector(".od-lvbar")) return;
+    if (!document.getElementById("vg-lv-style")) {
+      const st = document.createElement("style");
+      st.id = "vg-lv-style", st.textContent = vgLvCss, document.head.appendChild(st);
+    }
+    const el = NA("div", "od-lvbar", a.layer);
+    el.innerHTML = '<div class="rw"><b></b><span></span></div><div class="tr"><i></i></div>';
+    const lb = el.querySelector("b"), nx = el.querySelector("span"), fl = el.querySelector("i");
+    let shown = null, busy = !1, tg = 0;
+    const text = (L) => {
+      const tr = typeof vgPrestigeTier == "function" ? vgPrestigeTier(L.level) : null;
+      lb.innerHTML = `${typeof vgPrestigeBadge == "function" ? vgPrestigeBadge(L.level, 15) : ""}<em style="font-style:normal">Level ${L.level}</em>`, nx.textContent = `${L.xp.toLocaleString()} / ${L.need.toLocaleString()} XP`;
+      tr ? el.style.setProperty("--lc", tr.color) : el.style.removeProperty("--lc");
+    };
+    const set = (p, anim) => {
+      fl.style.transition = anim ? "" : "none", fl.style.width = `${(Math.max(0, Math.min(1, p)) * 100).toFixed(2)}%`, anim || fl.offsetWidth;
+    };
+    const upd = () => {
+      if (busy || typeof Za != "object" || !Za) return;
+      const L = pgLevel();
+      if (!shown || L.level < shown.level || L.total < shown.total) return shown = L, text(L), set(L.progress, !1);
+      if (L.total === shown.total) return;
+      if (L.level > shown.level) {
+        // fill to the end, flash, then roll over to the new level
+        busy = !0, el.classList.add("up"), set(1, !0), setTimeout(() => {
+          const N = pgLevel();
+          text(N), set(0, !1), set(N.progress, !0), shown = N, busy = !1, setTimeout(() => el.classList.remove("up"), 700);
+        }, 560);
+        return;
+      }
+      shown = L, text(L), set(L.progress, !0), el.classList.remove("gain"), void el.offsetWidth, el.classList.add("gain"), clearTimeout(tg), tg = setTimeout(() => el.classList.remove("gain"), 850);
+    };
+    upd();
+    try {
+      a.ctx?.events?.on?.("progress:xp", () => setTimeout(upd, 0));
+    } catch {
+    }
+    setInterval(upd, 1e3);
+  } catch {
+  }
+}
+/* ------------------------------------------------------------------ Release 1.01 (concept): the Season Pass page */
+// Main menu -> Season Pass: the season and your level with an angled XP bar (the pass has no levels of its own: it
+// follows your player level, the same number as everywhere else), and two tiles: Season Pass Rewards (opens the reward
+// track) and the secret operator. That tile is his progress bar: he fills in, in colour, from the bottom as you work
+// through his one challenge, and the part not reached yet stays grey. Once he's yours (or you're a developer) it opens
+// Operators on him. Everything slides in when the page opens and fades out when it closes. The page is laid out at
+// 1920 x 1080 and scaled to fit the window. Esc or Back returns to the menu.
 var vgSpCss = `
-.vg-sp { position: fixed; inset: 0; z-index: 370; overflow: hidden; color: #eef1ec; font-family: "Bahnschrift SemiCondensed", "Bahnschrift Condensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", sans-serif; background-color: #0a0c0b; background-image: radial-gradient(ellipse 48vw 65vh at 76% 44%, rgba(240,192,72,.2), rgba(240,192,72,0) 70%), radial-gradient(ellipse 58vw 56vh at 12% 0%, rgba(84,112,126,.22), rgba(84,112,126,0) 70%), repeating-linear-gradient(115deg, rgba(236,240,234,.028) 0 2px, transparent 2px 46px); }
+.vg-sp { position: fixed; inset: 0; z-index: 370; overflow: hidden; color: #eef1ec; font-family: "Bahnschrift SemiCondensed", "Bahnschrift Condensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", sans-serif; background-color: #0a0c0b; background-image: radial-gradient(ellipse 48vw 65vh at 76% 44%, rgba(240,192,72,.2), rgba(240,192,72,0) 70%), radial-gradient(ellipse 58vw 56vh at 12% 0%, rgba(84,112,126,.22), rgba(84,112,126,0) 70%), repeating-linear-gradient(115deg, rgba(236,240,234,.028) 0 2px, transparent 2px 46px); animation: vgSpFade .3s ease-out backwards; }
+.vg-sp.out { animation: vgSpFadeOut .22s ease-in forwards; pointer-events: none; }
+@keyframes vgSpFade { from { opacity: 0; } }
+@keyframes vgSpFadeOut { to { opacity: 0; } }
 .vg-sp .st { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
-.vg-sp::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: var(--bh, 96px); background: rgba(5,6,6,.82); border-bottom: 1px solid rgba(236,238,232,.1); }
 .vg-sp .main, .vg-sp .knife { translate: 0 var(--gy, 0px); }
-.vg-sp .feat, .vg-sp .foot { translate: 0 var(--gy2, 0px); }
+.vg-sp .feat, .vg-sp .foot, .vg-sp .back { translate: 0 var(--gy2, 0px); }
 .vg-sp button { font-family: inherit; cursor: pointer; border-radius: 0; }
 .vg-sp button:focus-visible { outline: 3px solid #f0c048; outline-offset: 3px; }
-.vg-sp .bar { position: absolute; left: 0; top: 0; width: 1920px; height: 96px; box-sizing: border-box; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; }
-.vg-sp .party { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 20px; background: rgba(10,12,11,.7); border: 2px solid #f0c048; color: #eef1ec; font-weight: 700; font-size: 28px; }
-.vg-sp .party svg, .vg-sp .sq svg { width: 30px; height: 30px; }
-.vg-sp nav { display: flex; gap: 4px; }
-.vg-sp nav button { padding: 12px 22px; background: transparent; border: 0; color: rgba(236,240,234,.86); font-weight: 700; font-size: 25px; letter-spacing: .06em; text-transform: uppercase; }
-.vg-sp nav button:hover { color: #fff; background: rgba(236,240,234,.08); }
-.vg-sp nav button.on { background: #eef1ec; color: #0a0c0b; font-weight: 800; cursor: default; }
-.vg-sp .rt { display: flex; gap: 10px; }
-.vg-sp .sq { width: 56px; height: 56px; display: grid; place-items: center; padding: 0; background: rgba(10,12,11,.7); border: 2px solid rgba(236,238,232,.24); color: #eef1ec; }
-.vg-sp .sq.gold { background: #f0c048; border-color: #f0c048; color: #0a0c0b; }
-.vg-sp .main { position: absolute; left: 120px; top: 172px; width: 866px; }
+/* the entrance: each part rises (or slides) in, one after another */
+.vg-sp .an { animation: vgSpRise .7s cubic-bezier(.2,.8,.2,1) backwards; animation-delay: var(--d, 0ms); }
+.vg-sp .an.l { animation-name: vgSpLeft; }
+.vg-sp .an.r { animation-name: vgSpRight; }
+@keyframes vgSpRise { from { opacity: 0; transform: translateY(34px); } }
+@keyframes vgSpLeft { from { opacity: 0; transform: translateX(-46px); } }
+@keyframes vgSpRight { from { opacity: 0; transform: translateX(60px); } }
+.vg-sp .main { position: absolute; left: 120px; top: 108px; width: 866px; }
 .vg-sp .hd { display: flex; align-items: center; gap: 22px; }
-.vg-sp .hd svg { width: 118px; height: 118px; flex: none; filter: drop-shadow(0 6px 24px rgba(240,192,72,.3)); }
+.vg-sp .hd svg { width: 118px; height: 118px; flex: none; filter: drop-shadow(0 6px 24px rgba(240,192,72,.3)); animation: vgSpPop .8s cubic-bezier(.3,1.45,.5,1) 60ms backwards; }
+@keyframes vgSpPop { from { opacity: 0; transform: scale(.35) rotate(-14deg); } }
 .vg-sp h1 { margin: 0; font-weight: 800; font-style: italic; font-size: 104px; line-height: .9; letter-spacing: .01em; text-transform: uppercase; text-shadow: 0 4px 0 rgba(0,0,0,.35); }
 .vg-sp .sub { margin: 4px 0 0; font-weight: 700; font-style: italic; font-size: 44px; line-height: 1; text-transform: uppercase; color: #f0c048; }
 .vg-sp .xp { position: relative; margin-top: 22px; height: 44px; background: #171b1a; clip-path: polygon(0 34%, 100% 0, 97.2% 100%, 0 100%); }
-.vg-sp .xp i { position: absolute; left: 0; top: 0; bottom: 0; background: #f0c048; clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); }
+.vg-sp .xp i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, #c9952a, #f0c048 70%, #ffe39a); clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); transition: width 1.2s cubic-bezier(.22,.8,.2,1) .35s; }
 .vg-sp .xp span { position: absolute; right: 44px; top: 60%; transform: translateY(-50%); font-weight: 700; font-style: italic; font-size: 24px; color: rgba(236,240,234,.74); }
 .vg-sp .tiles { margin-top: 22px; display: grid; grid-template-columns: 581px 269px; gap: 16px; height: 520px; }
-.vg-sp .tile { position: relative; overflow: hidden; padding: 0; border: 0; text-align: left; transition: filter .15s; }
-.vg-sp .tile:hover { filter: brightness(1.07); }
+.vg-sp .tile { position: relative; overflow: hidden; padding: 0; border: 0; text-align: left; transition: transform .28s cubic-bezier(.2,.8,.2,1), filter .2s, box-shadow .28s; }
+.vg-sp .tile:hover, .vg-sp .tile:focus-visible { transform: translateY(-7px); box-shadow: 0 20px 40px rgba(0,0,0,.5); }
+.vg-sp .tile:active { transform: translateY(-2px) scale(.985); transition-duration: .08s; }
 .vg-sp .pass { color: #121410; background-color: #f0c048; background-image: repeating-linear-gradient(115deg, rgba(255,255,255,.08) 0 2px, transparent 2px 22px), linear-gradient(160deg, #f8d888 0%, #f0c048 38%, #b47619 100%); }
-.vg-sp .pass .wm { position: absolute; right: 8px; top: 18px; width: 380px; height: 380px; opacity: .2; }
+.vg-sp .pass:hover { filter: brightness(1.06); }
+.vg-sp .pass::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 38%, rgba(255,250,228,.45) 50%, transparent 62%); transform: translateX(-130%); animation: vgSpShine 6s ease-in-out 1.1s infinite; }
+@keyframes vgSpShine { 0% { transform: translateX(-130%); } 22%, 100% { transform: translateX(130%); } }
+.vg-sp .pass .wm { position: absolute; right: 8px; top: 18px; width: 380px; height: 380px; opacity: .2; transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .3s; }
+.vg-sp .pass:hover .wm { transform: rotate(-6deg) scale(1.06); opacity: .26; }
 .vg-sp .pass .tx { position: absolute; left: 32px; bottom: 30px; display: flex; flex-direction: column; font-style: italic; text-transform: uppercase; }
 .vg-sp .pass .k { font-weight: 700; font-size: 30px; letter-spacing: .08em; color: #4a3608; }
 .vg-sp .pass .t { font-weight: 800; font-size: 124px; line-height: .84; color: #121410; }
 .vg-sp .pass .r { margin-top: 8px; font-weight: 800; font-size: 52px; line-height: 1; color: #fff6dc; text-shadow: 0 3px 0 rgba(90,60,8,.45); }
 .vg-sp .pass .n { margin-top: 10px; font-weight: 700; font-size: 22px; letter-spacing: .06em; color: #4a3608; }
 .vg-sp .echo { color: #eef1ec; border: 2px solid rgba(236,240,234,.16); background-color: #2a2d2e; background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px); cursor: not-allowed; }
-.vg-sp .echo:hover { filter: none; }
 .vg-sp .echo.open { border-color: rgba(127,227,212,.5); cursor: pointer; }
 .vg-sp .echo.open:hover { filter: brightness(1.08); }
+.vg-sp .echo.open::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 70px rgba(127,227,212,.32); opacity: .45; animation: vgSpPulse 2.8s ease-in-out infinite; will-change: opacity; }
+@keyframes vgSpPulse { 50% { opacity: 1; } }
 .vg-sp .echo svg.sil, .vg-sp .echo .fill svg { position: absolute; left: 0; width: 100%; height: 516px; }
 .vg-sp .echo svg.sil { top: 0; }
-.vg-sp .echo .fill { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; background-color: #0a0e0f; background-image: linear-gradient(0deg, rgba(127,227,212,.3), rgba(127,227,212,.1)), repeating-linear-gradient(0deg, rgba(127,227,212,.045) 0 1px, transparent 1px 4px); border-top: 3px solid #7fe3d4; box-shadow: 0 -6px 26px rgba(127,227,212,.45); }
+.vg-sp .echo .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; overflow: hidden; background-color: #0a0e0f; background-image: linear-gradient(0deg, rgba(127,227,212,.3), rgba(127,227,212,.1)), repeating-linear-gradient(0deg, rgba(127,227,212,.045) 0 1px, transparent 1px 4px); border-top: 3px solid #7fe3d4; box-shadow: 0 -6px 26px rgba(127,227,212,.45); transition: height 1.4s cubic-bezier(.22,.8,.2,1) .55s; }
+.vg-sp .echo .gl { position: absolute; left: 0; right: 0; bottom: 0; height: 0; box-shadow: 0 0 34px 5px rgba(127,227,212,.75); opacity: 0; pointer-events: none; transition: bottom 1.4s cubic-bezier(.22,.8,.2,1) .55s; animation: vgSpLine 2.6s ease-in-out 2s infinite; will-change: opacity; }
+@keyframes vgSpLine { 50% { opacity: .9; } }
 .vg-sp .echo .fill svg { bottom: 0; }
-.vg-sp .echo .pc { position: absolute; right: 0; transform: translateY(50%); padding: 4px 10px; background: #7fe3d4; color: #061010; font-weight: 800; font-style: italic; font-size: 20px; }
+.vg-sp .echo .eg { position: absolute; width: 34px; height: 34px; margin: 0 0 -17px -17px; border-radius: 50%; background: radial-gradient(circle, rgba(170,255,240,.9), rgba(127,227,212,.35) 40%, rgba(127,227,212,0) 70%); pointer-events: none; animation: vgSpLens 2.6s ease-in-out infinite; will-change: opacity; }
+.vg-sp .echo .eg.tp { width: 22px; height: 22px; margin: 0 0 -11px -11px; animation-duration: 1.4s; }
+@keyframes vgSpLens { 50% { opacity: .35; } }
+.vg-sp .echo .pc { position: absolute; right: 0; bottom: 0; opacity: 0; transform: translateY(50%); padding: 4px 10px; background: #7fe3d4; color: #061010; font-weight: 800; font-style: italic; font-size: 20px; transition: bottom 1.4s cubic-bezier(.22,.8,.2,1) .55s, opacity .3s .5s; }
 .vg-sp .echo .tg { position: absolute; left: 0; right: 0; top: 0; height: 180px; background: linear-gradient(180deg, rgba(22,24,25,.85), rgba(22,24,25,0)); }
 .vg-sp .echo .top { position: absolute; left: 18px; right: 18px; top: 16px; display: flex; flex-direction: column; gap: 6px; font-style: italic; text-transform: uppercase; color: #9aa0a1; }
 .vg-sp .echo.open .top { color: #7fe3d4; }
 .vg-sp .echo .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 20px; letter-spacing: .06em; }
-.vg-sp .echo .lk { flex: none; }
-.vg-sp .echo .lk { width: 34px; height: 34px; box-sizing: border-box; display: grid; place-items: center; border: 2px solid currentColor; }
+.vg-sp .echo .lk { flex: none; width: 34px; height: 34px; box-sizing: border-box; display: grid; place-items: center; border: 2px solid currentColor; transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+.vg-sp .echo.open:hover .lk { transform: translateX(4px); }
 .vg-sp .echo .lk svg { width: 18px; height: 18px; }
 .vg-sp .echo .file { font-weight: 700; font-size: 18px; letter-spacing: .1em; color: rgba(236,240,234,.55); }
 .vg-sp .echo .red { display: flex; gap: 8px; margin-top: 2px; }
 .vg-sp .echo .red i { display: block; height: 40px; background: #6f7576; }
 .vg-sp .echo .nm { font-weight: 800; font-size: 54px; line-height: .9; color: #eef1ec; text-shadow: 0 0 24px rgba(127,227,212,.6); }
-.vg-sp .echo .bot { position: absolute; left: 0; right: 0; bottom: 0; padding: 38px 18px 18px; display: flex; flex-direction: column; gap: 6px; background: linear-gradient(180deg, rgba(6,9,10,0), rgba(6,9,10,.8) 38px); text-shadow: 0 1px 3px rgba(0,0,0,.85); }
+.vg-sp .echo .bot { position: absolute; left: 0; right: 0; bottom: 0; padding: 38px 18px 18px; display: flex; flex-direction: column; gap: 6px; background: linear-gradient(180deg, rgba(6,9,10,0), rgba(6,9,10,.5) 38px); text-shadow: 0 1px 2px rgba(0,0,0,.95), 0 0 12px rgba(0,0,0,.8); }
 .vg-sp .echo .story { font-weight: 600; font-style: italic; font-size: 16px; line-height: 1.3; color: rgba(236,240,234,.74); }
 .vg-sp .echo .ch { font-weight: 800; font-style: italic; font-size: 24px; line-height: 1.02; text-transform: uppercase; }
 .vg-sp .echo .stt { font-weight: 700; font-style: italic; font-size: 20px; text-transform: uppercase; color: #7fe3d4; }
-.vg-sp .echo.shake { animation: vgSpShake .32s; }
-@keyframes vgSpShake { 20% { transform: translateX(-6px); } 45% { transform: translateX(6px); } 70% { transform: translateX(-3px); } }
-.vg-sp .knife { position: absolute; left: 1150px; top: 250px; width: 660px; height: 240px; transform: rotate(-30deg); filter: drop-shadow(0 0 60px rgba(240,192,72,.35)); pointer-events: none; }
+.vg-sp .echo.shake { animation: vgSpShake .36s; }
+@keyframes vgSpShake { 20% { transform: translateX(-7px); } 45% { transform: translateX(7px); } 70% { transform: translateX(-3px); } }
+.vg-sp .knife { position: absolute; left: 1150px; top: 210px; width: 660px; height: 240px; transform: rotate(-30deg); filter: drop-shadow(0 0 60px rgba(240,192,72,.35)); pointer-events: none; animation: vgSpKnife 1s cubic-bezier(.2,.8,.2,1) .18s backwards, vgSpFloat 6s ease-in-out 1.18s infinite; }
+@keyframes vgSpKnife { from { opacity: 0; transform: translate(120px, -60px) rotate(-44deg); } }
+@keyframes vgSpFloat { 50% { transform: translateY(-12px) rotate(-28.5deg); } }
 .vg-sp .feat { position: absolute; right: 40px; bottom: 64px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-style: italic; text-transform: uppercase; }
 .vg-sp .feat h2 { margin: 0; font-weight: 800; font-size: 96px; line-height: .92; text-shadow: 0 4px 0 rgba(0,0,0,.35); }
 .vg-sp .feat p { margin: 6px 0 0; font-weight: 700; font-size: 44px; line-height: 1; color: #f0c048; }
 .vg-sp .feat small { margin-top: 14px; font-weight: 600; font-size: 26px; text-transform: none; color: rgba(236,240,234,.74); }
-.vg-sp .foot { position: absolute; left: 24px; bottom: 22px; margin: 0; font-weight: 600; font-size: 15px; line-height: 1.45; color: rgba(236,240,234,.62); }
+.vg-sp .back { position: absolute; left: 120px; bottom: 34px; display: flex; align-items: center; gap: 14px; height: 52px; padding: 0 24px 0 10px; background: rgba(10,12,11,.55); border: 2px solid rgba(236,238,232,.22); color: #eef1ec; font-weight: 700; font-size: 22px; letter-spacing: .16em; text-transform: uppercase; transition: border-color .2s, background .2s, transform .25s cubic-bezier(.2,.8,.2,1); }
+.vg-sp .back:hover { border-color: #f0c048; background: rgba(240,192,72,.1); transform: translateX(-4px); }
+.vg-sp .back kbd { padding: 4px 9px; border: 2px solid rgba(236,238,232,.5); font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: .08em; }
+.vg-sp .foot { position: absolute; right: 40px; bottom: 26px; margin: 0; font-weight: 600; font-size: 15px; line-height: 1.45; color: rgba(236,240,234,.5); }
+@media (prefers-reduced-motion: reduce) { .vg-sp, .vg-sp *, .vg-sp *::after { animation: none !important; transition: none !important; } }
 `;
 // Echo as a silhouette (grey) and in colour (inside the fill); the same 265 x 516 drawing
 function vgSpEchoSvg(colour) {
   if (!colour) return '<svg class="sil" viewBox="0 0 265 516" aria-hidden="true"><path d="M194 296 L220 108" stroke="#1d2021" stroke-width="5"/><path d="M18 516 L28 360 Q38 302 90 284 L116 264 L150 264 L176 284 Q228 302 238 360 L248 516 Z" fill="#1d2021" stroke="rgba(255,255,255,0.06)" stroke-width="2"/><path d="M78 252 Q70 152 133 94 Q196 152 188 252 Q158 274 133 274 Q108 274 78 252 Z" fill="#1d2021" stroke="rgba(255,255,255,0.06)" stroke-width="2"/><circle cx="117" cy="194" r="9" fill="#3a3e40"/><circle cx="149" cy="194" r="9" fill="#3a3e40"/></svg>';
-  return '<svg viewBox="0 0 265 516" aria-hidden="true"><path d="M194 296 L220 108" stroke="#59646a" stroke-width="4"/><circle cx="220" cy="106" r="5" fill="#7fe3d4"/><path d="M18 516 L28 360 Q38 302 90 284 L116 264 L150 264 L176 284 Q228 302 238 360 L248 516 Z" fill="#1d2326"/><path d="M90 284 L133 344 L176 284 L158 270 L133 304 L108 270 Z" fill="#2a3134"/><path d="M66 330 L118 430 M200 330 L148 430" stroke="#4a4330" stroke-width="11"/><rect x="94" y="414" width="34" height="42" fill="#3a3f2c"/><rect x="138" y="414" width="34" height="42" fill="#3a3f2c"/><path d="M94 426 H128 M138 426 H172" stroke="#262a1c" stroke-width="2"/><rect x="70" y="360" width="26" height="46" fill="#2c3336"/><path d="M83 360 V336" stroke="#59646a" stroke-width="3"/><circle cx="83" cy="384" r="4" fill="#7fe3d4"/><path d="M46 320 L62 314 L78 320 V334 Q78 346 62 352 Q46 346 46 334 Z" fill="#7fe3d4" fill-opacity="0.85"/><path d="M54 328 L62 323 L70 328 V332 L62 327 L54 332 Z" fill="#0a0e0f"/><path d="M78 252 Q70 152 133 94 Q196 152 188 252 Q158 274 133 274 Q108 274 78 252 Z" fill="#252c2f"/><path d="M133 94 Q160 120 172 160" stroke="#353e42" stroke-width="3" fill="none"/><ellipse cx="133" cy="196" rx="45" ry="56" fill="#0b0e0f"/><path d="M100 178 Q133 152 166 178 L169 212 Q159 240 133 246 Q107 240 97 212 Z" fill="#3c4549"/><circle cx="117" cy="194" r="19" fill="#7fe3d4" fill-opacity="0.22"/><circle cx="149" cy="194" r="19" fill="#7fe3d4" fill-opacity="0.22"/><circle cx="117" cy="194" r="12" fill="#1a2224" stroke="#59646a" stroke-width="3"/><circle cx="149" cy="194" r="12" fill="#1a2224" stroke="#59646a" stroke-width="3"/><circle cx="117" cy="194" r="8" fill="#7fe3d4"/><circle cx="149" cy="194" r="8" fill="#7fe3d4"/><circle cx="114" cy="191" r="2.5" fill="#e9fffb"/><circle cx="146" cy="191" r="2.5" fill="#e9fffb"/><circle cx="133" cy="232" r="15" fill="#2b3235" stroke="#59646a" stroke-width="2"/><path d="M124 228 H142 M123 233 H143 M125 238 H141" stroke="#59646a" stroke-width="2"/><rect x="162" y="218" width="18" height="28" fill="#2b3235" transform="rotate(-24 171 232)"/></svg>';
+  return '<svg viewBox="0 0 265 516" aria-hidden="true"><path d="M194 296 L220 108" stroke="#59646a" stroke-width="4"/><circle class="tp" cx="220" cy="106" r="5" fill="#7fe3d4"/><path d="M18 516 L28 360 Q38 302 90 284 L116 264 L150 264 L176 284 Q228 302 238 360 L248 516 Z" fill="#1d2326"/><path d="M90 284 L133 344 L176 284 L158 270 L133 304 L108 270 Z" fill="#2a3134"/><path d="M66 330 L118 430 M200 330 L148 430" stroke="#4a4330" stroke-width="11"/><rect x="94" y="414" width="34" height="42" fill="#3a3f2c"/><rect x="138" y="414" width="34" height="42" fill="#3a3f2c"/><path d="M94 426 H128 M138 426 H172" stroke="#262a1c" stroke-width="2"/><rect x="70" y="360" width="26" height="46" fill="#2c3336"/><path d="M83 360 V336" stroke="#59646a" stroke-width="3"/><circle cx="83" cy="384" r="4" fill="#7fe3d4"/><path d="M46 320 L62 314 L78 320 V334 Q78 346 62 352 Q46 346 46 334 Z" fill="#7fe3d4" fill-opacity="0.85"/><path d="M54 328 L62 323 L70 328 V332 L62 327 L54 332 Z" fill="#0a0e0f"/><path d="M78 252 Q70 152 133 94 Q196 152 188 252 Q158 274 133 274 Q108 274 78 252 Z" fill="#252c2f"/><path d="M133 94 Q160 120 172 160" stroke="#353e42" stroke-width="3" fill="none"/><ellipse cx="133" cy="196" rx="45" ry="56" fill="#0b0e0f"/><path d="M100 178 Q133 152 166 178 L169 212 Q159 240 133 246 Q107 240 97 212 Z" fill="#3c4549"/><circle class="ln" cx="117" cy="194" r="19" fill="#7fe3d4" fill-opacity="0.22"/><circle class="ln" cx="149" cy="194" r="19" fill="#7fe3d4" fill-opacity="0.22"/><circle cx="117" cy="194" r="12" fill="#1a2224" stroke="#59646a" stroke-width="3"/><circle cx="149" cy="194" r="12" fill="#1a2224" stroke="#59646a" stroke-width="3"/><circle class="ln" cx="117" cy="194" r="8" fill="#7fe3d4"/><circle class="ln" cx="149" cy="194" r="8" fill="#7fe3d4"/><circle cx="114" cy="191" r="2.5" fill="#e9fffb"/><circle cx="146" cy="191" r="2.5" fill="#e9fffb"/><circle cx="133" cy="232" r="15" fill="#2b3235" stroke="#59646a" stroke-width="2"/><path d="M124 228 H142 M123 233 H143 M125 238 H141" stroke="#59646a" stroke-width="2"/><rect x="162" y="218" width="18" height="28" fill="#2b3235" transform="rotate(-24 171 232)"/></svg>';
 }
 var VG_SP_EMBLEM = '<path d="M60 6 L108 22 V58 C108 86 88 104 60 114 C32 104 12 86 12 58 V22 Z" fill="rgba(10,12,11,0.55)" stroke="#f0c048" stroke-width="5"/><path d="M60 30 L90 48 V60 L60 42 L30 60 V48 Z" fill="#f0c048"/><path d="M60 56 L90 74 V86 L60 68 L30 86 V74 Z" fill="#f0c048" opacity="0.75"/><path d="M44 20 H76 V25 H44 Z" fill="#eef1ec"/>';
-function vgSpScreen(nav = {}) {
-  if (typeof document > "u" || document.querySelector(".vg-sp")) return;
+function vgSpScreen() {
+  if (typeof document > "u" || document.querySelector(".vg-sp:not(.out)")) return;
+  document.querySelectorAll(".vg-sp.out").forEach((e) => e.remove());
   if (!document.getElementById("vg-sp-style")) {
     const st = document.createElement("style");
     st.id = "vg-sp-style", st.textContent = vgSpCss, document.head.appendChild(st);
@@ -61181,54 +61265,47 @@ function vgSpScreen(nav = {}) {
     vgPassSync(!0);
   } catch {
   }
-  const L = pgLevel(), S = vgPassState(), T = vgPassTiers(), maxT = VG_PASS.levels || T.length, tier = Math.min(L.level, maxT), top = L.level >= maxT;
+  // your level is the pass's level (it has none of its own)
+  const L = pgLevel(), S = vgPassState(), T = vgPassTiers();
   const goal = VG_ECHO.goal, n = vgEchoCount(), dev = typeof vgAuth == "object" && !!vgAuth.dev, open = dev || n >= goal, pct = open ? 100 : Math.round(n / goal * 100);
-  let party = 1;
-  try {
-    party = Math.max(1, vgNet?.social?.party?.members?.length || 1);
-  } catch {
-  }
   const ic = {
-    party: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18.5 14.4c1.9.8 3 2.8 3 5.6"/></svg>',
-    gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
-    menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>',
     lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>'
   };
-  const xpLine = top ? "Every tier reached" : `${Math.max(0, L.need - L.xp).toLocaleString()} XP to Tier ${tier + 1}`;
+  const xpLine = `${Math.max(0, L.need - L.xp).toLocaleString()} XP to Level ${L.level + 1}`;
   const passLine = S.unlocked ? `${S.got.length} of ${T.length} rewards unlocked` : "Free · open it to start";
   const status = open ? dev && n < goal ? "Unlocked · Developer" : "Unlocked · View operator" : `${pct}% · Unlocks when complete`;
   const root = document.createElement("div");
   root.className = "vg-sp", root.setAttribute("role", "dialog"), root.setAttribute("aria-label", "Season Pass");
   root.innerHTML = `<div class="st">
-<div class="bar"><button type="button" class="party" data-a="party" aria-label="Friends and party: ${party} of 6">${ic.party}<span>${party}/6</span></button>
-<nav aria-label="Main menu"><button type="button" data-a="play">Play</button><button type="button" class="on" aria-current="page">Season Pass</button><button type="button" data-a="operators">Operators</button><button type="button" data-a="loadouts">Loadouts</button><button type="button" data-a="challenges">Challenges</button><button type="button" data-a="career">Career</button></nav>
-<div class="rt"><button type="button" class="sq" data-a="settings" aria-label="Settings">${ic.gear}</button><button type="button" class="sq gold" data-a="play" aria-label="Back to the menu">${ic.menu}</button></div></div>
-<div class="main"><div class="hd"><svg viewBox="0 0 120 120" aria-hidden="true">${VG_SP_EMBLEM}</svg><div><h1>Season Pass</h1><p class="sub">Season ${VG_PASS.season} · ${top ? "Max tier" : `Tier ${tier}`}</p></div></div>
-<div class="xp"><i style="width:${(top ? 100 : L.progress * 100).toFixed(1)}%"></i><span>${xpLine}</span></div>
-<div class="tiles"><button type="button" class="tile pass" data-a="pass" aria-label="Season ${VG_PASS.season} Season Pass rewards: open the reward track"><svg class="wm" viewBox="0 0 120 120" aria-hidden="true"><path d="M60 6 L108 22 V58 C108 86 88 104 60 114 C32 104 12 86 12 58 V22 Z" fill="none" stroke="#2a1d05" stroke-width="5"/><path d="M60 30 L90 48 V60 L60 42 L30 60 V48 Z" fill="#2a1d05"/><path d="M60 56 L90 74 V86 L60 68 L30 86 V74 Z" fill="#2a1d05"/></svg><span class="tx"><span class="k">Season ${VG_PASS.season}</span><span class="t">Season<br>Pass</span><span class="r">Rewards</span><span class="n">${passLine}</span></span></button>
-<button type="button" class="tile echo${open ? " open" : ""}" data-a="echo" aria-disabled="${!open}" aria-label="${open ? "Secret operator Echo: unlocked. View operator" : `Secret operator, locked: get ${goal} eliminations on Halden Station, ${n} of ${goal} done`}">${vgSpEchoSvg(!1)}<span class="fill" style="height:${pct}%">${vgSpEchoSvg(!0)}</span>${open ? "" : `<span class="pc" style="bottom:${pct}%">${n} / ${goal}</span>`}<span class="tg"></span><span class="top"><span class="row"><span>Secret operator</span><span class="lk">${open ? ic.arrow : ic.lock}</span></span><span class="file">File 00 · ${open ? "Declassified" : "Classified"}</span>${open ? '<span class="nm">Echo</span>' : '<span class="red"><i style="width:104px"></i><i style="width:52px"></i></span>'}</span><span class="bot"><span class="story">Someone is still broadcasting from beneath Halden Station.</span><span class="ch">Get ${goal} eliminations on Halden Station</span><span class="stt">${status}</span></span></button></div></div>
+<div class="main"><div class="hd"><svg viewBox="0 0 120 120" aria-hidden="true">${VG_SP_EMBLEM}</svg><div class="an l" style="--d:120ms"><h1>Season Pass</h1><p class="sub">Season ${VG_PASS.season} · Level ${L.level}</p></div></div>
+<div class="xp an l" style="--d:220ms"><i></i><span>${xpLine}</span></div>
+<div class="tiles"><button type="button" class="tile pass an" style="--d:300ms" data-a="pass" aria-label="Season ${VG_PASS.season} Season Pass rewards: open the reward track"><svg class="wm" viewBox="0 0 120 120" aria-hidden="true"><path d="M60 6 L108 22 V58 C108 86 88 104 60 114 C32 104 12 86 12 58 V22 Z" fill="none" stroke="#2a1d05" stroke-width="5"/><path d="M60 30 L90 48 V60 L60 42 L30 60 V48 Z" fill="#2a1d05"/><path d="M60 56 L90 74 V86 L60 68 L30 86 V74 Z" fill="#2a1d05"/></svg><span class="tx"><span class="k">Season ${VG_PASS.season}</span><span class="t">Season<br>Pass</span><span class="r">Rewards</span><span class="n">${passLine}</span></span></button>
+<button type="button" class="tile echo an${open ? " open" : ""}" style="--d:390ms" data-a="echo" aria-disabled="${!open}" aria-label="${open ? "Secret operator Echo: unlocked. View operator" : `Secret operator, locked: get ${goal} eliminations on Halden Station, ${n} of ${goal} done`}">${vgSpEchoSvg(!1)}<span class="fill">${vgSpEchoSvg(!0)}<i class="eg" style="left:117px;bottom:322px"></i><i class="eg" style="left:149px;bottom:322px"></i><i class="eg tp" style="left:220px;bottom:410px"></i></span>${!open && pct > 0 ? '<span class="gl"></span>' : ""}${open ? "" : `<span class="pc">0 / ${goal}</span>`}<span class="tg"></span><span class="top"><span class="row"><span>Secret operator</span><span class="lk">${open ? ic.arrow : ic.lock}</span></span><span class="file">File 00 · ${open ? "Declassified" : "Classified"}</span>${open ? '<span class="nm">Echo</span>' : '<span class="red"><i style="width:104px"></i><i style="width:52px"></i></span>'}</span><span class="bot"><span class="story">Someone is still broadcasting from beneath Halden Station.</span><span class="ch">Get ${goal} eliminations on Halden Station</span><span class="stt">${status}</span></span></button></div></div>
 <svg class="knife" viewBox="0 0 640 220" aria-hidden="true"><defs><linearGradient id="vgspBlade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6d6"/><stop offset="0.45" stop-color="#f0c048"/><stop offset="1" stop-color="#9c6414"/></linearGradient><linearGradient id="vgspGrip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b423e"/><stop offset="1" stop-color="#161a18"/></linearGradient></defs><path d="M240 76 L520 76 L612 108 L520 132 Q400 140 240 126 Z" fill="url(#vgspBlade)"/><path d="M262 98 H500" stroke="#7c4f10" stroke-width="5" stroke-linecap="round"/><path d="M520 76 L612 108" stroke="#fffbe8" stroke-width="3"/><rect x="218" y="52" width="24" height="108" fill="#2a302d" stroke="#f0c048" stroke-width="3"/><rect x="70" y="82" width="150" height="48" fill="url(#vgspGrip)"/><path d="M92 82 V130 M114 82 V130 M136 82 V130 M158 82 V130 M180 82 V130 M202 82 V130" stroke="#4a524e" stroke-width="3"/><rect x="44" y="76" width="28" height="60" fill="#f0c048"/></svg>
-<div class="feat"><h2>Finishing Moves</h2><p>New in Release 1.0</p><small>Get behind an enemy and press melee.</small></div>
+<div class="feat an r" style="--d:460ms"><h2>Finishing Moves</h2><p>New in Release 1.0</p><small>Get behind an enemy and press melee.</small></div>
+<button type="button" class="back an" style="--d:520ms" data-a="back" aria-label="Back to the menu"><kbd>Esc</kbd><span>Back</span></button>
 <p class="foot">Vangaurd · ${vgEsc(VGD.label)} · Build ${VGD.build}</p>
 </div>`;
   const st = root.querySelector(".st"), fit = () => {
-    const W = window.innerWidth, H = window.innerHeight, k = Math.min(W / 1920, H / 1080);
-    const gy = Math.max(0, (H - 1080 * k) / 2) / k;
-    st.style.transform = `scale(${k})`, st.style.left = `${(W - 1920 * k) / 2}px`, st.style.top = "0px", root.style.setProperty("--bh", `${96 * k}px`), root.style.setProperty("--gy", `${gy}px`), root.style.setProperty("--gy2", `${gy * 2}px`);
+    const W = window.innerWidth, H = window.innerHeight, k = Math.min(W / 1920, H / 1080), gy = Math.max(0, (H - 1080 * k) / 2) / k;
+    st.style.transform = `scale(${k})`, st.style.left = `${(W - 1920 * k) / 2}px`, st.style.top = "0px", root.style.setProperty("--gy", `${gy}px`), root.style.setProperty("--gy2", `${gy * 2}px`);
   };
+  let gone = !1, raf = 0;
   const close = () => {
-    root.remove(), window.removeEventListener("keydown", key, !0), window.removeEventListener("keyup", stop, !0), window.removeEventListener("resize", fit);
+    if (gone) return;
+    gone = !0, cancelAnimationFrame(raf), window.removeEventListener("keydown", key, !0), window.removeEventListener("keyup", stop, !0), window.removeEventListener("resize", fit);
+    root.classList.add("out"), setTimeout(() => root.remove(), 240);
   };
   const act = (a) => {
+    if (gone) return;
     if (a === "pass") return vgPassScreen();
-    if (a === "party") return document.querySelector(".vg-burger")?.click();
     if (a === "echo") {
-      if (open) return close(), nav.echo ? nav.echo() : vgOpsScreen("echo");
+      if (open) return close(), vgOpsScreen("echo");
       const t = root.querySelector(".echo");
       return t.classList.remove("shake"), void t.offsetWidth, t.classList.add("shake"), vgToast(`Get ${goal} eliminations on Halden Station to unlock this operator (${n} of ${goal}).`);
     }
-    close(), a !== "play" && nav[a]?.();
+    close();
   };
   // keys are this page's while it's on top (Esc goes back); another screen opened over it keeps its own
   const stop = (ev) => {
@@ -61241,18 +61318,32 @@ function vgSpScreen(nav = {}) {
     if (k === "Escape" || k === "Backspace") return ev.preventDefault(), close();
     if (/^Arrow(Left|Right|Up|Down)$/.test(k)) {
       ev.preventDefault();
-      const all = [...root.querySelectorAll("button:not(.on)")], i = all.indexOf(document.activeElement), d = k === "ArrowLeft" || k === "ArrowUp" ? -1 : 1;
+      const all = [...root.querySelectorAll("button")], i = all.indexOf(document.activeElement), d = k === "ArrowLeft" || k === "ArrowUp" ? -1 : 1;
       all[(i < 0 ? 0 : i + d + all.length) % all.length]?.focus();
     }
   };
   root.querySelectorAll("[data-a]").forEach((b2) => b2.addEventListener("click", (ev) => (ev.stopPropagation(), act(b2.dataset.a))));
   root.addEventListener("mousedown", (ev) => ev.stopPropagation()), window.addEventListener("keydown", key, !0), window.addEventListener("keyup", stop, !0), window.addEventListener("resize", fit);
-  document.body.appendChild(root), fit(), setTimeout(() => root.querySelector(".pass")?.focus(), 30);
-  const pc = root.querySelector(".echo .pc");
+  document.body.appendChild(root), fit(), setTimeout(() => gone || root.querySelector(".pass")?.focus({ preventScroll: !0 }), 650);
+  // the count rides the fill line unless the line would run through the text; then it joins the status line
+  const tile = root.querySelector(".echo"), fill = tile.querySelector(".fill"), pc = tile.querySelector(".pc"), xpf = root.querySelector(".xp i");
   if (pc) {
-    const a = pc.getBoundingClientRect(), b = root.querySelector(".echo .story").getBoundingClientRect(), t = root.querySelector(".echo .top").getBoundingClientRect();
-    (a.bottom > b.top - 4 || a.top < t.bottom + 4) && (pc.hidden = !0, root.querySelector(".echo .stt").textContent = `${n} / ${goal} · ${status}`);
+    const H2 = tile.clientHeight, y = H2 * (1 - pct / 100), h = pc.offsetHeight, bot = tile.querySelector(".bot"), story = tile.querySelector(".story"), top = tile.querySelector(".top");
+    (y + h / 2 > bot.offsetTop + story.offsetTop - 4 || y - h / 2 < top.offsetTop + top.offsetHeight + 4) && (pc.hidden = !0, tile.querySelector(".stt").textContent = `${n} / ${goal} · ${status}`);
   }
+  // then the bars fill (CSS transitions) and the count rolls up with them
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (gone) return;
+    xpf.style.width = `${(L.progress * 100).toFixed(1)}%`, fill.style.height = `${pct}%`, tile.querySelector(".gl")?.style.setProperty("bottom", `${pct}%`);
+    if (pc && !pc.hidden) {
+      pc.style.bottom = `${pct}%`, pc.style.opacity = "1";
+      const t0 = performance.now() + 550, dur = 1400, roll = (now) => {
+        const u = Math.max(0, Math.min(1, (now - t0) / dur)), e = 1 - Math.pow(1 - u, 3);
+        pc.textContent = `${Math.round(n * e)} / ${goal}`, u < 1 && !gone && (raf = requestAnimationFrame(roll));
+      };
+      raf = requestAnimationFrame(roll);
+    }
+  }));
   return { close, root };
 }
 // catch up on rewards whenever your level got ahead of the pass some other way (progress synced from your account)
@@ -63695,11 +63786,7 @@ function cJ(A) {
       F.sessionType === "multiplayer" ? ye() : Pi();
     }),
     de(d, "Operators", "Choose who you play as · new Halloween operators", () => vgOpsScreen()),
-    de(d, "Season Pass", "Season 1 · free rewards as you level up, and a secret operator", () => vgSpScreen({ operators: () => vgOpsScreen(), echo: () => vgOpsScreen("echo"), loadouts: () => {
-      F.loFrom = "main", loOpen();
-    }, challenges: () => {
-      F.armoryPage = "challenges", F.armoryFrom = "main", z(), tt("armory");
-    }, career: () => vgCareerScreen(), settings: () => Ct("graphics") })),
+    de(d, "Season Pass", "Season 1 · free rewards as you level up, and a secret operator", () => vgSpScreen()),
     de(d, "Loadouts", "Build, name and equip your five loadouts", () => {
       F.loFrom = "main", loOpen();
     }),
@@ -66699,7 +66786,7 @@ function hJ(A) {
         soundViz: !0,
         netStats: !1
       }), g = document.createElement("style"), g.textContent = x3, g.textContent += `
-.od-fps-counter{position:fixed;right:28px;top:26px;z-index:80;padding:7px 10px;background:rgba(8,12,11,.62);border:1px solid rgba(255,255,255,.18);color:#f0eee6;font:700 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;pointer-events:none}.od-match-score{position:fixed;left:50%;top:calc(82px + 4.8*var(--u,1px));transform:translateX(-50%);z-index:70;padding:8px 13px;background:rgba(8,12,11,.58);border:1px solid rgba(255,255,255,.14);color:#f0eee6;font:700 10px/1.2 system-ui,sans-serif;letter-spacing:.12em;white-space:nowrap;pointer-events:none}.od-net-overlay{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:65}.od-net-player{position:absolute;display:flex;align-items:center;gap:6px;white-space:nowrap;font:800 12px/1 system-ui,sans-serif;letter-spacing:.1em;color:#ff7068;text-shadow:0 2px 4px #000,0 0 10px #000;pointer-events:none}.od-net-player .arrow{font-size:16px}.od-net-player.friend{color:#8bd8ff}.od-net-player.edge{padding:5px 7px;background:rgba(4,8,11,.58);border-radius:2px}.od-net-player.edge .arrow{transform:rotate(var(--bearing))}@media(max-width:600px){.od-fps-counter{right:12px;top:12px}.od-match-score{top:94px;font-size:8px;letter-spacing:.06em}.od-net-player{font-size:10px}}`, A.ui.hudRoot.appendChild(g), a.layer = NA("div", "od-layer od-hud", A.ui.hudRoot), I = NA("div", "od-net-overlay", a.layer), a.uiLayer = NA("div", "od-layer od-ui", A.ui.uiRoot), B = NA("div", "od-fps-counter", A.ui.hudRoot), B.setAttribute("aria-live", "off"), B.style.display = "none", h = NA("div", "od-match-score", A.ui.hudRoot), h.style.display = "none", J.root = a.layer, IA(), n = z9(a), a.minimap = n, s = O9(a), c = $9(a), o = Z9(a), r = q9(a), l = cJ(a), IA(), i("resize", IA), window.addEventListener("resize", IA), i("settings:changed", ({ path: QA }) => {
+.od-fps-counter{position:fixed;right:28px;top:26px;z-index:80;padding:7px 10px;background:rgba(8,12,11,.62);border:1px solid rgba(255,255,255,.18);color:#f0eee6;font:700 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;pointer-events:none}.od-match-score{position:fixed;left:50%;top:calc(82px + 4.8*var(--u,1px));transform:translateX(-50%);z-index:70;padding:8px 13px;background:rgba(8,12,11,.58);border:1px solid rgba(255,255,255,.14);color:#f0eee6;font:700 10px/1.2 system-ui,sans-serif;letter-spacing:.12em;white-space:nowrap;pointer-events:none}.od-net-overlay{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:65}.od-net-player{position:absolute;display:flex;align-items:center;gap:6px;white-space:nowrap;font:800 12px/1 system-ui,sans-serif;letter-spacing:.1em;color:#ff7068;text-shadow:0 2px 4px #000,0 0 10px #000;pointer-events:none}.od-net-player .arrow{font-size:16px}.od-net-player.friend{color:#8bd8ff}.od-net-player.edge{padding:5px 7px;background:rgba(4,8,11,.58);border-radius:2px}.od-net-player.edge .arrow{transform:rotate(var(--bearing))}@media(max-width:600px){.od-fps-counter{right:12px;top:12px}.od-match-score{top:94px;font-size:8px;letter-spacing:.06em}.od-net-player{font-size:10px}}`, A.ui.hudRoot.appendChild(g), a.layer = NA("div", "od-layer od-hud", A.ui.hudRoot), I = NA("div", "od-net-overlay", a.layer), a.uiLayer = NA("div", "od-layer od-ui", A.ui.uiRoot), B = NA("div", "od-fps-counter", A.ui.hudRoot), B.setAttribute("aria-live", "off"), B.style.display = "none", h = NA("div", "od-match-score", A.ui.hudRoot), h.style.display = "none", J.root = a.layer, IA(), n = z9(a), a.minimap = n, s = O9(a), c = $9(a), o = Z9(a), r = q9(a), l = cJ(a), vgLvBar(a), IA(), i("resize", IA), window.addEventListener("resize", IA), i("settings:changed", ({ path: QA }) => {
         QA === "hud.scale" && IA();
       }), i("combat:kill", iA), i("combat:hit", SA), i("player:damaged", kA), i("player:died", WA), i("weapon:fired", () => {
         a.stats.shotsFired++, E = 0;

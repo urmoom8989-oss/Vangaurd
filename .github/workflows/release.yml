@@ -146,7 +146,9 @@ jobs:
           - **Mac**: \`Vangaurd-${FILE_LABEL}-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-${FILE_LABEL}-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
 
           New in Release 1.01 (a concept build on top of Release 1.0; Release 1.0 is unchanged):
-          - A new Season Pass tab: your season and tier with an angled XP bar, the Season 1 Season Pass Rewards (opens the reward track) and a secret operator.
+          - A new Season Pass page, animated: your season and level with an angled XP bar, the Season 1 Season Pass Rewards (opens the reward track) and a secret operator.
+          - The pass and your player level are one and the same: it's called Level everywhere, and each reward on the track shows the level it comes at.
+          - A level bar along the bottom of the screen in game: your level and XP, filling as you earn it, with a flash when you level up.
           - The secret operator Echo, with the first piece of a story for live events. One challenge unlocks him: get 50 eliminations on Halden Station. His tile fills in as you go, and once he's yours it takes you to him in Operators. Developers have him from the start.
 
           Everything from Release 1.0:
