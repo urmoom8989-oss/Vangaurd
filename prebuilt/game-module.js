@@ -56151,6 +56151,10 @@ function wmDefMeridian() {
     navY: 2.8,
     // the teams' ends: the tower (west) and the building next door (east)
     spawnAxis: "x",
+    // Release 1.0: the ladder up the back of the tower crane: where you stand on it (x, z), which way is off it
+    // (nx, nz), its foot and the landing at the top (y0, y1), and where you step off at the top (ex, ez: forward,
+    // over the top of the ladder, so holding forward walks you away from the hatch)
+    ladders: [{ x: 47, z: 16.5, nx: 1, nz: 0, y0: 0.6, y1: 41.6, ex: 45.85, ez: 16.5 }],
     mmTop: 3.2,
     streets: [],
     patches: [],
@@ -56460,6 +56464,29 @@ function wmDefMeridian() {
         box("metal_painted%e2b33a", cx - 1.2, cx + 1.2, top, top + 2.4, cz - 1.2, cz + 1.2, ns), box("glass", cx + 0.6, cx + 1.25, top + 0.6, top + 2.2, cz - 1.1, cz + 1.1, ns);
         box("metal_painted%e2b33a", cx - 34, cx + 12, top + 2.4, top + 3.4, cz - 0.6, cz + 0.6, ns), box("concrete_wall#grey", cx + 7, cx + 11, top + 0.6, top + 2.4, cz - 0.9, cz + 0.9, ns);
         K.pipe("metal_steel", [cx - 22, top + 2.4, cz], [cx - 22, top - 14, cz], 0.02, { col: !1, seg: 4 }), box("metal_painted#dark", cx - 22.4, cx - 21.6, top - 14.6, top - 14, cz - 0.4, cz + 0.4, ns);
+      }
+      // Release 1.0: the ladder up the back of the crane's mast (inside a safety cage) to a landing under the cab:
+      // grating with a hatch where the ladder comes through, and a railing all round
+      {
+        const cx = 45.5, cz = 16.5, LX = 46.55, Y0 = 0.6, DY = 41.6, Y1 = DY + 1.1, yel = "metal_painted%e2b33a", dk = "metal_painted#dark";
+        for (const s of [-0.24, 0.24]) {
+          e.box(yel, LX, (Y0 + Y1) / 2, cz + s, 0.06, Y1 - Y0, 0.06, ns);
+          for (let y = Y0 + 2; y < DY; y += 3) e.box(dk, (cx + 0.8 + LX) / 2, y, cz + s, LX - cx - 0.8, 0.05, 0.05, ns);
+        }
+        for (let y = Y0 + 0.3; y < DY - 0.1; y += 0.3) e.box(dk, LX, y, cz, 0.04, 0.04, 0.48, ns);
+        // the cage: hoops every 1.5 m from head height up, and three straps up its length
+        for (let y = Y0 + 2.4; y < DY - 0.6; y += 1.5) e.box(yel, 47.5, y, cz, 0.04, 0.06, 0.9, ns), e.box(yel, (LX + 47.5) / 2, y, cz - 0.45, 0.95, 0.06, 0.04, ns), e.box(yel, (LX + 47.5) / 2, y, cz + 0.45, 0.95, 0.06, 0.04, ns);
+        for (const [x, z] of [[47.5, cz], [47.05, cz - 0.45], [47.05, cz + 0.45]]) e.box(yel, x, (Y0 + 2.4 + DY - 0.6) / 2, z, 0.04, DY - 0.6 - Y0 - 2.4, 0.04, ns);
+        // the landing: four plates round the hatch (they're the floor), then the railing
+        const X0 = 44.1, X1 = 48.9, Z0 = 14.9, Z1 = 18.1, HX0 = 46.45, HX1 = 47.55, HZ0 = 15.95, HZ1 = 17.05;
+        for (const [a, b2, c, d] of [[X0, HX0, Z0, Z1], [HX1, X1, Z0, Z1], [HX0, HX1, Z0, HZ0], [HX0, HX1, HZ1, Z1]]) box(dk, a, b2, DY - 0.15, DY, c, d);
+        for (const [a, b2, c, d] of [[X0, X1, Z0, Z0 + 0.05], [X0, X1, Z1 - 0.05, Z1], [X0, X0 + 0.05, Z0, Z1], [X1 - 0.05, X1, Z0, Z1]]) {
+          box(yel, a, b2, DY + 1.0, DY + 1.06, c, d, ns), box(yel, a, b2, DY + 0.5, DY + 0.55, c, d, ns), box(dk, a, b2, DY, DY + 0.14, c, d, ns);
+          // (walls you can't walk through but can shoot through)
+          e.colBox((a + b2) / 2, DY + 0.55, (c + d) / 2, Math.max(0.1, b2 - a), 1.1, Math.max(0.1, d - c), wmPart, { ray: !1, move: !0 });
+        }
+        for (let x = X0; x <= X1 + 0.01; x += (X1 - X0) / 4) for (const z of [Z0 + 0.025, Z1 - 0.025]) box(yel, x - 0.03, x + 0.03, DY, DY + 1.06, z - 0.03, z + 0.03, ns);
+        for (let z = Z0 + (Z1 - Z0) / 3; z < Z1 - 0.1; z += (Z1 - Z0) / 3) for (const x of [X0 + 0.025, X1 - 0.025]) box(yel, x - 0.03, x + 0.03, DY, DY + 1.06, z - 0.03, z + 0.03, ns);
       }
       // solar panels and a few antennas on the south side
       for (let k = 0; k < 3; k++) for (const x of [27, 31, 35]) e.box("metal_painted%1b2a44", x, 0.55, -14.5 + k * 2.6, 3.4, 0.05, 1.6, { rot: [0.45, 0, 0] }), box("metal_painted#dark", x - 1.5, x + 1.5, 0, 0.45, -14.6 + k * 2.6, -14.4 + k * 2.6, ns);
@@ -72614,8 +72641,13 @@ var eV, Hh, T5, tV = YA((() => {
       let o = 0, r = 0;
       s && (o = n.x, r = n.y);
       const c = Math.min(1, Math.hypot(o, r)), l = Math.sin(t.yaw), g = Math.cos(t.yaw);
-      if (this._fwd.set(-l, 0, -g), this._right.set(g, 0, -l), this.stanceLock > 0 && (this.stanceLock = Math.max(0, this.stanceLock - A)), this.mantleCheckCooldown > 0 && this.mantleCheckCooldown--, this.jumpLock > 0 && (this.jumpLock -= A), this.wallContact++, this.mode === "mantle") {
-        this._stepMantle(A), this._consumeIntent(A), this._post(A, e);
+      if (this._fwd.set(-l, 0, -g), this._right.set(g, 0, -l), this.stanceLock > 0 && (this.stanceLock = Math.max(0, this.stanceLock - A)), this.mantleCheckCooldown > 0 && this.mantleCheckCooldown--, this.jumpLock > 0 && (this.jumpLock -= A), this.wallContact++, this.ladderCool > 0 && (this.ladderCool -= A), this.mode === "mantle" || this.mode === "ladder") {
+        this.mode === "ladder" ? this._stepLadder(A, s, r) : this._stepMantle(A), this._consumeIntent(A), this._post(A, e);
+        return;
+      }
+      // Release 1.0: onto a ladder
+      if (s && this._ladderGrab(r, t)) {
+        this._consumeIntent(A), this._post(A, e);
         return;
       }
       const B = t.ads, h = this.ctx.settings.data.player || {};
@@ -72936,6 +72968,77 @@ var eV, Hh, T5, tV = YA((() => {
       const r = this._evMantle;
       r.phase = "start", r.position.copy(i), r.height = a, r.vault = s, r.duration = t.dur, this.ctx.events.emit("player:mantle", r);
     }
+    // Release 1.0: ladders (a map lists its own: wmMap(id).ladders). Walk into one facing it to get on. Forward
+    // climbs the way you're looking (look down to go down), back the other way, sprint climbs faster, jump lets go.
+    // At the top you step off onto the landing; walking into the hatch from the landing puts you back on it, and so
+    // does falling past it. No shooting while you climb.
+    _ladderNear() {
+      let L = null;
+      try {
+        L = wmMap(this.ctx.services.world?.mapId)?.ladders;
+      } catch {
+      }
+      if (!L) return null;
+      const p = this.pos;
+      for (const d of L) {
+        const ox = p.x - d.x, oz = p.z - d.z, out = ox * d.nx + oz * d.nz, side = -ox * d.nz + oz * d.nx;
+        if (Math.abs(side) < 0.5 && out > -0.45 && out < 0.55 && p.y > d.y0 - 0.35 && p.y < d.y1 + 0.3) return d;
+      }
+      return null;
+    }
+    _ladderGrab(fi, t) {
+      if (this.ladderCool > 0 || this.mode === "slide" || t.stance === "prone") return !1;
+      const d = this._ladderNear();
+      if (!d) return !1;
+      const p = this.pos, facing = -(this._fwd.x * d.nx + this._fwd.z * d.nz);
+      // at the foot only when you walk into it facing it (and aren't looking at your feet); anywhere above, always
+      if (p.y < d.y0 + 0.5 && !(fi > 0.3 && facing > 0.45 && (t.pitch ?? 0) > -0.6)) return !1;
+      t.stance !== "stand" && this.setStance("stand", !0), this.sliding = !1;
+      return this.mode = "ladder", this.ladder = d, this.ldis = null, this.lstep = 0, this.vel.set(0, 0, 0), this.grounded = !1, this.jumped = !1, this.sprintLatched = !1, this.tac && this._setTac(!1), this.maxFallSpeed = 0, this.fallStartY = p.y, !0;
+    }
+    _stepLadder(A, s, fi) {
+      const d = this.ladder, t = this.state, p = this.pos, i = this.intent;
+      if (!d || !s) return this._ladderOff(!1);
+      // stepping off at the top: up and over onto the landing
+      if (this.ldis) {
+        const D = this.ldis;
+        D.t = Math.min(1, D.t + A / 0.42);
+        const k = D.t * D.t * (3 - 2 * D.t);
+        p.set(cs(D.p0.x, D.p1.x, k), cs(D.p0.y, D.p1.y, Ui(k * 1.7)) + Math.sin(Math.PI * D.t) * 0.18, cs(D.p0.z, D.p1.z, k)), this.vel.set(0, 0, 0), this.syncCapsule();
+        if (D.t >= 1) {
+          this.mode = "ground", this.ladder = null, this.ldis = null, this.ladderCool = 0.5;
+          const o = this._info;
+          Lg(o), this._resolve(o, !0, !1, 6), this._readCapsule(), this.grounded = this._groundProbe(0.4), this.grounded || (this.mode = "air"), this.maxFallSpeed = 0, this.fallStartY = p.y;
+        }
+        return;
+      }
+      if (i.jump > 0) return i.jump = 0, this._ladderOff(!0);
+      const dir = Math.abs(fi) < 0.2 ? 0 : Math.sign(fi) * ((t.pitch ?? 0) < -0.35 ? -1 : 1), spd = this.ctx.input?.isDown?.("sprint") ? 4.4 : 3.2, y0 = p.y;
+      // held onto the line of the ladder
+      const k = 1 - Math.exp(-14 * A);
+      p.x += (d.x - p.x) * k, p.z += (d.z - p.z) * k;
+      let y = p.y + dir * spd * Math.min(1, Math.abs(fi)) * A;
+      if (dir > 0 && y >= d.y1) return this.ldis = { t: 0, p0: p.clone().setY(d.y1), p1: new b(d.ex, d.y1 + 0.03, d.ez) }, p.y = d.y1, this.syncCapsule(), void 0;
+      if (dir < 0 && y <= d.y0) return p.y = d.y0, this._ladderOff(!1);
+      p.y = Math.min(d.y1, Math.max(d.y0, y)), this.vel.set(0, A > 0 ? (p.y - y0) / A : 0, 0), this.maxFallSpeed = 0, this.fallStartY = p.y;
+      // a clank on each rung
+      if (this.lstep += Math.abs(p.y - y0), this.lstep > 0.6) {
+        this.lstep = 0, this.foot ^= 1;
+        const ft = this._evFoot;
+        ft.surface = "metal", ft.position.copy(p), ft.speed = 2, ft.stance = "stand", ft.foot = this.foot ? "right" : "left", ft.sprinting = !1, ft.tacSprinting = !1, ft.volume = 0.55, this.ctx.events.emit("player:footstep", ft);
+      }
+      this.syncCapsule();
+    }
+    // off the ladder: at the foot (onto the ground), or pushed off it by a jump
+    _ladderOff(push) {
+      const d = this.ladder;
+      this.mode = "air", this.ladder = null, this.ldis = null, this.ladderCool = push ? 0.6 : 0.4, this.sinceGrounded = 1, this.maxFallSpeed = 0, this.fallStartY = this.pos.y, this.jumped = !!push;
+      push && d ? this.vel.set(d.nx * 3.4, 2.6, d.nz * 3.4) : this.vel.set(0, 0, 0), this.syncCapsule();
+      if (!push) {
+        const o = this._info;
+        Lg(o), this._resolve(o, !0, !1, 4), this._readCapsule(), this._groundProbe(0.3) && (this.grounded = !0, this.mode = "ground");
+      }
+    }
     _stepMantle(A) {
       const e = this.mantle, t = this.state;
       e.t += A / e.dur;
@@ -72967,7 +73070,7 @@ var eV, Hh, T5, tV = YA((() => {
       const t = this.state, i = this.vel, a = Math.hypot(i.x, i.z);
       t.speed = a, t.moving = a > 0.3, t.grounded = this.grounded;
       const s = this._sprintVisible();
-      t.sprinting = s, t.tacSprinting = this.tac && s, t.sprintHeld = this.sprinting, t.sliding = this.mode === "slide", t.mantling = this.mode === "mantle";
+      t.sprinting = s, t.tacSprinting = this.tac && s, t.sprintHeld = this.sprinting, t.sliding = this.mode === "slide", t.mantling = this.mode === "mantle", t.climbing = this.mode === "ladder";
       const n = this.grounded && this.mode === "ground", o = n && a > 0.25 ? 1 : 0;
       if (this.gaitWeight += (o - this.gaitWeight) * (1 - Math.exp(-8 * A)), n && a > 0.25) {
         const c = this._stepLength(a), l = Math.floor(this.gait / Math.PI);
@@ -73135,7 +73238,7 @@ var eV, Hh, T5, tV = YA((() => {
       const nA = a.pitch + c + this.landPitch.x + this.punchPitch.x + this.mantlePitch.x + G + $ + k + pA, j = a.yaw + this.punchYaw.x + tA, aA = l - this.lean.x * at.leanRoll + this.slideRoll.x + this.strafeRoll.x + this.mantleRoll.x + U + this.punchRoll.x + K + N + IA;
       a.roll = aA, n.rotation.set(Cn(nA, -89.5 * Yt, 89.5 * Yt), j, aA, "YXZ");
       let z = 0;
-      o.fovEffects !== !1 && (R ? z = at.fovSlide * Ui(s.slideSpeed / 7) : s.sprinting && s.mode !== "mantle" && (z = s.tac ? at.fovTac : at.fovSprint), z *= Ui(I / be.walk) * (1 - Ui(a.ads))), this.fovKick += (z - this.fovKick) * Ef(at.fovRate, A);
+      o.fovEffects !== !1 && (R ? z = at.fovSlide * Ui(s.slideSpeed / 7) : s.sprinting && s.mode !== "mantle" && s.mode !== "ladder" && (z = s.tac ? at.fovTac : at.fovSprint), z *= Ui(I / be.walk) * (1 - Ui(a.ads))), this.fovKick += (z - this.fovKick) * Ef(at.fovRate, A);
       const cA = i.settings.data.graphics.fov + this.fovKick;
       this.hfov = cA;
       const bA = Gu(cA) * Yt, GA = 2 * Math.atan(Math.tan(bA / 2) / this.zoom) / Yt;
@@ -86376,8 +86479,8 @@ function b6(A) {
       return;
     }
     t.pressed("sprint") && (a.t - P < 0.3 && (_ = !0), P = a.t);
-    const vgBF = vgKS.blockFire || vgIntroBlock() || vgFinBlock(), xe = !!OA.sprinting && !E.reloading;
-    if (OA.sprinting || (_ = !1), E.sprinting = !!OA.sprinting, E.tacSprint = xe && _, OA.sprinting && E.reloading && !v?.data.pastSeat && AA(), xe ? G = 0.14 : G = Math.max(0, G - HA), Y >= 0 ? (Y += HA, Y >= oe.holsterTime && (Y = -1, bt(Q), Q = null, N = u.cfg.equipTime, H.weaponId = E.id, i.emit("weapon:equip", H), A.services.audio.play(`${u.cfg.kind}_equip`, { bus: "sfx" }))) : N > 0 && (N -= HA, N <= 0 && (N = 0, E.action = "idle")), Xe() || E.reloading || v?.name === "inspect") {
+    const vgBF = vgKS.blockFire || vgIntroBlock() || vgFinBlock() || !!OA.climbing, xe = (!!OA.sprinting || !!OA.climbing) && !E.reloading;
+    if (OA.sprinting || (_ = !1), E.sprinting = !!OA.sprinting || !!OA.climbing, E.tacSprint = xe && _, OA.sprinting && E.reloading && !v?.data.pastSeat && AA(), xe ? G = 0.14 : G = Math.max(0, G - HA), Y >= 0 ? (Y += HA, Y >= oe.holsterTime && (Y = -1, bt(Q), Q = null, N = u.cfg.equipTime, H.weaponId = E.id, i.emit("weapon:equip", H), A.services.audio.play(`${u.cfg.kind}_equip`, { bus: "sfx" }))) : N > 0 && (N -= HA, N <= 0 && (N = 0, E.action = "idle")), Xe() || E.reloading || v?.name === "inspect") {
       const ar = E.id === "rifle" ? "pistol" : "rifle", okAt = vgOk.pend ?? vgOk.alt;
       ggOn ? E.id !== ggOn && Q !== ggOn && Ae(ggOn) : vgOkOn() && E.id === "rifle" && Q !== "pistol" ? t.pressed("swapWeapon") || t.pressed("weaponNext") || t.pressed("weaponPrev") ? vgOkSwap(!okAt) : t.pressed("weapon1") && okAt ? vgOkSwap(!1) : t.pressed("weapon2") && !okAt && vgOkSwap(!0) : t.pressed("swapWeapon") || t.pressed("weaponNext") || t.pressed("weaponPrev") ? Ae(ar) : t.pressed("weapon1") && E.id !== "rifle" ? Ae("rifle") : t.pressed("weapon2") && E.id !== "pistol" && Ae("pistol");
     }
