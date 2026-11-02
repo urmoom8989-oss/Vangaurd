@@ -49616,7 +49616,9 @@ var VG_CHARMS = [
   { id: "grenade", name: "Mini Frag", lv: 10, desc: "Pin firmly in place." },
   { id: "skull", name: "Bone Skull", lv: 14, desc: "A little skull carved from bone." },
   { id: "star", name: "Gold Star", lv: 20, desc: "For outstanding service." },
-  { id: "crown", name: "Crown", lv: 30, desc: "For whoever tops the scoreboard." }
+  { id: "crown", name: "Crown", lv: 30, desc: "For whoever tops the scoreboard." },
+  // Release 1.0: a season badge: yours for good once you reach Level 100 while Season 1 is on (not on the pass)
+  { id: "s1lv100", name: "S1 · Level 100", lv: 100, season: 1, desc: "Season 1: Blackout. Reached Level 100." }
 ];
 var VG_STICKERS = [
   { id: "none", name: "No sticker", lv: 1 },
@@ -49638,7 +49640,44 @@ function cosDef(kind, id) {
   return L.find((d) => d.id === id) || L[0];
 }
 function cosUnlocked(d, level = pgLevel().level) {
+  if (d?.season) return vgSeasonBadge(d, level);
   return !d || d.id === "none" || level >= (d.lv || 1) || vgPassHas(d.kind || (VG_CHARMS.includes(d) ? "charm" : "sticker"), d.id);
+}
+// a season badge charm: kept in your progression (so it stays yours after the season ends) the moment you're at its
+// level while its season is on
+function vgSeasonBadge(d, level = pgLevel().level) {
+  const B = typeof Za == "object" && Za ? Za.badges ||= {} : {};
+  if (B[d.id]) return !0;
+  return typeof VG_PASS == "object" && VG_PASS.season === d.season && level >= d.lv ? (B[d.id] = Date.now(), !0) : !1;
+}
+// (any you've just earned: told with the level-up)
+function vgSeasonBadgesAt(level) {
+  const got = [];
+  for (const d of VG_CHARMS) d.season && !Za.badges?.[d.id] && vgSeasonBadge(d, level) && got.push(`${d.name} charm`);
+  return got.length && om(), got;
+}
+// the badge's face: a Blackout shield (black, gold rim and chevrons) with the level on it and the season under it
+function vgBadgeCanvas(N, d = cosDef("charm", "s1lv100")) {
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = N;
+  const g = cv.getContext("2d"), k = N / 120, P = new Path2D("M60 6 L108 22 V58 C108 86 88 104 60 114 C32 104 12 86 12 58 V22 Z"), F = (w, px) => `${w} ${px}px "Bahnschrift SemiBold Condensed", "Bahnschrift Condensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", Arial, sans-serif`;
+  g.scale(k, k), g.save(), g.clip(P);
+  let gr = g.createLinearGradient(0, 6, 0, 114);
+  gr.addColorStop(0, "#232829"), gr.addColorStop(0.55, "#121414"), gr.addColorStop(1, "#070808"), g.fillStyle = gr, g.fillRect(0, 0, 120, 120);
+  gr = g.createRadialGradient(60, 24, 2, 60, 24, 70), gr.addColorStop(0, "rgba(240,192,72,.34)"), gr.addColorStop(1, "rgba(240,192,72,0)"), g.fillStyle = gr, g.fillRect(0, 0, 120, 120);
+  g.strokeStyle = "rgba(236,240,234,.06)", g.lineWidth = 1.4;
+  for (let x = -120; x < 240; x += 9) g.beginPath(), g.moveTo(x, 120), g.lineTo(x + 56, 0), g.stroke();
+  g.restore();
+  // the rim: gold with a dark line inside it
+  g.lineJoin = "round", g.strokeStyle = "#f0c048", g.lineWidth = 7, g.stroke(P), g.save(), g.translate(60, 60), g.scale(0.86, 0.86), g.translate(-60, -60), g.strokeStyle = "rgba(240,192,72,.45)", g.lineWidth = 1.6, g.stroke(P), g.restore();
+  // the season's two chevrons, then the level and the season
+  g.fillStyle = "#f0c048";
+  for (const y of [22, 33]) g.beginPath(), g.moveTo(60, y), g.lineTo(78, y + 10), g.lineTo(78, y + 15), g.lineTo(60, y + 5), g.lineTo(42, y + 15), g.lineTo(42, y + 10), g.closePath(), g.fill();
+  g.textAlign = "center", g.textBaseline = "alphabetic";
+  const tg = g.createLinearGradient(0, 52, 0, 82);
+  tg.addColorStop(0, "#fff6d6"), tg.addColorStop(0.5, "#f0c048"), tg.addColorStop(1, "#b07a1c"), g.fillStyle = tg, g.font = F(900, 34), g.fillText(String(d.lv), 60, 82, 74);
+  g.fillStyle = "#7fe3d4", g.fillRect(44, 87, 32, 2.2), g.font = F(800, 12), g.fillText(`S${d.season}`, 60, 101);
+  return cv;
 }
 function pgCos(kind, role, k = pgActive()) {
   const r = vgRole(role), s = pgSlots()[k], d = cosDef(kind, s?.[kind]?.[r]);
@@ -49722,7 +49761,13 @@ function vgCosIcon(kind, id) {
   let url = "";
   try {
     if (kind === "sticker") url = id === "none" ? "" : vgStickerCanvas(id, 96).toDataURL();
-    else if (id !== "none") {
+    else if (cosDef("charm", id).season) {
+      const N = 96, cv = document.createElement("canvas");
+      cv.width = cv.height = N;
+      const g = cv.getContext("2d"), c = N / 2;
+      g.strokeStyle = "#b9bdc0", g.lineWidth = 3, g.beginPath(), g.arc(c, 10, 6, 0, 7), g.stroke(), g.setLineDash([3, 3]), g.beginPath(), g.moveTo(c, 16), g.lineTo(c, 30), g.stroke(), g.setLineDash([]);
+      g.drawImage(vgBadgeCanvas(160, cosDef("charm", id)), c - 34, 26, 68, 68), url = cv.toDataURL();
+    } else if (id !== "none") {
       const N = 96, cv = document.createElement("canvas");
       cv.width = cv.height = N;
       const g = cv.getContext("2d"), c = N / 2;
@@ -49768,6 +49813,29 @@ function vgCharmKit() {
     const sg = new Ke();
     sg.setAttribute("position", new De(P, 3)), sg.computeVertexNormals(), g.star = sg;
   }
+  {
+    // the season badge's shield: its outline (the Season Pass emblem's), a fan for each face, then the edge
+    const O = [], bz = (a, b2, c, d, t) => (1 - t) ** 3 * a + 3 * (1 - t) ** 2 * t * b2 + 3 * (1 - t) * t * t * c + t ** 3 * d;
+    O.push([60, 6], [108, 22], [108, 58]);
+    for (let i = 1; i <= 6; i++) O.push([bz(108, 108, 88, 60, i / 6), bz(58, 86, 104, 114, i / 6)]);
+    for (let i = 1; i <= 6; i++) O.push([bz(60, 32, 12, 12, i / 6), bz(114, 104, 86, 58, i / 6)]);
+    O.push([12, 22]);
+    const S = 0.024, h = 7e-4, X = (q) => (q[0] / 120 - 0.5) * S, Y = (q) => (0.5 - q[1] / 120) * S, P = [], U = [], n = O.length, C = [60, 62];
+    for (let i = 0; i < n; i++) {
+      const a = O[i], c = O[(i + 1) % n];
+      P.push(X(C), Y(C), h, X(a), Y(a), h, X(c), Y(c), h), U.push(C[0] / 120, 1 - C[1] / 120, a[0] / 120, 1 - a[1] / 120, c[0] / 120, 1 - c[1] / 120);
+    }
+    for (let i = 0; i < n; i++) {
+      const a = O[i], c = O[(i + 1) % n];
+      P.push(X(C), Y(C), -h, X(c), Y(c), -h, X(a), Y(a), -h), U.push(1 - C[0] / 120, 1 - C[1] / 120, 1 - c[0] / 120, 1 - c[1] / 120, 1 - a[0] / 120, 1 - a[1] / 120);
+    }
+    for (let i = 0; i < n; i++) {
+      const a = O[i], c = O[(i + 1) % n];
+      P.push(X(a), Y(a), h, X(a), Y(a), -h, X(c), Y(c), -h, X(a), Y(a), h, X(c), Y(c), -h, X(c), Y(c), h), U.push(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+    const bg = new Ke();
+    bg.setAttribute("position", new De(P, 3)), bg.setAttribute("uv", new De(U, 2)), bg.computeVertexNormals(), bg.addGroup(0, n * 6, 0), bg.addGroup(n * 6, n * 6, 1), g.badge = bg;
+  }
   return vgCosCache.kit = { m, g };
 }
 function vgCharmMesh(id) {
@@ -49792,6 +49860,17 @@ function vgCharmMesh(id) {
     const M2 = vgPumpkinMats(), p = add(vgOps.pgeo, M2.lantern, 0, -0.0105, 0, 0, Math.PI, 0, 0.075);
     p.onBeforeRender = vgFlicker, add(vgOps.sgeo, M2.stem, 0, -1.8e-3, 0, 0, 0, 0, 0.12);
   } else if (id === "star") add(g.star, m.gold, 0, -0.0105, 0);
+  else if (cosDef("charm", id).season) {
+    // (the face drawn once per badge, kept)
+    const T = vgCosCache.badge ||= {};
+    if (!T[id]) {
+      const tx = new _u(vgBadgeCanvas(256, cosDef("charm", id)));
+      tx.colorSpace = Ii, tx.anisotropy = 4, T[id] = new Vt({ map: tx, emissive: 16777215, emissiveMap: tx, emissiveIntensity: 0.16, metalness: 0.55, roughness: 0.36 });
+    }
+    add(g.tagHole, m.gold, 0, 4e-4, 0, 0, Math.PI / 2, 0, 1.15);
+    const o = new Le(g.badge, [T[id], m.gold]);
+    o.position.set(0, -0.0108, 0), o.castShadow = o.receiveShadow = !1, body.add(o);
+  }
   else if (id === "crown") {
     add(g.crown, m.gold, 0, -8e-3, 0);
     for (let i = 0; i < 5; i++) {
@@ -50164,6 +50243,10 @@ function pgAddXp(A, e = "", t = !0) {
   if (a > i) {
     const s = [];
     for (let n = i + 1; n <= a; n++) s.push(...pgUnlocksAt(n));
+    try {
+      s.push(...vgSeasonBadgesAt(a));
+    } catch {
+    }
     try {
       const hud = pgCtx?.services.hud;
       hud?.levelUp ? hud.levelUp({ level: a, from: i, unlocked: s }) : hud?.notify?.(`LEVEL UP · LEVEL ${a}${s.length ? ` · Unlocked: ${s.join(", ")}` : ""}`, { kind: "banner", duration: 4.5 });
@@ -60795,13 +60878,13 @@ function vgOpsScreen(pick) {
   } catch {
   }
   const root = document.createElement("div"), S = pgCtx?.settings, pad = vgPadOn(), pn = (i, k) => pad ? vgEsc(vgPadName(S, i)) : k;
+  // Release 1.0: only the operators you own are listed (the developer one for developers, the secret one once he's
+  // yours), and only the filters that have any of them
+  const ALL = VG_OPS.filter((o) => (!o.dev || vgAuth.dev) && vgOpOwned(o.id)), FL = VG_OP_FILTERS.filter((f) => f.id === "all" || f.id !== "own" && ALL.some(f.ok)), def = (id) => ALL.find((o) => o.id === id) || ALL[0];
   root.className = "vg-ops", root.setAttribute("role", "dialog"), root.setAttribute("aria-label", "Operators");
-  root.innerHTML = `<div class="stage"><canvas aria-hidden="true"></canvas></div><section class="pnl"><header class="hd"><div><span class="kk">Selecting</span><h2>Operators</h2></div><div class="kind">${VG_OP_SVG.helmet}<span>Operator</span></div></header><div class="flt"><span class="lbl"><span>Filter</span><b></b></span><div class="tabs"><kbd>${pn(4, "Q")}</kbd>${VG_OP_FILTERS.map((f) => `<button type="button" data-f="${f.id}" title="${f.name}" aria-label="${f.name}">${VG_OP_SVG[f.id]}</button>`).join("")}<kbd>${pn(5, "E")}</kbd></div></div><div class="grid" role="listbox" aria-label="Operators"></div><div class="btm"><button type="button" class="save"><kbd${pad ? "" : " hidden"}>${pn(2, "")}</kbd><span>Save and Exit</span></button><button type="button" data-go></button></div></section><div class="card"><div class="rh"><small><em></em><i>|</i><span>Operator</span></small><b></b></div><div class="rb"><p class="ds"></p><p class="set"></p><p class="note"></p></div></div><footer class="ft"><span>${pad ? "" : "<kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd>"}<span>Choose</span></span><span><kbd>${pn(0, "Enter")}</kbd><span>Equip</span></span><span><kbd>${pn(4, "Q")}</kbd><kbd>${pn(5, "E")}</kbd><span>Filter</span></span><span><kbd>${pad ? "R" : "Drag"}</kbd><span>Rotate</span></span><button type="button" class="bk"><kbd>${pn(1, "Esc")}</kbd><span>Back</span></button></footer>`;
+  root.innerHTML = `<div class="stage"><canvas aria-hidden="true"></canvas></div><section class="pnl"><header class="hd"><div><span class="kk">Selecting</span><h2>Operators</h2></div><div class="kind">${VG_OP_SVG.helmet}<span>Operator</span></div></header><div class="flt"><span class="lbl"><span>Filter</span><b></b></span><div class="tabs"><kbd>${pn(4, "Q")}</kbd>${FL.map((f) => `<button type="button" data-f="${f.id}" title="${f.name}" aria-label="${f.name}">${VG_OP_SVG[f.id]}</button>`).join("")}<kbd>${pn(5, "E")}</kbd></div></div><div class="grid" role="listbox" aria-label="Operators"></div><div class="btm"><button type="button" class="save"><kbd${pad ? "" : " hidden"}>${pn(2, "")}</kbd><span>Save and Exit</span></button><button type="button" data-go></button></div></section><div class="card"><div class="rh"><small><em></em><i>|</i><span>Operator</span></small><b></b></div><div class="rb"><p class="ds"></p><p class="set"></p><p class="note"></p></div></div><footer class="ft"><span>${pad ? "" : "<kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd>"}<span>Choose</span></span><span><kbd>${pn(0, "Enter")}</kbd><span>Equip</span></span><span><kbd>${pn(4, "Q")}</kbd><kbd>${pn(5, "E")}</kbd><span>Filter</span></span><span><kbd>${pad ? "R" : "Drag"}</kbd><span>Rotate</span></span><button type="button" class="bk"><kbd>${pn(1, "Esc")}</kbd><span>Back</span></button></footer>`;
   document.body.appendChild(root);
   const $ = (q) => root.querySelector(q), grid = $(".grid"), go = $("[data-go]"), card = $(".card"), stage = $(".stage");
-  // the developer operator is only listed for developers
-  // (the secret one once he's yours)
-  const ALL = VG_OPS.filter((o) => (!o.dev || vgAuth.dev) && (!o.secret || vgOpOwned(o.id))), def = (id) => ALL.find((o) => o.id === id) || ALL[0];
   let fi = 0, hid = pick && ALL.some((o) => o.id === pick) ? pick : vgOpCurrent(), prev = null;
   try {
     prev = vgOpPreview($("canvas"), { pedestal: !0, spin: !1, ang: -0.38, fov: 34, cam: { pos: [0, 0.8, 5.2], look: [0, 0.56, 0] } });
@@ -60823,7 +60906,7 @@ function vgOpsScreen(pick) {
     prev?.show(o.id);
   };
   const paint = () => {
-    const cur = vgOpCurrent(), F = VG_OP_FILTERS[fi], list = ALL.filter(F.ok);
+    const cur = vgOpCurrent(), F = FL[fi], list = ALL.filter(F.ok);
     list.some((o) => o.id === hid) || (hid = (list[0] || ALL[0]).id);
     grid.innerHTML = list.map((o) => tile(o, cur)).join(""), $(".lbl b").textContent = F.name;
     root.querySelectorAll("[data-f]").forEach((b2, i) => (b2.classList.toggle("on", i === fi), b2.setAttribute("aria-pressed", i === fi)));
@@ -60854,7 +60937,7 @@ function vgOpsScreen(pick) {
     vgOpOwned(o.id) ? choose(o.id) : o.pass ? (close(), vgPassScreen()) : vgDlcBuy(o.dlc);
   };
   const filt = (d) => {
-    fi = (fi + d + VG_OP_FILTERS.length) % VG_OP_FILTERS.length, paint(), grid.querySelector(".hi")?.focus();
+    fi = (fi + d + FL.length) % FL.length, paint(), grid.querySelector(".hi")?.focus();
   };
   // the arrows move through the grid (rows as laid out)
   const move = (dx, dy) => {
@@ -60926,7 +61009,7 @@ var VG_PASS_OPS = [
 var VG_PASS = { season: 1, name: "Blackout", open: !0, levels: 100, perPage: 10, tiers: null, busy: !1 };
 function vgPassTiers() {
   if (VG_PASS.tiers) return VG_PASS.tiers;
-  const T = [], camos = camoDefs.filter((c) => c.id !== "none" && !c.dlc && !c.ch && c.lv > 0).sort((a, b2) => a.lv - b2.lv), charms = VG_CHARMS.filter((c) => c.id !== "none"), stickers = VG_STICKERS.filter((c) => c.id !== "none");
+  const T = [], camos = camoDefs.filter((c) => c.id !== "none" && !c.dlc && !c.ch && c.lv > 0).sort((a, b2) => a.lv - b2.lv), charms = VG_CHARMS.filter((c) => c.id !== "none" && !c.season), stickers = VG_STICKERS.filter((c) => c.id !== "none");
   let ci = 0, hi = 0, si = 0;
   for (let t = 1; t <= VG_PASS.levels; t++) {
     const op = VG_PASS_OPS.find((o) => o.tier === t);
@@ -64344,11 +64427,11 @@ function cJ(A) {
         info = `<b>${Nn(pick.name)}</b><span>${pick.id === "none" ? "Always available" : pick.dlc ? `${Nn(VG_DLC[pick.dlc]?.name || "DLC")} · DLC` : chl ? `Challenge · ${Nn(chl.text)}` : `Level ${pick.lv}`}${pick.live ? " · Animated" : ""}</span>${pick.id === cur ? '<span class="od-lo-eqd">Equipped</span>' : locked ? pick.dlc ? `<button type="button" data-nav class="od-btn pri" data-lo-buy="${pick.dlc}">Buy on Steam · ${Nn(VG_DLC[pick.dlc]?.price || "")}</button>` : `<button type="button" class="od-btn" disabled>${chl ? "Complete the challenge" : `Reach level ${pick.lv}`}</button>` : `<button type="button" data-nav class="od-btn pri" data-lo-apply="camo:${pick.id}">Apply camo</button>`}`;
       } else {
         const kind = tab, L2 = kind === "charm" ? VG_CHARMS : VG_STICKERS, cur = pgCos(kind, r, k), pick = cosDef(kind, V.pick || cur), locked = !cosUnlocked(pick, lvl);
-        tiles = L2.map((c) => {
+        tiles = L2.filter((c) => !c.season || c.season === VG_PASS.season || cosUnlocked(c, lvl)).map((c) => {
           const lk = !cosUnlocked(c, lvl), ic = vgCosIcon(kind, c.id);
           return `<button type="button" data-nav class="od-lo2-tile${c.id === cur ? " pri" : ""}${c.id === pick.id ? " sel" : ""}${lk ? " lock" : ""}" data-lo-cos="${kind}:${c.id}" title="${Nn(c.name)}"><span class="sw icon"${ic ? ` style="background-image:url(${ic})"` : ""}></span><small>${Nn(c.name)}</small></button>`;
         }).join("");
-        info = `<b>${Nn(pick.name)}</b><span>${pick.id === "none" ? "Nothing on the gun" : `${pick.desc ? `${Nn(pick.desc)} · ` : ""}Level ${pick.lv}`}</span>${pick.id === cur ? '<span class="od-lo-eqd">Equipped</span>' : locked ? `<button type="button" class="od-btn" disabled>Reach level ${pick.lv}</button>` : `<button type="button" data-nav class="od-btn pri" data-lo-apply="${kind}:${pick.id}">${pick.id === "none" ? "Remove" : `Apply ${kind}`}</button>`}`;
+        info = `<b>${Nn(pick.name)}</b><span>${pick.id === "none" ? "Nothing on the gun" : `${pick.desc ? `${Nn(pick.desc)} · ` : ""}${pick.season ? `Season ${pick.season} reward` : `Level ${pick.lv}`}`}</span>${pick.id === cur ? '<span class="od-lo-eqd">Equipped</span>' : locked ? `<button type="button" class="od-btn" disabled>${pick.season ? pick.season === VG_PASS.season ? `Reach Level ${pick.lv} this season` : `Season ${pick.season} is over` : `Reach level ${pick.lv}`}</button>` : `<button type="button" data-nav class="od-btn pri" data-lo-apply="${kind}:${pick.id}">${pick.id === "none" ? "Remove" : `Apply ${kind}`}</button>`}`;
       }
       html = `<div class="od-lo2 page">${crumbs(L.name, roleName(r), "Cosmetics")}<div class="od-lo2-cos"><div class="od-lo2-cosl"><div class="od-lo2-tabs">${(w?.stats?.melee ? [["camo", "Camo"]] : [["camo", "Camo"], ["charm", "Charm"], ["sticker", "Sticker"]]).map(([id, n]) => `<button type="button" data-nav class="${id === tab ? "sel" : ""}" data-lo-tab="${id}">${n}</button>`).join("")}</div><div class="od-lo2-tiles">${tiles}</div></div><div class="od-lo2-cosr"><div class="od-lo2-stage"><div class="cap"><b>${Nn(w.name)}</b><span>Drag to turn</span></div></div><div class="od-lo2-cosinfo">${info}</div></div></div></div>`;
     } else if (V.v === "perks") {
