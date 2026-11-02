@@ -144,6 +144,10 @@ jobs:
           - **Mac**: \`Vangaurd-${FILE_LABEL}-arm64.dmg\` for Apple Silicon (M1 and newer), \`Vangaurd-${FILE_LABEL}-x64.dmg\` for Intel Macs. The app is not notarized: the first time, right-click the app and choose **Open**. If macOS says it is damaged, run \`xattr -cr /Applications/Vangaurd.app\` in Terminal once.
 
           What's new:
+          - A new Season Pass page, animated: your season and level with an angled XP bar, the Season 1 Season Pass Rewards (opens the reward track) and a secret operator.
+          - The secret operator Echo: get 50 eliminations on Halden Station to unlock him. His tile fills in as you go.
+          - The pass and your player level are one and the same: it's called Level everywhere, and each reward on the track shows the level it comes at.
+          - A level bar along the bottom of the screen in game, with your level and XP.
           - Melee weapons for your secondary: knife, machete, axe and bat.
           - Prestige levels past 100, and a Career page with your lifetime stats.
           - Lobby chat, party voice chat, and mute or block any player.

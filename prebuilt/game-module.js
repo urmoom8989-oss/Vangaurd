@@ -50202,7 +50202,7 @@ function iJ(A, e = !1, dist = null) {
   const before = camoDefs.filter((c) => c.ch && camoUnlocked(c));
   Za.kills++, e && Za.headshots++, dist != null && dist >= 35 && (Za.longshots = (Za.longshots | 0) + 1);
   const t = /^(pistol|melee:)/.test(String(A || "")) ? "pistol" : "rifle";
-  Za.weapons[t] ||= { kills: 0 }, Za.weapons[t].kills++, om(), pgAddXp($3 + (e ? 50 : 0), "kill");
+  Za.weapons[t] ||= { kills: 0 }, Za.weapons[t].kills++, vgEchoKill(), om(), pgAddXp($3 + (e ? 50 : 0), "kill");
   // Beta 1.3: weapon levels and challenges
   const vid = wpnVariantFor(A), lng = dist != null && dist >= 35;
   vid && wpnAddXp(vid, 100 + (e ? 50 : 0) + (lng ? 50 : 0));
@@ -59893,8 +59893,32 @@ var VG_OPS = [
   { id: "frostline", name: "Frostline", tag: "Season 1 Pass", desc: "Winter whites, a frosted visor and ice-blue trim.", dlc: null, pass: !0 },
   { id: "nightshade", name: "Nightshade", tag: "Season 1 Pass", desc: "Black tactical kit with violet trim and glowing night-vision goggles.", dlc: null, pass: !0 },
   { id: "ember", name: "Ember", tag: "Season 1 Pass", desc: "Scorched armour with glowing seams that smoulder as you move.", dlc: null, pass: !0 },
-  { id: "spectre", name: "Spectre", tag: "Developer", desc: "Obsidian armour wired with living gold and cyan light, and a glowing visor. Developers only.", dlc: null, dev: !0 }
+  { id: "spectre", name: "Spectre", tag: "Developer", desc: "Obsidian armour wired with living gold and cyan light, and a glowing visor. Developers only.", dlc: null, dev: !0 },
+  // Release 1.01: a secret operator, unlocked by one challenge (see VG_ECHO); developers have him from the start
+  { id: "echo", name: "Echo", tag: "Secret", desc: "A hood, a gas mask whose lenses never go dark, and a radio still picking up the signal from beneath Halden Station.", dlc: null, secret: !0 }
 ];
+// Release 1.01: Echo's challenge. Eliminations on Halden Station are counted in your progression (so the count
+// follows your account with the cloud save); at the goal he is yours.
+var VG_ECHO = { goal: 50, map: "halden" };
+function vgEchoCount() {
+  try {
+    return Math.max(0, Math.min(VG_ECHO.goal, Za?.secret?.echo | 0));
+  } catch {
+    return 0;
+  }
+}
+function vgEchoDone() {
+  return vgEchoCount() >= VG_ECHO.goal;
+}
+// one of your eliminations (called from the kill bookkeeping, which saves the progression right after)
+function vgEchoKill() {
+  try {
+    if (vgEchoDone() || pgCtx?.services?.world?.mapId !== VG_ECHO.map) return;
+    Za.secret = { ...Za.secret && typeof Za.secret == "object" ? Za.secret : {}, echo: vgEchoCount() + 1 };
+    vgEchoDone() && vgToast("Secret operator unlocked: Echo. Find him in Operators.");
+  } catch {
+  }
+}
 // Release 1.0: a soldier's pose must never become NaN. One bad number (a hit reaction with a NaN direction, say)
 // spread to the whole skeleton: the soldier vanished, and its hitboxes, now NaN too, counted as hit by every bullet
 // fired anywhere on the map, so shooting the ground killed enemies. The animator now ignores bad input and rebuilds
@@ -59939,7 +59963,7 @@ function vgOpDef(id) {
 }
 function vgOpOwned(id) {
   const d = vgOpDef(id);
-  return d.id === id && (d.dev ? typeof vgAuth == "object" && !!vgAuth.dev : d.pass ? vgPassHas("op", d.id) : !d.dlc || vgDlcOwned(d.dlc));
+  return d.id === id && (d.dev ? typeof vgAuth == "object" && !!vgAuth.dev : d.secret ? typeof vgAuth == "object" && !!vgAuth.dev || vgEchoDone() : d.pass ? vgPassHas("op", d.id) : !d.dlc || vgDlcOwned(d.dlc));
 }
 // what other players are told you look like: the developer operator stays private (they see the Standard one)
 function vgOpPublic() {
@@ -60133,12 +60157,17 @@ function vgOpTimeStart() {
   requestAnimationFrame(f);
 }
 var VG_OP_STYLE = {
+  // Release 1.01: Echo, charcoal with dark teal, and teal light (see VG_OP_GLOW)
+  echo: { dirt: 0.5, cols: { 0: [0.03, 0.036, 0.04, 0.9], 1: [0.04, 0.047, 0.05, 0.7], 2: [0.024, 0.03, 0.032, 0.8], 3: [0.03, 0.035, 0.038, 0.9], 5: [0.02, 0.023, 0.025, 0.8], 6: [0.018, 0.02, 0.021, 0.75], 10: [0.05, 0.28, 0.25, 0.45], 11: [0.035, 0.041, 0.044, 0.92], 15: [0.03, 0.034, 0.036, 0.85] } },
   frostline: { dirt: 0.25, cols: { 0: [0.62, 0.65, 0.68, 0.86], 1: [0.5, 0.54, 0.58, 0.8], 2: [0.42, 0.46, 0.5, 0.85], 3: [0.78, 0.8, 0.83, 0.95], 5: [0.36, 0.39, 0.43, 0.8], 6: [0.3, 0.32, 0.35, 0.75], 10: [0.3, 0.6, 0.85, 0.5], 11: [0.72, 0.75, 0.78, 0.55], 14: [0.5, 0.55, 0.6, 0.4], 15: [0.55, 0.58, 0.62, 0.85] } },
   nightshade: { dirt: 0.35, cols: { 0: [0.035, 0.032, 0.045, 0.86], 1: [0.05, 0.042, 0.068, 0.62], 2: [0.04, 0.032, 0.058, 0.8], 3: [0.03, 0.028, 0.038, 0.92], 5: [0.032, 0.03, 0.04, 0.8], 6: [0.02, 0.019, 0.026, 0.7], 10: [0.32, 0.12, 0.7, 0.45], 11: [0.045, 0.04, 0.058, 0.45], 14: [0.18, 0.1, 0.32, 0.4], 15: [0.05, 0.042, 0.066, 0.8] } },
   ember: { dirt: 1.4, cols: { 0: [0.05, 0.035, 0.03, 0.92], 1: [0.13, 0.055, 0.032, 0.62], 2: [0.06, 0.035, 0.025, 0.85], 3: [0.04, 0.03, 0.026, 0.92], 5: [0.05, 0.03, 0.022, 0.85], 6: [0.03, 0.02, 0.016, 0.75], 10: [0.6, 0.2, 0.05, 0.5], 11: [0.08, 0.045, 0.035, 0.5], 14: [0.3, 0.15, 0.08, 0.4], 15: [0.1, 0.045, 0.03, 0.75] } },
   spectre: { dirt: 0.05, cols: { 0: [0.012, 0.013, 0.017, 0.5], 1: [0.016, 0.017, 0.022, 0.22], 2: [0.35, 0.24, 0.07, 0.35], 3: [0.01, 0.011, 0.014, 0.85], 5: [0.012, 0.013, 0.016, 0.45], 6: [0.012, 0.012, 0.015, 0.4], 10: [0.9, 0.62, 0.15, 0.3], 11: [0.014, 0.015, 0.02, 0.18], 14: [0.9, 0.62, 0.15, 0.25], 15: [0.016, 0.017, 0.022, 0.25] } }
 };
 var VG_OP_GLOW = {
+  // Echo: pulses of signal running up the teal trim, and the lenses lit
+  echo: `if ( m == 10 ) e += vec3( 0.2, 0.85, 0.75 ) * ( 0.12 + 1.1 * pow( 0.5 + 0.5 * sin( p.y * 9.0 - t * 4.0 ), 10.0 ) );
+      if ( m == 12 || m == 13 ) e += vec3( 0.35, 1.0, 0.88 ) * 1.2;`,
   frostline: `if ( m == 10 || m == 12 ) e += vec3( 0.35, 0.75, 1.0 ) * ( m == 12 ? 2.2 : 0.55 );`,
   nightshade: `if ( m == 10 ) e += vec3( 0.55, 0.2, 1.0 ) * ( 0.7 + 0.25 * sin( t * 2.0 ) );
       if ( m == 2 || m == 14 ) e += vec3( 0.45, 0.18, 0.95 ) * ( 0.16 + 0.06 * sin( t * 2.0 + p.y * 4.0 ) );
@@ -60354,6 +60383,50 @@ function vgOpVisor(id, body) {
   }
   return g;
 }
+// Release 1.01: Echo's gas mask (two lenses that glow, a filter at the front) on the head bone, and his radio and
+// antenna on the chest bone (behind the right shoulder)
+function vgOpEcho(body) {
+  const E = vgOpEyes(body), M = vgOps.echo || (vgOps.echo = {
+    rub: new Vt({ color: 1910564, roughness: 0.62, metalness: 0.15 }),
+    met: new Vt({ color: 2832954, roughness: 0.4, metalness: 0.7 }),
+    glow: new ha({ color: new ue(0.35, 1, 0.88).multiplyScalar(1.25) }),
+    hood: new Vt({ color: 1777964, roughness: 0.92, metalness: 0, side: 2 }),
+    shell: new Kn(0.07, 20, 14),
+    ring: new ta(0.024, 0.024, 0.014, 18),
+    lens: new ta(0.018, 0.018, 4e-3, 18),
+    can: new ta(0.03, 0.033, 0.045, 18),
+    rod: new ta(35e-4, 6e-3, 0.5, 6),
+    tip: new Kn(0.012, 10, 8),
+    box: new wi(0.07, 0.11, 0.05)
+  });
+  const mask = new yt(), ant = new yt();
+  mask.name = "op_echo_mask", ant.name = "op_echo_radio";
+  const H = vgOps.echoHelm || (vgOps.echoHelm = (() => {
+    try {
+      const geo = vgOpGeos("echo")[0], P = geo.attributes.position, D = geo.attributes.aData, inv = body.skeleton.boneInverses[ZA.head], v = new b(), lo = new b(1e9, 1e9, 1e9), hi = new b(-1e9, -1e9, -1e9);
+      for (let i = 0; i < P.count; i++) Math.round(D.getX(i) * 255) === ce.HELMET && (v.set(P.getX(i), P.getY(i), P.getZ(i)).applyMatrix4(inv), lo.min(v), hi.max(v));
+      if (hi.x > lo.x) return { c: lo.clone().add(hi).multiplyScalar(0.5), s: hi.clone().sub(lo).multiplyScalar(0.5) };
+    } catch {
+    }
+    return { c: new b(0, 0.105, 0), s: new b(0.115, 0.075, 0.13) };
+  })());
+  M.cap || (M.cap = new Kn(1, 24, 6, 0, Math.PI * 2, 0, Math.PI * 0.3), M.cowl = new Kn(1, 24, 10, Math.PI / 2 + 0.85, Math.PI * 2 - 1.7, Math.PI * 0.3, Math.PI * 0.5));
+  for (const g of [M.cap, M.cowl]) {
+    const h = new Le(g, M.hood);
+    h.scale.set(H.s.x * 1.25, H.s.y * 1.4 + 0.04, H.s.z * 1.2), h.position.set(H.c.x, H.c.y - 0.03, H.c.z - 0.01), mask.add(h);
+  }
+  const sh = new Le(M.shell, M.rub);
+  sh.scale.set(1.08, 0.95, 0.85), sh.position.set(E.x, E.y - 0.028, E.z + 8e-3), mask.add(sh);
+  for (const sx of [1, -1]) {
+    const r = new Le(M.ring, M.met), l = new Le(M.lens, M.glow);
+    r.rotation.x = l.rotation.x = Math.PI / 2, r.position.set(E.x + sx * 0.032, E.y + 4e-3, E.z + 0.05), l.position.set(E.x + sx * 0.032, E.y + 4e-3, E.z + 0.058), mask.add(r, l);
+  }
+  const c = new Le(M.can, M.met);
+  c.rotation.x = Math.PI / 2, c.position.set(E.x, E.y - 0.06, E.z + 0.072), mask.add(c);
+  const bx = new Le(M.box, M.met), rod = new Le(M.rod, M.met), tip = new Le(M.tip, M.glow);
+  bx.position.set(-0.1, 0.02, -0.14), rod.position.set(-0.115, 0.28, -0.15), rod.rotation.z = 0.12, tip.position.set(-0.145, 0.53, -0.15), ant.add(bx, rod, tip);
+  return { mask, ant };
+}
 // ---------- put an operator on a soldier (netSoldier / vH body): other players, replays, the preview
 function vgOpApply(sol, id) {
   const body = sol?.body || sol;
@@ -60361,7 +60434,7 @@ function vgOpApply(sol, id) {
   id = VG_OPS.some((o) => o.id === id) ? id : "default";
   if ((sol.op || "default") === id) return;
   sol.op = id, sol.__opBase || (sol.__opBase = { geos: body.geometries, mat: body.mesh.material });
-  body.__opExtra?.removeFromParent(), body.__opExtra = null;
+  body.__opExtra?.removeFromParent(), body.__opExtra = null, body.__opExtra2?.removeFromParent(), body.__opExtra2 = null;
   if (id === "default") {
     body.geometries = sol.__opBase.geos, body.mesh.material = sol.__opBase.mat;
   } else {
@@ -60376,6 +60449,9 @@ function vgOpApply(sol, id) {
     } else if (id === "spectre" || id === "frostline" || id === "nightshade") {
       const e = vgOpVisor(id, body);
       head.add(e), body.__opExtra = e;
+    } else if (id === "echo") {
+      const e = vgOpEcho(body);
+      head.add(e.mask), (body.bones[ZA.chest] || head).add(e.ant), body.__opExtra = e.mask, body.__opExtra2 = e.ant;
     }
   }
   const lod = body.lod;
@@ -60392,7 +60468,7 @@ function vgFPTex(kind) {
   const N = 256, cv = document.createElement("canvas");
   cv.width = cv.height = N;
   const g = cv.getContext("2d"), r = camoRng(kind === "bone" ? 77 : 41), img = g.createImageData(N, N), d = img.data;
-  const base = { bone: [227, 217, 193], frost: [196, 204, 212], night: [16, 14, 20], ember: [34, 22, 17], spectre: [10, 11, 14] }[kind] || [46, 36, 27];
+  const base = { bone: [227, 217, 193], frost: [196, 204, 212], night: [16, 14, 20], ember: [34, 22, 17], spectre: [10, 11, 14], echo: [22, 26, 28] }[kind] || [46, 36, 27];
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const i = (y * N + x) * 4;
     let v = (r() - 0.5) * (kind === "bone" ? 14 : 18);
@@ -60497,11 +60573,11 @@ function vgOpHands(force = !1) {
     const B = m?.userData?.vgBase;
     if (B) {
       if (sleeve) {
-        const tex = { skeleton: "bone", pumpkin: "coat", frostline: "frost", nightshade: "night", ember: "ember", spectre: "spectre" }[op];
+        const tex = { skeleton: "bone", pumpkin: "coat", frostline: "frost", nightshade: "night", ember: "ember", spectre: "spectre", echo: "echo" }[op];
         m.color.setHex(16777215), U.uCamo && (U.uCamo.value = tex ? vgFPTex(tex) : B.camo), op === "default" && m.color.setHex(B.color), m.sheen = op === "skeleton" ? 0.05 : B.sheen;
       } else {
         // gloves (and their leather parts) per operator
-        const gc = { skeleton: [14866624, 13353893], pumpkin: [6195251, 4285226], frostline: [12370128, 9541793], nightshade: [1710623, 4859024], ember: [2759700, 6889502], spectre: [1053720, 9468962] }[op];
+        const gc = { skeleton: [14866624, 13353893], pumpkin: [6195251, 4285226], frostline: [12370128, 9541793], nightshade: [1710623, 4859024], ember: [2759700, 6889502], spectre: [1053720, 9468962], echo: [1777956, 2765366] }[op];
         m.color.setHex(gc ? gc[0] : B.color), U.uLeather?.value?.setHex?.(gc ? gc[1] : B.leather), U.uWear && (U.uWear.value = op === "default" ? B.wear : 0), m.sheen = op === "skeleton" ? 0.1 : B.sheen;
       }
     }
@@ -60527,6 +60603,7 @@ typeof window < "u" && (window.__VG10__ = { ops: VG_OPS, current: () => vgOpCurr
 // Main menu -> Operators: pick who you play as. A turning 3D preview of each operator; DLC operators show what pack
 // they come in, with "Buy on Steam" (or "Equip" once you own it).
 var VG_OP_ICON = {
+  echo: '<svg viewBox="0 0 32 32"><path fill="#1f2528" d="M16 3c-6 0-10 4.5-10 10.5V28h20V13.5C26 7.5 22 3 16 3z"/><path fill="#30393d" d="M10 14c0-3.4 2.7-5.6 6-5.6s6 2.2 6 5.6v4.6c0 3.2-2.7 5.4-6 5.4s-6-2.2-6-5.4z"/><circle cx="13" cy="15" r="2.4" fill="#7fe3d4"/><circle cx="19" cy="15" r="2.4" fill="#7fe3d4"/><circle cx="16" cy="21" r="2.6" fill="#1a2023" stroke="#5a656a"/></svg>',
   frostline: '<svg viewBox="0 0 32 32"><path fill="#e9eef2" d="M16 3.5c-5.6 0-9.5 3.8-9.5 8.8V15h19v-2.7c0-5-3.9-8.8-9.5-8.8z"/><path fill="#c8d3dc" d="M9.5 15h13v4c0 3.6-2.9 6.4-6.5 6.4S9.5 22.6 9.5 19z"/><path fill="#bfe6ff" d="M9 13.6h14v3.4H9z"/><path fill="#9fb3c4" d="M6 29c1.4-3.4 5.3-5 10-5s8.6 1.6 10 5z"/></svg>',
   nightshade: '<svg viewBox="0 0 32 32"><path fill="#24212c" d="M16 3.5c-5.6 0-9.5 3.8-9.5 8.8V15h19v-2.7c0-5-3.9-8.8-9.5-8.8z"/><path fill="#1a1622" d="M9.5 15h13v4c0 3.6-2.9 6.4-6.5 6.4S9.5 22.6 9.5 19z"/><circle cx="12.4" cy="14.4" r="2.6" fill="#c4a7ff"/><circle cx="19.6" cy="14.4" r="2.6" fill="#c4a7ff"/><path fill="#3c3350" d="M6 29c1.4-3.4 5.3-5 10-5s8.6 1.6 10 5z"/><path fill="#8b5cf6" d="M13 26.4h6v1.2h-6z"/></svg>',
   ember: '<svg viewBox="0 0 32 32"><path fill="#2a1d17" d="M16 3.5c-5.6 0-9.5 3.8-9.5 8.8V15h19v-2.7c0-5-3.9-8.8-9.5-8.8z"/><path fill="#3a2318" d="M9.5 15h13v4c0 3.6-2.9 6.4-6.5 6.4S9.5 22.6 9.5 19z"/><path fill="none" stroke="#ff6a2a" stroke-width="1.3" d="M11 8l3 3-1 3M21 7l-2 4 2 3M12 19l3 2M20 19l-3 2"/><path fill="#ffc46b" d="M10.5 14.2h11v1.6h-11z"/><path fill="#6b2f1b" d="M6 29c1.4-3.4 5.3-5 10-5s8.6 1.6 10 5z"/></svg>',
@@ -60538,9 +60615,9 @@ var VG_OP_ICON = {
 // Release 1.0: the Operators screen is a locker: a panel of portrait tiles on the left (coloured by rarity, with
 // filters), the operator on a pedestal on the right, and a card with its rarity, name, description and set.
 // Choosing a tile you own equips it; a locked one points you at the Steam store or the Season Pass.
-var VG_OP_RARITY = { default: "common", frostline: "rare", nightshade: "epic", skeleton: "epic", ember: "legendary", pumpkin: "legendary", spectre: "dev" };
-var VG_RARITY = { common: "Common", rare: "Rare", epic: "Epic", legendary: "Legendary", dev: "Developer" };
-var VG_RARITY_GLOW = { common: "#c6ced4", rare: "#4a8fd0", epic: "#8656c4", legendary: "#d0823a", dev: "#3fc9d8" };
+var VG_OP_RARITY = { default: "common", frostline: "rare", nightshade: "epic", skeleton: "epic", ember: "legendary", pumpkin: "legendary", spectre: "dev", echo: "secret" };
+var VG_RARITY = { common: "Common", rare: "Rare", epic: "Epic", legendary: "Legendary", dev: "Developer", secret: "Secret" };
+var VG_RARITY_GLOW = { common: "#c6ced4", rare: "#4a8fd0", epic: "#8656c4", legendary: "#d0823a", dev: "#3fc9d8", secret: "#7fe3d4" };
 var VG_OP_SVG = {
   helmet: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C7 3 3.5 6.6 3.5 11.2V14h17v-2.8C20.5 6.6 17 3 12 3zM3 15.5h18v2.2c0 .7-.6 1.3-1.3 1.3H15l-1.2 2h-3.6L9 19H4.3c-.7 0-1.3-.6-1.3-1.3z"/></svg>',
   all: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" d="M12 12c-2-2.6-3.6-4-5.5-4a4 4 0 0 0 0 8c1.9 0 3.5-1.4 5.5-4zm0 0c2 2.6 3.6 4 5.5 4a4 4 0 0 0 0-8c-1.9 0-3.5 1.4-5.5 4z"/></svg>',
@@ -60653,6 +60730,8 @@ var vgOpsCss = `
 .vg-ops .r-epic { --c1: #8656c4; --c2: #22123a; --bd: #a97ee0; }
 .vg-ops .r-legendary { --c1: #d0823a; --c2: #3a1c0a; --bd: #eba15a; }
 .vg-ops .r-dev { --c1: #3fc9d8; --c2: #2a1f08; --bd: #f2c14e; }
+.vg-ops .r-secret { --c1: #7fe3d4; --c2: #0a1214; --bd: #7fe3d4; }
+.vg-ops .op.r-secret { background: radial-gradient(ellipse 85% 65% at 50% 30%, rgba(127,227,212,.35), transparent 60%), linear-gradient(150deg, #0e3a3a, #0a1214 70%, #123c3a); }
 .vg-ops .card.r-dev small em { color: #f2c14e; }
 .vg-ops .op.r-dev { background: radial-gradient(ellipse 85% 65% at 50% 30%, rgba(80,220,240,.4), transparent 60%), linear-gradient(150deg, #0d5a64, #2a1f08 70%, #6a4c0e); }
 .vg-ops .ft { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--u) * 56); display: flex; align-items: center; justify-content: flex-end; gap: calc(var(--u) * 24); padding: 0 calc(var(--u) * 56); background: rgba(5,6,9,.85); border-top: 1px solid rgba(236,240,234,.07); font-size: calc(var(--u) * 12.5); font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #a9b0a8; }
@@ -60669,7 +60748,7 @@ var vgOpsCss = `
   .vg-ops .ft { justify-content: center; padding: 0 calc(var(--u) * 12); gap: calc(var(--u) * 14); }
 }
 `;
-function vgOpsScreen() {
+function vgOpsScreen(pick) {
   if (typeof document > "u" || document.querySelector(".vg-ops")) return;
   if (!document.getElementById("vg-ops-style")) {
     const st = document.createElement("style");
@@ -60685,8 +60764,9 @@ function vgOpsScreen() {
   document.body.appendChild(root);
   const $ = (q) => root.querySelector(q), grid = $(".grid"), go = $("[data-go]"), card = $(".card"), stage = $(".stage");
   // the developer operator is only listed for developers
-  const ALL = VG_OPS.filter((o) => !o.dev || vgAuth.dev), def = (id) => ALL.find((o) => o.id === id) || ALL[0];
-  let fi = 0, hid = vgOpCurrent(), prev = null;
+  // (the secret one once he's yours)
+  const ALL = VG_OPS.filter((o) => (!o.dev || vgAuth.dev) && (!o.secret || vgOpOwned(o.id))), def = (id) => ALL.find((o) => o.id === id) || ALL[0];
+  let fi = 0, hid = pick && ALL.some((o) => o.id === pick) ? pick : vgOpCurrent(), prev = null;
   try {
     prev = vgOpPreview($("canvas"), { pedestal: !0, spin: !1, ang: -0.38, fov: 34, cam: { pos: [0, 0.8, 5.2], look: [0, 0.56, 0] } });
   } catch (err) {
@@ -60700,7 +60780,7 @@ function vgOpsScreen() {
   const info = () => {
     const o = def(hid), cur = vgOpCurrent(), own = vgOpOwned(o.id), pack = o.dlc ? VG_DLC[o.dlc] : null, r = VG_OP_RARITY[o.id] || "common";
     root.style.setProperty("--glow", VG_RARITY_GLOW[r] || VG_RARITY_GLOW.common), card.className = `card r-${r}`, $(".rh em").textContent = VG_RARITY[r], $(".rh b").textContent = o.name, $(".ds").textContent = o.desc;
-    $(".set").textContent = o.dev ? "Developers only." : `Part of the ${pack ? pack.name : o.tag} set.`;
+    $(".set").textContent = o.dev ? "Developers only." : o.secret ? "A secret operator." : `Part of the ${pack ? pack.name : o.tag} set.`;
     go.className = !own ? o.pass ? "pass" : "buy" : "", go.disabled = own && o.id === cur;
     go.textContent = !own ? o.pass ? "Open the Season Pass" : `Buy on Steam · ${pack?.price || ""}` : o.id === cur ? "Equipped" : "Equip";
     $(".note").textContent = !own ? o.pass ? `A Season ${VG_PASS.season} reward. Unlock the Season Pass and keep levelling up to get it.` : `Part of the ${pack?.name || "DLC"}: ${pack?.items?.length || 0} items. It unlocks here as soon as Steam says you own it.` : o.dev ? "Only you see this operator. Everyone else sees you as the Standard operator." : o.id === cur ? "Other players see you as this operator." : "";
@@ -60905,7 +60985,7 @@ var vgPassCss = `
 .vg-pass .tiers { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 10px; min-height: 0; }
 .vg-pass .tier { position: relative; display: flex; flex-direction: column; min-height: 0; padding: 10px; background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)); border: 1px solid rgba(236,240,234,.12); }
 .vg-pass .tier.op { border-color: rgba(196,167,255,.5); background: linear-gradient(180deg, rgba(139,92,246,.18), rgba(255,255,255,.02)); }
-.vg-pass .tier .n { display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; letter-spacing: .18em; color: #a9b0a8; }
+.vg-pass .tier .n { display: flex; flex-wrap: wrap; gap: 2px 8px; justify-content: space-between; font-size: 11px; font-weight: 800; letter-spacing: .18em; color: #a9b0a8; }
 .vg-pass .tier .n em { font-style: normal; color: #f2c14e; }
 .vg-pass .tier .art { flex: 1; min-height: 44px; margin: 8px 0; display: grid; place-items: center; background: rgba(0,0,0,.3) center / cover no-repeat; }
 .vg-pass .tier .art.icon { background-size: 58%; }
@@ -60971,13 +61051,13 @@ function vgPassScreen() {
   const kind = { op: "Operator", camo: "Weapon camo", charm: "Gun charm", sticker: "Gun sticker", xp: "Player XP", boost: "XP boost" };
   const render = () => {
     const S = vgPassState(), list = T.slice(page * per, page * per + per), n = S.unlocked ? S.got.length : 0, next = S.unlocked ? T.find((x) => !S.got.includes(x.tier)) : null, boost = vgBoostLeft();
-    $(".lvl").innerHTML = S.unlocked ? `<b>${n} of ${T.length} rewards unlocked</b><div class="bar"><i style="width:${(n / T.length * 100).toFixed(1)}%"></i></div><small>${next ? `Next: ${vgEsc(next.name)}, at your next level up.` : "Every reward is yours."}${boost ? ` Double XP: ${boost} min left.` : ""}</small>` : `<button type="button" class="unlock" data-unlock>Unlock Season Pass</button><small>Free. Everything up to your current level unlocks straight away.</small>`;
+    $(".lvl").innerHTML = S.unlocked ? `<b>Level ${pgLevel().level} · ${n} of ${T.length} rewards unlocked</b><div class="bar"><i style="width:${(n / T.length * 100).toFixed(1)}%"></i></div><small>${next ? `Next: ${vgEsc(next.name)}, at your next level up.` : "Every reward is yours."}${boost ? ` Double XP: ${boost} min left.` : ""}</small>` : `<button type="button" class="unlock" data-unlock>Unlock Season Pass</button><small>Free. Everything up to your current level unlocks straight away.</small>`;
     $(".soon").innerHTML = S.unlocked ? `${tick}<span><b>The pass follows your level.</b> Every level up unlocks the next reward on its own, so keep playing.</span>` : `${lock}<span><b>Unlock the pass to start levelling it up.</b> It follows your player level: the rewards up to your level are yours right away, and the rest unlock as you level up.</span>`;
     $(".soon").classList.toggle("on", !!S.unlocked);
     $(".ops").innerHTML = VG_PASS_OPS.map((o) => `<div class="opc${vgPassHas("op", o.id) ? " got" : ""}">${vgPassOpSvg(o)}<span><b>${vgEsc(o.name)}</b><small>${vgEsc(o.desc)}</small><em>${vgPassHas("op", o.id) ? `${tick}Unlocked · Operators` : `${lock}Locked`}</em></span></div>`).join("");
     grid.innerHTML = list.map((t) => {
       const got = S.unlocked && S.got.includes(t.tier);
-      return `<div class="tier${t.type === "op" ? " op" : ""}${got ? " got" : ""}">${t.type === "op" ? '<div class="n"><em>OPERATOR</em></div>' : ""}<div class="art${t.type === "charm" || t.type === "sticker" ? " icon" : ""}"${style(t)}>${art(t)}</div><b title="${vgEsc(t.name)}">${vgEsc(t.name)}</b><small>${kind[t.type]}</small><div class="st">${got ? `${tick}Unlocked` : `${lock}Locked`}</div></div>`;
+      return `<div class="tier${t.type === "op" ? " op" : ""}${got ? " got" : ""}"><div class="n"><span>Level ${t.tier}</span>${t.type === "op" ? "<em>Operator</em>" : ""}</div><div class="art${t.type === "charm" || t.type === "sticker" ? " icon" : ""}"${style(t)}>${art(t)}</div><b title="${vgEsc(t.name)}">${vgEsc(t.name)}</b><small>${kind[t.type]}</small><div class="st">${got ? `${tick}Unlocked` : `${lock}Locked`}</div></div>`;
     }).join("");
     pager.innerHTML = `<button type="button" data-pg="prev" ${page ? "" : "disabled"} aria-label="Previous page">‹</button>${Array.from({ length: pages }, (_, i) => `<button type="button" data-pg="${i}" class="${i === page ? "on" : ""}">${i + 1}</button>`).join("")}<button type="button" data-pg="next" ${page < pages - 1 ? "" : "disabled"} aria-label="Next page">›</button>`;
     pager.querySelectorAll("[data-pg]").forEach((b2) => b2.addEventListener("click", () => go(b2.dataset.pg === "prev" ? page - 1 : b2.dataset.pg === "next" ? page + 1 : +b2.dataset.pg)));
@@ -61005,6 +61085,266 @@ function vgPassScreen() {
   }, 1e3);
   $(".back").addEventListener("click", close), window.addEventListener("keydown", key, !0), window.addEventListener("keyup", stop, !0), root.addEventListener("mousedown", (ev) => ev.stopPropagation()), document.body.appendChild(root), render(), setTimeout(() => ($("[data-unlock]") || pager.querySelector(".on"))?.focus(), 30);
   return { close, root, go: (n) => go(n), page: () => page };
+}
+/* ------------------------------------------------------------------ Release 1.01: the level bar in game */
+// A thin bar along the whole bottom edge of the screen while you play: your level on the left, your XP in this level
+// on the right, and the bar filling as you earn XP. On a level up it fills to the end, flashes, rolls over to the new
+// level and carries on. It's part of the HUD layer, so it hides with the HUD (menus, death screen, replays). Prestige
+// levels take their prestige colour.
+var vgLvCss = `
+.od-lvbar { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 2; --lc0: var(--lc, var(--accent)); }
+.od-lvbar .rw { display: flex; justify-content: space-between; align-items: center; padding: 0 calc(var(--u) * 16) calc(var(--u) * 6); font-weight: 700; text-transform: uppercase; text-shadow: var(--ts); }
+.od-lvbar b { display: flex; align-items: center; gap: calc(var(--u) * 7); font-size: calc(var(--u) * 16); font-weight: 800; letter-spacing: .16em; color: var(--lc0); transform-origin: left center; transition: transform .35s cubic-bezier(.3,1.5,.5,1); }
+.od-lvbar b svg { width: calc(var(--u) * 18); height: calc(var(--u) * 18); }
+.od-lvbar span { font-size: calc(var(--u) * 13); letter-spacing: .14em; color: var(--fg2); }
+.od-lvbar .tr { position: relative; height: calc(var(--u) * 6); background: rgba(8,10,12,.55); box-shadow: inset 0 calc(var(--u) * 1) 0 rgba(236,240,234,.12); overflow: hidden; }
+.od-lvbar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--lc0) 62%, #000), var(--lc0)); box-shadow: 0 0 calc(var(--u) * 8) color-mix(in srgb, var(--lc0) 55%, transparent); transition: width .9s cubic-bezier(.22,.8,.2,1); }
+.od-lvbar i::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: calc(var(--u) * 3); background: #fff; opacity: .55; }
+.od-lvbar.gain i::after { animation: odLvGain .8s ease-out; }
+@keyframes odLvGain { from { opacity: 1; box-shadow: 0 0 calc(var(--u) * 16) calc(var(--u) * 3) #fff; } }
+.od-lvbar.up i { transition-duration: .5s; }
+.od-lvbar.up .tr { animation: odLvUp 1.2s ease-out; }
+@keyframes odLvUp { 0%, 45% { background: color-mix(in srgb, var(--lc0) 45%, rgba(8,10,12,.55)); box-shadow: 0 0 calc(var(--u) * 26) var(--lc0); } }
+.od-lvbar.up b { transform: scale(1.3); }
+@media (prefers-reduced-motion: reduce) { .od-lvbar *, .od-lvbar *::after { animation: none !important; transition: none !important; } }
+`;
+function vgLvBar(a) {
+  try {
+    if (!a?.layer || typeof document > "u" || a.layer.querySelector(".od-lvbar")) return;
+    if (!document.getElementById("vg-lv-style")) {
+      const st = document.createElement("style");
+      st.id = "vg-lv-style", st.textContent = vgLvCss, document.head.appendChild(st);
+    }
+    const el = NA("div", "od-lvbar", a.layer);
+    el.innerHTML = '<div class="rw"><b></b><span></span></div><div class="tr"><i></i></div>';
+    const lb = el.querySelector("b"), nx = el.querySelector("span"), fl = el.querySelector("i");
+    let shown = null, busy = !1, tg = 0;
+    const text = (L) => {
+      const tr = typeof vgPrestigeTier == "function" ? vgPrestigeTier(L.level) : null;
+      lb.innerHTML = `${typeof vgPrestigeBadge == "function" ? vgPrestigeBadge(L.level, 15) : ""}<em style="font-style:normal">Level ${L.level}</em>`, nx.textContent = `${L.xp.toLocaleString()} / ${L.need.toLocaleString()} XP`;
+      tr ? el.style.setProperty("--lc", tr.color) : el.style.removeProperty("--lc");
+    };
+    const set = (p, anim) => {
+      fl.style.transition = anim ? "" : "none", fl.style.width = `${(Math.max(0, Math.min(1, p)) * 100).toFixed(2)}%`, anim || fl.offsetWidth;
+    };
+    const upd = () => {
+      if (busy || typeof Za != "object" || !Za) return;
+      const L = pgLevel();
+      if (!shown || L.level < shown.level || L.total < shown.total) return shown = L, text(L), set(L.progress, !1);
+      if (L.total === shown.total) return;
+      if (L.level > shown.level) {
+        // fill to the end, flash, then roll over to the new level
+        busy = !0, el.classList.add("up"), set(1, !0), setTimeout(() => {
+          const N = pgLevel();
+          text(N), set(0, !1), set(N.progress, !0), shown = N, busy = !1, setTimeout(() => el.classList.remove("up"), 700);
+        }, 560);
+        return;
+      }
+      shown = L, text(L), set(L.progress, !0), el.classList.remove("gain"), void el.offsetWidth, el.classList.add("gain"), clearTimeout(tg), tg = setTimeout(() => el.classList.remove("gain"), 850);
+    };
+    upd();
+    try {
+      a.ctx?.events?.on?.("progress:xp", () => setTimeout(upd, 0));
+    } catch {
+    }
+    setInterval(upd, 1e3);
+  } catch {
+  }
+}
+/* ------------------------------------------------------------------ Release 1.01 (concept): the Season Pass page */
+// Main menu -> Season Pass: the season and your level with an angled XP bar (the pass has no levels of its own: it
+// follows your player level, the same number as everywhere else), and two tiles: Season Pass Rewards (opens the reward
+// track) and the secret operator. That tile is his progress bar: he fills in, in colour, from the bottom as you work
+// through his one challenge, and the part not reached yet stays grey. Once he's yours (or you're a developer) it opens
+// Operators on him. Everything slides in when the page opens and fades out when it closes. The page is laid out at
+// 1920 x 1080 and scaled to fit the window. Esc or Back returns to the menu.
+var vgSpCss = `
+.vg-sp { position: fixed; inset: 0; z-index: 370; overflow: hidden; color: #eef1ec; font-family: "Bahnschrift SemiCondensed", "Bahnschrift Condensed", "Bahnschrift", "Roboto Condensed", "Arial Narrow", sans-serif; background-color: #0a0c0b; background-image: radial-gradient(ellipse 48vw 65vh at 76% 44%, rgba(240,192,72,.2), rgba(240,192,72,0) 70%), radial-gradient(ellipse 58vw 56vh at 12% 0%, rgba(84,112,126,.22), rgba(84,112,126,0) 70%), repeating-linear-gradient(115deg, rgba(236,240,234,.028) 0 2px, transparent 2px 46px); animation: vgSpFade .3s ease-out backwards; }
+.vg-sp.out { animation: vgSpFadeOut .22s ease-in forwards; pointer-events: none; }
+@keyframes vgSpFade { from { opacity: 0; } }
+@keyframes vgSpFadeOut { to { opacity: 0; } }
+.vg-sp .st { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+.vg-sp .main, .vg-sp .knife { translate: 0 var(--gy, 0px); }
+.vg-sp .feat, .vg-sp .foot, .vg-sp .back { translate: 0 var(--gy2, 0px); }
+.vg-sp button { font-family: inherit; cursor: pointer; border-radius: 0; }
+.vg-sp button:focus-visible { outline: 3px solid #f0c048; outline-offset: 3px; }
+/* the entrance: each part rises (or slides) in, one after another */
+.vg-sp .an { animation: vgSpRise .7s cubic-bezier(.2,.8,.2,1) backwards; animation-delay: var(--d, 0ms); }
+.vg-sp .an.l { animation-name: vgSpLeft; }
+.vg-sp .an.r { animation-name: vgSpRight; }
+@keyframes vgSpRise { from { opacity: 0; transform: translateY(34px); } }
+@keyframes vgSpLeft { from { opacity: 0; transform: translateX(-46px); } }
+@keyframes vgSpRight { from { opacity: 0; transform: translateX(60px); } }
+.vg-sp .main { position: absolute; left: 120px; top: 108px; width: 866px; }
+.vg-sp .hd { display: flex; align-items: center; gap: 22px; }
+.vg-sp .hd svg { width: 118px; height: 118px; flex: none; filter: drop-shadow(0 6px 24px rgba(240,192,72,.3)); animation: vgSpPop .8s cubic-bezier(.3,1.45,.5,1) 60ms backwards; }
+@keyframes vgSpPop { from { opacity: 0; transform: scale(.35) rotate(-14deg); } }
+.vg-sp h1 { margin: 0; font-weight: 800; font-style: italic; font-size: 104px; line-height: .9; letter-spacing: .01em; text-transform: uppercase; text-shadow: 0 4px 0 rgba(0,0,0,.35); }
+.vg-sp .sub { margin: 4px 0 0; font-weight: 700; font-style: italic; font-size: 44px; line-height: 1; text-transform: uppercase; color: #f0c048; }
+.vg-sp .xp { position: relative; margin-top: 22px; height: 44px; background: #171b1a; clip-path: polygon(0 34%, 100% 0, 97.2% 100%, 0 100%); }
+.vg-sp .xp i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, #c9952a, #f0c048 70%, #ffe39a); clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); transition: width 1.2s cubic-bezier(.22,.8,.2,1) .35s; }
+.vg-sp .xp span { position: absolute; right: 44px; top: 60%; transform: translateY(-50%); font-weight: 700; font-style: italic; font-size: 24px; color: rgba(236,240,234,.74); }
+.vg-sp .tiles { margin-top: 22px; display: grid; grid-template-columns: 581px 269px; gap: 16px; height: 520px; }
+.vg-sp .tile { position: relative; overflow: hidden; padding: 0; border: 0; text-align: left; transition: transform .28s cubic-bezier(.2,.8,.2,1), filter .2s, box-shadow .28s; }
+.vg-sp .tile:hover, .vg-sp .tile:focus-visible { transform: translateY(-7px); box-shadow: 0 20px 40px rgba(0,0,0,.5); }
+.vg-sp .tile:active { transform: translateY(-2px) scale(.985); transition-duration: .08s; }
+.vg-sp .pass { color: #121410; background-color: #f0c048; background-image: repeating-linear-gradient(115deg, rgba(255,255,255,.08) 0 2px, transparent 2px 22px), linear-gradient(160deg, #f8d888 0%, #f0c048 38%, #b47619 100%); }
+.vg-sp .pass:hover { filter: brightness(1.06); }
+.vg-sp .pass::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 38%, rgba(255,250,228,.45) 50%, transparent 62%); transform: translateX(-130%); animation: vgSpShine 6s ease-in-out 1.1s infinite; }
+@keyframes vgSpShine { 0% { transform: translateX(-130%); } 22%, 100% { transform: translateX(130%); } }
+.vg-sp .pass .wm { position: absolute; right: 8px; top: 18px; width: 380px; height: 380px; opacity: .2; transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .3s; }
+.vg-sp .pass:hover .wm { transform: rotate(-6deg) scale(1.06); opacity: .26; }
+.vg-sp .pass .tx { position: absolute; left: 32px; bottom: 30px; display: flex; flex-direction: column; font-style: italic; text-transform: uppercase; }
+.vg-sp .pass .k { font-weight: 700; font-size: 30px; letter-spacing: .08em; color: #4a3608; }
+.vg-sp .pass .t { font-weight: 800; font-size: 124px; line-height: .84; color: #121410; }
+.vg-sp .pass .r { margin-top: 8px; font-weight: 800; font-size: 52px; line-height: 1; color: #fff6dc; text-shadow: 0 3px 0 rgba(90,60,8,.45); }
+.vg-sp .pass .n { margin-top: 10px; font-weight: 700; font-size: 22px; letter-spacing: .06em; color: #4a3608; }
+.vg-sp .echo { color: #eef1ec; border: 2px solid rgba(236,240,234,.16); background-color: #2a2d2e; background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px); cursor: not-allowed; }
+.vg-sp .echo.open { border-color: rgba(127,227,212,.5); cursor: pointer; }
+.vg-sp .echo.open:hover { filter: brightness(1.08); }
+.vg-sp .echo.open::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 70px rgba(127,227,212,.32); opacity: .45; animation: vgSpPulse 2.8s ease-in-out infinite; will-change: opacity; }
+@keyframes vgSpPulse { 50% { opacity: 1; } }
+.vg-sp .echo svg.sil, .vg-sp .echo .fill svg { position: absolute; left: 0; width: 100%; height: 516px; }
+.vg-sp .echo svg.sil { top: 0; }
+.vg-sp .echo .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; overflow: hidden; background-color: #0a0e0f; background-image: linear-gradient(0deg, rgba(127,227,212,.3), rgba(127,227,212,.1)), repeating-linear-gradient(0deg, rgba(127,227,212,.045) 0 1px, transparent 1px 4px); border-top: 3px solid #7fe3d4; box-shadow: 0 -6px 26px rgba(127,227,212,.45); transition: height 1.4s cubic-bezier(.22,.8,.2,1) .55s; }
+.vg-sp .echo .gl { position: absolute; left: 0; right: 0; bottom: 0; height: 0; box-shadow: 0 0 34px 5px rgba(127,227,212,.75); opacity: 0; pointer-events: none; transition: bottom 1.4s cubic-bezier(.22,.8,.2,1) .55s; animation: vgSpLine 2.6s ease-in-out 2s infinite; will-change: opacity; }
+@keyframes vgSpLine { 50% { opacity: .9; } }
+.vg-sp .echo .fill svg { bottom: 0; }
+.vg-sp .echo .eg { position: absolute; width: 34px; height: 34px; margin: 0 0 -17px -17px; border-radius: 50%; background: radial-gradient(circle, rgba(170,255,240,.9), rgba(127,227,212,.35) 40%, rgba(127,227,212,0) 70%); pointer-events: none; animation: vgSpLens 2.6s ease-in-out infinite; will-change: opacity; }
+.vg-sp .echo .eg.tp { width: 22px; height: 22px; margin: 0 0 -11px -11px; animation-duration: 1.4s; }
+@keyframes vgSpLens { 50% { opacity: .35; } }
+.vg-sp .echo .pc { position: absolute; right: 0; bottom: 0; opacity: 0; transform: translateY(50%); padding: 4px 10px; background: #7fe3d4; color: #061010; font-weight: 800; font-style: italic; font-size: 20px; transition: bottom 1.4s cubic-bezier(.22,.8,.2,1) .55s, opacity .3s .5s; }
+.vg-sp .echo .tg { position: absolute; left: 0; right: 0; top: 0; height: 180px; background: linear-gradient(180deg, rgba(22,24,25,.85), rgba(22,24,25,0)); }
+.vg-sp .echo .top { position: absolute; left: 18px; right: 18px; top: 16px; display: flex; flex-direction: column; gap: 6px; font-style: italic; text-transform: uppercase; color: #9aa0a1; }
+.vg-sp .echo.open .top { color: #7fe3d4; }
+.vg-sp .echo .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 20px; letter-spacing: .06em; }
+.vg-sp .echo .lk { flex: none; width: 34px; height: 34px; box-sizing: border-box; display: grid; place-items: center; border: 2px solid currentColor; transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+.vg-sp .echo.open:hover .lk { transform: translateX(4px); }
+.vg-sp .echo .lk svg { width: 18px; height: 18px; }
+.vg-sp .echo .file { font-weight: 700; font-size: 18px; letter-spacing: .1em; color: rgba(236,240,234,.55); }
+.vg-sp .echo .red { display: flex; gap: 8px; margin-top: 2px; }
+.vg-sp .echo .red i { display: block; height: 40px; background: #6f7576; }
+.vg-sp .echo .nm { font-weight: 800; font-size: 54px; line-height: .9; color: #eef1ec; text-shadow: 0 0 24px rgba(127,227,212,.6); }
+.vg-sp .echo .bot { position: absolute; left: 0; right: 0; bottom: 0; padding: 38px 18px 18px; display: flex; flex-direction: column; gap: 6px; background: linear-gradient(180deg, rgba(6,9,10,0), rgba(6,9,10,.5) 38px); text-shadow: 0 1px 2px rgba(0,0,0,.95), 0 0 12px rgba(0,0,0,.8); }
+.vg-sp .echo .story { font-weight: 600; font-style: italic; font-size: 16px; line-height: 1.3; color: rgba(236,240,234,.74); }
+.vg-sp .echo .ch { font-weight: 800; font-style: italic; font-size: 24px; line-height: 1.02; text-transform: uppercase; }
+.vg-sp .echo .stt { font-weight: 700; font-style: italic; font-size: 20px; text-transform: uppercase; color: #7fe3d4; }
+.vg-sp .echo.shake { animation: vgSpShake .36s; }
+@keyframes vgSpShake { 20% { transform: translateX(-7px); } 45% { transform: translateX(7px); } 70% { transform: translateX(-3px); } }
+.vg-sp .knife { position: absolute; left: 1150px; top: 210px; width: 660px; height: 240px; transform: rotate(-30deg); filter: drop-shadow(0 0 60px rgba(240,192,72,.35)); pointer-events: none; animation: vgSpKnife 1s cubic-bezier(.2,.8,.2,1) .18s backwards, vgSpFloat 6s ease-in-out 1.18s infinite; }
+@keyframes vgSpKnife { from { opacity: 0; transform: translate(120px, -60px) rotate(-44deg); } }
+@keyframes vgSpFloat { 50% { transform: translateY(-12px) rotate(-28.5deg); } }
+.vg-sp .feat { position: absolute; right: 40px; bottom: 64px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-style: italic; text-transform: uppercase; }
+.vg-sp .feat h2 { margin: 0; font-weight: 800; font-size: 96px; line-height: .92; text-shadow: 0 4px 0 rgba(0,0,0,.35); }
+.vg-sp .feat p { margin: 6px 0 0; font-weight: 700; font-size: 44px; line-height: 1; color: #f0c048; }
+.vg-sp .feat small { margin-top: 14px; font-weight: 600; font-size: 26px; text-transform: none; color: rgba(236,240,234,.74); }
+.vg-sp .back { position: absolute; left: 120px; bottom: 34px; display: flex; align-items: center; gap: 14px; height: 52px; padding: 0 24px 0 10px; background: rgba(10,12,11,.55); border: 2px solid rgba(236,238,232,.22); color: #eef1ec; font-weight: 700; font-size: 22px; letter-spacing: .16em; text-transform: uppercase; transition: border-color .2s, background .2s, transform .25s cubic-bezier(.2,.8,.2,1); }
+.vg-sp .back:hover { border-color: #f0c048; background: rgba(240,192,72,.1); transform: translateX(-4px); }
+.vg-sp .back kbd { padding: 4px 9px; border: 2px solid rgba(236,238,232,.5); font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: .08em; }
+.vg-sp .foot { position: absolute; right: 40px; bottom: 26px; margin: 0; font-weight: 600; font-size: 15px; line-height: 1.45; color: rgba(236,240,234,.5); }
+@media (prefers-reduced-motion: reduce) { .vg-sp, .vg-sp *, .vg-sp *::after { animation: none !important; transition: none !important; } }
+`;
+// Echo as a silhouette (grey) and in colour (inside the fill); the same 265 x 516 drawing
+function vgSpEchoSvg(colour) {
+  if (!colour) return '<svg class="sil" viewBox="0 0 265 516" aria-hidden="true"><path d="M194 296 L220 108" stroke="#1d2021" stroke-width="5"/><path d="M18 516 L28 360 Q38 302 90 284 L116 264 L150 264 L176 284 Q228 302 238 360 L248 516 Z" fill="#1d2021" stroke="rgba(255,255,255,0.06)" stroke-width="2"/><path d="M78 252 Q70 152 133 94 Q196 152 188 252 Q158 274 133 274 Q108 274 78 252 Z" fill="#1d2021" stroke="rgba(255,255,255,0.06)" stroke-width="2"/><circle cx="117" cy="194" r="9" fill="#3a3e40"/><circle cx="149" cy="194" r="9" fill="#3a3e40"/></svg>';
+  return '<svg viewBox="0 0 265 516" aria-hidden="true"><path d="M194 296 L220 108" stroke="#59646a" stroke-width="4"/><circle class="tp" cx="220" cy="106" r="5" fill="#7fe3d4"/><path d="M18 516 L28 360 Q38 302 90 284 L116 264 L150 264 L176 284 Q228 302 238 360 L248 516 Z" fill="#1d2326"/><path d="M90 284 L133 344 L176 284 L158 270 L133 304 L108 270 Z" fill="#2a3134"/><path d="M66 330 L118 430 M200 330 L148 430" stroke="#4a4330" stroke-width="11"/><rect x="94" y="414" width="34" height="42" fill="#3a3f2c"/><rect x="138" y="414" width="34" height="42" fill="#3a3f2c"/><path d="M94 426 H128 M138 426 H172" stroke="#262a1c" stroke-width="2"/><rect x="70" y="360" width="26" height="46" fill="#2c3336"/><path d="M83 360 V336" stroke="#59646a" stroke-width="3"/><circle cx="83" cy="384" r="4" fill="#7fe3d4"/><path d="M46 320 L62 314 L78 320 V334 Q78 346 62 352 Q46 346 46 334 Z" fill="#7fe3d4" fill-opacity="0.85"/><path d="M54 328 L62 323 L70 328 V332 L62 327 L54 332 Z" fill="#0a0e0f"/><path d="M78 252 Q70 152 133 94 Q196 152 188 252 Q158 274 133 274 Q108 274 78 252 Z" fill="#252c2f"/><path d="M133 94 Q160 120 172 160" stroke="#353e42" stroke-width="3" fill="none"/><ellipse cx="133" cy="196" rx="45" ry="56" fill="#0b0e0f"/><path d="M100 178 Q133 152 166 178 L169 212 Q159 240 133 246 Q107 240 97 212 Z" fill="#3c4549"/><circle class="ln" cx="117" cy="194" r="19" fill="#7fe3d4" fill-opacity="0.22"/><circle class="ln" cx="149" cy="194" r="19" fill="#7fe3d4" fill-opacity="0.22"/><circle cx="117" cy="194" r="12" fill="#1a2224" stroke="#59646a" stroke-width="3"/><circle cx="149" cy="194" r="12" fill="#1a2224" stroke="#59646a" stroke-width="3"/><circle class="ln" cx="117" cy="194" r="8" fill="#7fe3d4"/><circle class="ln" cx="149" cy="194" r="8" fill="#7fe3d4"/><circle cx="114" cy="191" r="2.5" fill="#e9fffb"/><circle cx="146" cy="191" r="2.5" fill="#e9fffb"/><circle cx="133" cy="232" r="15" fill="#2b3235" stroke="#59646a" stroke-width="2"/><path d="M124 228 H142 M123 233 H143 M125 238 H141" stroke="#59646a" stroke-width="2"/><rect x="162" y="218" width="18" height="28" fill="#2b3235" transform="rotate(-24 171 232)"/></svg>';
+}
+var VG_SP_EMBLEM = '<path d="M60 6 L108 22 V58 C108 86 88 104 60 114 C32 104 12 86 12 58 V22 Z" fill="rgba(10,12,11,0.55)" stroke="#f0c048" stroke-width="5"/><path d="M60 30 L90 48 V60 L60 42 L30 60 V48 Z" fill="#f0c048"/><path d="M60 56 L90 74 V86 L60 68 L30 86 V74 Z" fill="#f0c048" opacity="0.75"/><path d="M44 20 H76 V25 H44 Z" fill="#eef1ec"/>';
+function vgSpScreen() {
+  if (typeof document > "u" || document.querySelector(".vg-sp:not(.out)")) return;
+  document.querySelectorAll(".vg-sp.out").forEach((e) => e.remove());
+  if (!document.getElementById("vg-sp-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-sp-style", st.textContent = vgSpCss, document.head.appendChild(st);
+  }
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  try {
+    vgPassSync(!0);
+  } catch {
+  }
+  // your level is the pass's level (it has none of its own)
+  const L = pgLevel(), S = vgPassState(), T = vgPassTiers();
+  const goal = VG_ECHO.goal, n = vgEchoCount(), dev = typeof vgAuth == "object" && !!vgAuth.dev, open = dev || n >= goal, pct = open ? 100 : Math.round(n / goal * 100);
+  const ic = {
+    lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" aria-hidden="true"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+    arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>'
+  };
+  const xpLine = `${Math.max(0, L.need - L.xp).toLocaleString()} XP to Level ${L.level + 1}`;
+  const passLine = S.unlocked ? `${S.got.length} of ${T.length} rewards unlocked` : "Free · open it to start";
+  const status = open ? dev && n < goal ? "Unlocked · Developer" : "Unlocked · View operator" : `${pct}% · Unlocks when complete`;
+  const root = document.createElement("div");
+  root.className = "vg-sp", root.setAttribute("role", "dialog"), root.setAttribute("aria-label", "Season Pass");
+  root.innerHTML = `<div class="st">
+<div class="main"><div class="hd"><svg viewBox="0 0 120 120" aria-hidden="true">${VG_SP_EMBLEM}</svg><div class="an l" style="--d:120ms"><h1>Season Pass</h1><p class="sub">Season ${VG_PASS.season} · Level ${L.level}</p></div></div>
+<div class="xp an l" style="--d:220ms"><i></i><span>${xpLine}</span></div>
+<div class="tiles"><button type="button" class="tile pass an" style="--d:300ms" data-a="pass" aria-label="Season ${VG_PASS.season} Season Pass rewards: open the reward track"><svg class="wm" viewBox="0 0 120 120" aria-hidden="true"><path d="M60 6 L108 22 V58 C108 86 88 104 60 114 C32 104 12 86 12 58 V22 Z" fill="none" stroke="#2a1d05" stroke-width="5"/><path d="M60 30 L90 48 V60 L60 42 L30 60 V48 Z" fill="#2a1d05"/><path d="M60 56 L90 74 V86 L60 68 L30 86 V74 Z" fill="#2a1d05"/></svg><span class="tx"><span class="k">Season ${VG_PASS.season}</span><span class="t">Season<br>Pass</span><span class="r">Rewards</span><span class="n">${passLine}</span></span></button>
+<button type="button" class="tile echo an${open ? " open" : ""}" style="--d:390ms" data-a="echo" aria-disabled="${!open}" aria-label="${open ? "Secret operator Echo: unlocked. View operator" : `Secret operator, locked: get ${goal} eliminations on Halden Station, ${n} of ${goal} done`}">${vgSpEchoSvg(!1)}<span class="fill">${vgSpEchoSvg(!0)}<i class="eg" style="left:117px;bottom:322px"></i><i class="eg" style="left:149px;bottom:322px"></i><i class="eg tp" style="left:220px;bottom:410px"></i></span>${!open && pct > 0 ? '<span class="gl"></span>' : ""}${open ? "" : `<span class="pc">0 / ${goal}</span>`}<span class="tg"></span><span class="top"><span class="row"><span>Secret operator</span><span class="lk">${open ? ic.arrow : ic.lock}</span></span><span class="file">File 00 · ${open ? "Declassified" : "Classified"}</span>${open ? '<span class="nm">Echo</span>' : '<span class="red"><i style="width:104px"></i><i style="width:52px"></i></span>'}</span><span class="bot"><span class="story">Someone is still broadcasting from beneath Halden Station.</span><span class="ch">Get ${goal} eliminations on Halden Station</span><span class="stt">${status}</span></span></button></div></div>
+<svg class="knife" viewBox="0 0 640 220" aria-hidden="true"><defs><linearGradient id="vgspBlade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6d6"/><stop offset="0.45" stop-color="#f0c048"/><stop offset="1" stop-color="#9c6414"/></linearGradient><linearGradient id="vgspGrip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b423e"/><stop offset="1" stop-color="#161a18"/></linearGradient></defs><path d="M240 76 L520 76 L612 108 L520 132 Q400 140 240 126 Z" fill="url(#vgspBlade)"/><path d="M262 98 H500" stroke="#7c4f10" stroke-width="5" stroke-linecap="round"/><path d="M520 76 L612 108" stroke="#fffbe8" stroke-width="3"/><rect x="218" y="52" width="24" height="108" fill="#2a302d" stroke="#f0c048" stroke-width="3"/><rect x="70" y="82" width="150" height="48" fill="url(#vgspGrip)"/><path d="M92 82 V130 M114 82 V130 M136 82 V130 M158 82 V130 M180 82 V130 M202 82 V130" stroke="#4a524e" stroke-width="3"/><rect x="44" y="76" width="28" height="60" fill="#f0c048"/></svg>
+<div class="feat an r" style="--d:460ms"><h2>Finishing Moves</h2><p>New in Release 1.0</p><small>Get behind an enemy and press melee.</small></div>
+<button type="button" class="back an" style="--d:520ms" data-a="back" aria-label="Back to the menu"><kbd>Esc</kbd><span>Back</span></button>
+<p class="foot">Vangaurd · ${vgEsc(VGD.label)} · Build ${VGD.build}</p>
+</div>`;
+  const st = root.querySelector(".st"), fit = () => {
+    const W = window.innerWidth, H = window.innerHeight, k = Math.min(W / 1920, H / 1080), gy = Math.max(0, (H - 1080 * k) / 2) / k;
+    st.style.transform = `scale(${k})`, st.style.left = `${(W - 1920 * k) / 2}px`, st.style.top = "0px", root.style.setProperty("--gy", `${gy}px`), root.style.setProperty("--gy2", `${gy * 2}px`);
+  };
+  let gone = !1, raf = 0;
+  const close = () => {
+    if (gone) return;
+    gone = !0, cancelAnimationFrame(raf), window.removeEventListener("keydown", key, !0), window.removeEventListener("keyup", stop, !0), window.removeEventListener("resize", fit);
+    root.classList.add("out"), setTimeout(() => root.remove(), 240);
+  };
+  const act = (a) => {
+    if (gone) return;
+    if (a === "pass") return vgPassScreen();
+    if (a === "echo") {
+      if (open) return close(), vgOpsScreen("echo");
+      const t = root.querySelector(".echo");
+      return t.classList.remove("shake"), void t.offsetWidth, t.classList.add("shake"), vgToast(`Get ${goal} eliminations on Halden Station to unlock this operator (${n} of ${goal}).`);
+    }
+    close();
+  };
+  // keys are this page's while it's on top (Esc goes back); another screen opened over it keeps its own
+  const stop = (ev) => {
+    ev.target && ev.target !== document.body && !root.contains(ev.target) || ev.stopImmediatePropagation();
+  }, key = (ev) => {
+    if (ev.target && ev.target !== document.body && !root.contains(ev.target)) return;
+    if (document.querySelector(".vg-pass, .vg-ops")) return;
+    ev.stopImmediatePropagation();
+    const k = ev.code;
+    if (k === "Escape" || k === "Backspace") return ev.preventDefault(), close();
+    if (/^Arrow(Left|Right|Up|Down)$/.test(k)) {
+      ev.preventDefault();
+      const all = [...root.querySelectorAll("button")], i = all.indexOf(document.activeElement), d = k === "ArrowLeft" || k === "ArrowUp" ? -1 : 1;
+      all[(i < 0 ? 0 : i + d + all.length) % all.length]?.focus();
+    }
+  };
+  root.querySelectorAll("[data-a]").forEach((b2) => b2.addEventListener("click", (ev) => (ev.stopPropagation(), act(b2.dataset.a))));
+  root.addEventListener("mousedown", (ev) => ev.stopPropagation()), window.addEventListener("keydown", key, !0), window.addEventListener("keyup", stop, !0), window.addEventListener("resize", fit);
+  document.body.appendChild(root), fit(), setTimeout(() => gone || root.querySelector(".pass")?.focus({ preventScroll: !0 }), 650);
+  // the count rides the fill line unless the line would run through the text; then it joins the status line
+  const tile = root.querySelector(".echo"), fill = tile.querySelector(".fill"), pc = tile.querySelector(".pc"), xpf = root.querySelector(".xp i");
+  if (pc) {
+    const H2 = tile.clientHeight, y = H2 * (1 - pct / 100), h = pc.offsetHeight, bot = tile.querySelector(".bot"), story = tile.querySelector(".story"), top = tile.querySelector(".top");
+    (y + h / 2 > bot.offsetTop + story.offsetTop - 4 || y - h / 2 < top.offsetTop + top.offsetHeight + 4) && (pc.hidden = !0, tile.querySelector(".stt").textContent = `${n} / ${goal} · ${status}`);
+  }
+  // then the bars fill (CSS transitions) and the count rolls up with them
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (gone) return;
+    xpf.style.width = `${(L.progress * 100).toFixed(1)}%`, fill.style.height = `${pct}%`, tile.querySelector(".gl")?.style.setProperty("bottom", `${pct}%`);
+    if (pc && !pc.hidden) {
+      pc.style.bottom = `${pct}%`, pc.style.opacity = "1";
+      const t0 = performance.now() + 550, dur = 1400, roll = (now) => {
+        const u = Math.max(0, Math.min(1, (now - t0) / dur)), e = 1 - Math.pow(1 - u, 3);
+        pc.textContent = `${Math.round(n * e)} / ${goal}`, u < 1 && !gone && (raf = requestAnimationFrame(roll));
+      };
+      raf = requestAnimationFrame(roll);
+    }
+  }));
+  return { close, root };
 }
 // catch up on rewards whenever your level got ahead of the pass some other way (progress synced from your account)
 typeof window < "u" && setInterval(() => {
@@ -63446,7 +63786,7 @@ function cJ(A) {
       F.sessionType === "multiplayer" ? ye() : Pi();
     }),
     de(d, "Operators", "Choose who you play as · new Halloween operators", () => vgOpsScreen()),
-    de(d, "Season Pass", "Season 1 · free · operators, camos, charms and stickers as you level up", () => vgPassScreen()),
+    de(d, "Season Pass", "Season 1 · free rewards as you level up, and a secret operator", () => vgSpScreen()),
     de(d, "Loadouts", "Build, name and equip your five loadouts", () => {
       F.loFrom = "main", loOpen();
     }),
@@ -66446,7 +66786,7 @@ function hJ(A) {
         soundViz: !0,
         netStats: !1
       }), g = document.createElement("style"), g.textContent = x3, g.textContent += `
-.od-fps-counter{position:fixed;right:28px;top:26px;z-index:80;padding:7px 10px;background:rgba(8,12,11,.62);border:1px solid rgba(255,255,255,.18);color:#f0eee6;font:700 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;pointer-events:none}.od-match-score{position:fixed;left:50%;top:calc(82px + 4.8*var(--u,1px));transform:translateX(-50%);z-index:70;padding:8px 13px;background:rgba(8,12,11,.58);border:1px solid rgba(255,255,255,.14);color:#f0eee6;font:700 10px/1.2 system-ui,sans-serif;letter-spacing:.12em;white-space:nowrap;pointer-events:none}.od-net-overlay{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:65}.od-net-player{position:absolute;display:flex;align-items:center;gap:6px;white-space:nowrap;font:800 12px/1 system-ui,sans-serif;letter-spacing:.1em;color:#ff7068;text-shadow:0 2px 4px #000,0 0 10px #000;pointer-events:none}.od-net-player .arrow{font-size:16px}.od-net-player.friend{color:#8bd8ff}.od-net-player.edge{padding:5px 7px;background:rgba(4,8,11,.58);border-radius:2px}.od-net-player.edge .arrow{transform:rotate(var(--bearing))}@media(max-width:600px){.od-fps-counter{right:12px;top:12px}.od-match-score{top:94px;font-size:8px;letter-spacing:.06em}.od-net-player{font-size:10px}}`, A.ui.hudRoot.appendChild(g), a.layer = NA("div", "od-layer od-hud", A.ui.hudRoot), I = NA("div", "od-net-overlay", a.layer), a.uiLayer = NA("div", "od-layer od-ui", A.ui.uiRoot), B = NA("div", "od-fps-counter", A.ui.hudRoot), B.setAttribute("aria-live", "off"), B.style.display = "none", h = NA("div", "od-match-score", A.ui.hudRoot), h.style.display = "none", J.root = a.layer, IA(), n = z9(a), a.minimap = n, s = O9(a), c = $9(a), o = Z9(a), r = q9(a), l = cJ(a), IA(), i("resize", IA), window.addEventListener("resize", IA), i("settings:changed", ({ path: QA }) => {
+.od-fps-counter{position:fixed;right:28px;top:26px;z-index:80;padding:7px 10px;background:rgba(8,12,11,.62);border:1px solid rgba(255,255,255,.18);color:#f0eee6;font:700 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;pointer-events:none}.od-match-score{position:fixed;left:50%;top:calc(82px + 4.8*var(--u,1px));transform:translateX(-50%);z-index:70;padding:8px 13px;background:rgba(8,12,11,.58);border:1px solid rgba(255,255,255,.14);color:#f0eee6;font:700 10px/1.2 system-ui,sans-serif;letter-spacing:.12em;white-space:nowrap;pointer-events:none}.od-net-overlay{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:65}.od-net-player{position:absolute;display:flex;align-items:center;gap:6px;white-space:nowrap;font:800 12px/1 system-ui,sans-serif;letter-spacing:.1em;color:#ff7068;text-shadow:0 2px 4px #000,0 0 10px #000;pointer-events:none}.od-net-player .arrow{font-size:16px}.od-net-player.friend{color:#8bd8ff}.od-net-player.edge{padding:5px 7px;background:rgba(4,8,11,.58);border-radius:2px}.od-net-player.edge .arrow{transform:rotate(var(--bearing))}@media(max-width:600px){.od-fps-counter{right:12px;top:12px}.od-match-score{top:94px;font-size:8px;letter-spacing:.06em}.od-net-player{font-size:10px}}`, A.ui.hudRoot.appendChild(g), a.layer = NA("div", "od-layer od-hud", A.ui.hudRoot), I = NA("div", "od-net-overlay", a.layer), a.uiLayer = NA("div", "od-layer od-ui", A.ui.uiRoot), B = NA("div", "od-fps-counter", A.ui.hudRoot), B.setAttribute("aria-live", "off"), B.style.display = "none", h = NA("div", "od-match-score", A.ui.hudRoot), h.style.display = "none", J.root = a.layer, IA(), n = z9(a), a.minimap = n, s = O9(a), c = $9(a), o = Z9(a), r = q9(a), l = cJ(a), vgLvBar(a), IA(), i("resize", IA), window.addEventListener("resize", IA), i("settings:changed", ({ path: QA }) => {
         QA === "hud.scale" && IA();
       }), i("combat:kill", iA), i("combat:hit", SA), i("player:damaged", kA), i("player:died", WA), i("weapon:fired", () => {
         a.stats.shotsFired++, E = 0;
