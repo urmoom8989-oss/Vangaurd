@@ -1522,8 +1522,8 @@ function tagConfirms(match, tag, p) {
 // Beta 1.3 killstreaks: the caller's game runs the streak (it decides hits); the server passes the event on so
 // everyone sees the UAV, airstrike, care package, sentry or helicopter, and lets that player's streak damage count
 // for a while even if they die meanwhile.
-const STREAKS = new Set(['uav', 'cuav', 'care', 'air', 'sentry', 'heli']);
-const STREAK_LIFE = { uav: 35e3, cuav: 30e3, care: 70e3, air: 12e3, sentry: 50e3, heli: 50e3 };
+const STREAKS = new Set(['uav', 'cuav', 'care', 'air', 'sentry', 'heli', 'mortar', 'prec']);
+const STREAK_LIFE = { uav: 35e3, cuav: 30e3, care: 70e3, air: 12e3, sentry: 50e3, heli: 50e3, mortar: 15e3, prec: 12e3 };
 function onStreak(c, msg) {
   const match = matches.get(c.matchId);
   if (!match || match.ended || match.phase !== 'live') return;
