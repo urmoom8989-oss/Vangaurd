@@ -39325,14 +39325,10 @@ var Z_, X_, BE, Gg, WH, ka, $S, B2, q_ = YA((() => {
       this.muffled = !!A, this._auto(this.sfxFilter.frequency, this._restFilter(), this.ac.currentTime, A ? 0.25 : 0.8);
     }
     playerShot({ weaponId: A = "rifle", suppressed: e = !1, ammoFrac: t = 1, surface: i = "concrete", feet: a = null, at: s } = {}) {
-      // Release 1.0: the last quarter of a magazine sounds hollower: the shot a touch higher and the nearly empty
-      // magazine's spring ringing under it, more so the fewer rounds are left
-      const hk = t >= 0 && t <= 0.25 ? (0.25 - t) / 0.25 : 0, n = Qc(A), o = e && Xi[`${n}_fire_suppressed`] ? `${n}_fire_suppressed` : `${n}_fire`, r = this.play(o, e ? { at: s, volume: 0.6, pitch: 1 + 0.045 * hk } : { at: s, pitch: 1 + 0.06 * hk });
-      hk > 0 && this.vgHollow(hk, s, e);
-      if (t <= 0.2 && t > 0 && this.play("low_ammo_tick", {
-        at: s,
-        volume: 0.5 + (0.2 - t) * 2.5
-      }), this.duck(e ? -3 : -7, 0.02, 0.35, s), a && n !== "shotgun" && this.autoCasings !== !1) {
+      // Release 1.0: the last quarter of a magazine clicks: the action cycling against an almost empty magazine,
+      // louder the fewer rounds are left
+      const hk = t >= 0 && t <= 0.25 ? (0.25 - t) / 0.25 : 0, n = Qc(A), o = e && Xi[`${n}_fire_suppressed`] ? `${n}_fire_suppressed` : `${n}_fire`, r = this.play(o, e ? { at: s, volume: 0.6 } : { at: s });
+      if (t <= 0.25 && this.vgLowClick(0.35 + 0.65 * hk, s), this.duck(e ? -3 : -7, 0.02, 0.35, s), a && n !== "shotgun" && this.autoCasings !== !1) {
         const c = Fr(i), l = c === "metal" ? "metal" : c === "wood" ? "wood" : c === "dirt" || c === "grass" || c === "gravel" || c === "water" ? "dirt" : "concrete", g = this.listener.right, B = {
           x: a.x + g.x * 0.7 + (this.rng.next() - 0.5) * 0.6,
           y: a.y + 0.02,
@@ -39346,16 +39342,28 @@ var Z_, X_, BE, Gg, WH, ka, $S, B2, q_ = YA((() => {
       }
       return r;
     }
-    vgHollow(k, at, quiet) {
+    vgLowClick(k, at) {
       try {
         const a = this.ac, out = this.busIn?.sfx || this.sfxIn;
         if (!a || !out) return;
-        const t0 = Math.max(a.currentTime, at != null ? at - this.timeBase : a.currentTime), g = a.createGain(), hp = a.createBiquadFilter(), v = (0.045 + 0.085 * k) * (quiet ? 0.7 : 1);
-        hp.type = "highpass", hp.frequency.value = 900, g.connect(hp), hp.connect(out), g.gain.setValueAtTime(0, t0), g.gain.linearRampToValueAtTime(v, t0 + 4e-3), g.gain.exponentialRampToValueAtTime(1e-4, t0 + 0.12 + 0.09 * k);
-        for (const [f, w] of [[1720 + 260 * k, 1], [2890 + 320 * k, 0.55], [4410 + 200 * k, 0.28]]) {
-          const o = a.createOscillator(), og = a.createGain();
-          o.type = "sine", o.frequency.setValueAtTime(f, t0), o.frequency.exponentialRampToValueAtTime(f * 0.985, t0 + 0.18), og.gain.value = w, o.connect(og), og.connect(g), o.start(t0), o.stop(t0 + 0.26);
+        // the click, made once: two short dry transients (the bolt, then the follower), filtered noise with a small
+        // body under each, no ringing
+        if (!this.vgClickBuf || this.vgClickBuf.sampleRate !== a.sampleRate) {
+          const sr = a.sampleRate, n = Math.floor(sr * 0.09), B = a.createBuffer(1, n, sr), d = B.getChannelData(0);
+          let seed = 12345;
+          const rnd = () => (seed = seed * 1103515245 + 12345 >>> 0, seed / 4294967295 * 2 - 1);
+          for (const [t0, g, tau, body] of [[0, 1, 9e-4, 0.35], [0.028, 0.55, 7e-4, 0.2]]) {
+            let prev = 0;
+            for (let i = Math.floor(t0 * sr); i < n; i++) {
+              const tt = i / sr - t0, w = rnd(), hp = w - prev;
+              prev = w, d[i] += (hp * 0.6 * Math.exp(-tt / tau) + Math.sin(2 * Math.PI * 1150 * tt) * body * Math.exp(-tt / 35e-4)) * g;
+            }
+          }
+          this.vgClickBuf = B;
         }
+        const t0 = Math.max(a.currentTime, (at != null ? at - this.timeBase : a.currentTime) + 0.05), src = a.createBufferSource(), hpf = a.createBiquadFilter(), g = a.createGain();
+        src.buffer = this.vgClickBuf, src.playbackRate.value = 0.96 + Math.random() * 0.08, hpf.type = "highpass", hpf.frequency.value = 700, g.gain.value = 0.55 * k;
+        src.connect(hpf), hpf.connect(g), g.connect(out), src.start(t0);
       } catch {
       }
     }
