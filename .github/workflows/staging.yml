@@ -1,0 +1,103 @@
+name: Build Vangaurd Staging (Mac, Windows)
+
+# Test builds. Every push to the staging branch builds the Mac and Windows apps pointed at the staging server
+# (the "Vangaurd Staging" service on Railway, which deploys the same branch and keeps its own accounts, so
+# nothing you do there touches live players or their progress). The apps install as "Vangaurd Staging", next
+# to the real game, with their own settings and sign-in.
+#
+# Nothing is published: the builds are attached to the workflow run (Actions > this run > Artifacts).
+#
+# To test something: push it to staging (git push origin <your branch>:staging), wait for this run and the
+# Railway deploy, download the build here and play. When it's good, put it on main for the real release.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [staging]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging
+  cancel-in-progress: true
+
+env:
+  VG_SERVER_URL: "https://vangaurd-staging-production.up.railway.app"
+  BUILD_LABEL: "Staging"
+  # The same build number as the version being tested, so the staging server and the app agree.
+  BUILD_NUMBER: "29"
+  APP_VERSION: "2.0"
+  STEAMWORKS_VERSION: "0.4.0"
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - name: Add steamworks.js
+        run: npm install --no-save --no-audit --no-fund "steamworks.js@${STEAMWORKS_VERSION}"
+      - name: Prepare game files (pointed at the staging server)
+        run: node tools/build-release.mjs --dist dist
+      - name: Name it Vangaurd Staging (installs next to the real game)
+        run: |
+          npm pkg set version="${APP_VERSION}.${BUILD_NUMBER}" build.productName="Vangaurd Staging" build.appId="com.vangaurd.game.staging"
+          npm pkg set 'build.artifactName=Vangaurd-Staging-${arch}.${ext}'
+      - name: Build Mac app (Apple Silicon + Intel)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --mac dmg zip --arm64 --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vangaurd-staging-mac
+          retention-days: 14
+          path: |
+            release/*.dmg
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - name: Add steamworks.js
+        shell: bash
+        run: npm install --no-save --no-audit --no-fund "steamworks.js@${STEAMWORKS_VERSION}"
+      - name: Prepare game files (pointed at the staging server)
+        run: node tools/build-release.mjs --dist dist
+      - name: Name it Vangaurd Staging (installs next to the real game)
+        shell: bash
+        run: |
+          npm pkg set version="${APP_VERSION}.${BUILD_NUMBER}" build.productName="Vangaurd Staging" build.appId="com.vangaurd.game.staging"
+          npm pkg set 'build.artifactName=Vangaurd-Staging-${arch}.${ext}' 'build.win.artifactName=Vangaurd-Staging-win.${ext}' 'build.nsis.artifactName=Vangaurd-Staging-Setup.${ext}'
+      - name: Build Windows app
+        run: npx electron-builder --win nsis zip --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vangaurd-staging-windows
+          retention-days: 14
+          path: |
+            release/*.exe
+            release/*.zip
+          if-no-files-found: error
+
+  summary:
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: |
+          {
+            echo "## Vangaurd Staging (commit ${GITHUB_SHA::7})"
+            echo ""
+            echo "Test build for the staging server (${VG_SERVER_URL})."
+            echo "Download it from **Artifacts** below: vangaurd-staging-windows (Setup.exe or the zip) or vangaurd-staging-mac (.dmg)."
+            echo "It installs as Vangaurd Staging, next to the real game. Staging has its own accounts: make one the first time."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -65,6 +65,8 @@ function createUpdater({ app, dialog, shell, log = () => {}, fetchImpl, platform
   async function check(win, reason = 'launch') {
     // The Steam version is updated by Steam (Beta 1.3).
     if (steam) return { steam: true };
+    // Release 1.0: test builds (Vangaurd Staging) are replaced by the next staging build, never by a release.
+    if (/staging/i.test(String(app.getName?.() || ''))) return { staging: true };
     if (busy) return { busy: true };
     busy = true;
     const live = () => win && !win.isDestroyed();

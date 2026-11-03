@@ -22,7 +22,16 @@ const head = await readFile(path.join(root, 'prebuilt', 'standalone-head.html'),
 // BUILD_NUMBER (set by the release workflow) is stamped into the game so it can tell the server and the
 // desktop updater which build it is. Local builds are build 0.
 const buildNumber = String(Math.max(0, Math.floor(Number(process.env.BUILD_NUMBER) || 0)));
-const moduleCode = (await readFile(path.join(root, 'prebuilt', 'game-module.js'), 'utf8')).replaceAll('"__VGD_BUILD__"', JSON.stringify(buildNumber));
+let moduleCode = (await readFile(path.join(root, 'prebuilt', 'game-module.js'), 'utf8')).replaceAll('"__VGD_BUILD__"', JSON.stringify(buildNumber));
+// Staging builds (the staging workflow sets VG_SERVER_URL) play on the staging server instead of the live one.
+const LIVE_SERVER = '"https://opus-of-duty-production-f963.up.railway.app"';
+if (process.env.VG_SERVER_URL) {
+  const url = new URL(process.env.VG_SERVER_URL);
+  if (url.protocol !== 'https:') throw new Error('VG_SERVER_URL must be an https:// address.');
+  if (!moduleCode.includes(LIVE_SERVER)) throw new Error('the live server address was not found in prebuilt/game-module.js.');
+  moduleCode = moduleCode.replace(LIVE_SERVER, JSON.stringify(url.origin));
+  console.log(`server: ${url.origin}`);
+}
 const ARCHIVE_OPEN = '<script id="asset-archive" type="application/octet-stream">';
 const MODULE_OPEN = '</script><script type="module">\n';
 if (!head.endsWith(ARCHIVE_OPEN)) throw new Error('prebuilt/standalone-head.html must end with the asset-archive script tag.');
