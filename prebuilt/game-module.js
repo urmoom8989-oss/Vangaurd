@@ -59912,7 +59912,7 @@ function vgCineDue(t = vgStNow()) {
 // plays it if it's due, then done()
 async function vgCineMaybe(done) {
   // (what the owner set, and whether you're a developer, come from the server just after sign-in: give them a moment)
-  for (let i = 0; i < 16 && !(vgCine.got && vgNet.open); i++) await new Promise((r) => setTimeout(r, 250));
+  for (const t0 = Date.now(); !(vgCine.got && vgNet.open) && !vgAuth.offline && Date.now() - t0 < 4e3; ) await new Promise((r) => setTimeout(r, 250));
   vgCine.launched = !0, vgCineDue() && !vgCine.open ? vgCinePlay(done, !0) : done?.();
 }
 // players already in the game: when it starts, it plays in the menus (not in a match, a queue or a loading screen)
