@@ -41,6 +41,8 @@ const MIME = {
   '.gif': 'image/gif',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  '.webm': 'video/webm',
+  '.mp4': 'video/mp4',
   '.mp3': 'audio/mpeg',
   '.ogg': 'audio/ogg',
   '.wav': 'audio/wav',

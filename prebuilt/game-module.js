@@ -1,4 +1,4 @@
-const mimeFor = (name) => ({'.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp','.gif':'image/gif','.json':'application/json','.omat':'text/plain','.mp3':'audio/mpeg','.wav':'audio/wav','.ogg':'audio/ogg','.glb':'model/gltf-binary','.gltf':'model/gltf+json'})[name.slice(name.lastIndexOf('.')).toLowerCase()] || 'application/octet-stream';
+const mimeFor = (name) => ({'.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp','.gif':'image/gif','.json':'application/json','.omat':'text/plain','.mp3':'audio/mpeg','.wav':'audio/wav','.ogg':'audio/ogg','.webm':'video/webm','.mp4':'video/mp4','.glb':'model/gltf-binary','.gltf':'model/gltf+json'})[name.slice(name.lastIndexOf('.')).toLowerCase()] || 'application/octet-stream';
 async function installStandaloneAssets(encoded){
   const binary=atob(encoded),compressed=new Uint8Array(binary.length);
   for(let i=0;i<binary.length;i++)compressed[i]=binary.charCodeAt(i);
@@ -59851,11 +59851,139 @@ function vgServerStatus(ms = 8e3) {
 // Usernames and passwords live on the Vangaurd server; the game only keeps a sign-in token on this device
 // ("Stay signed in"). A username that is taken can only be used by signing in to that account.
 var vgAuth = { user: null, token: null, offline: !1, open: !1, listeners: [] }, VG_AUTH_KEY = "vangaurd.auth.v1";
-// News & patch notes once per launch, right after sign-in (Beta 1.2).
+// News & patch notes once per launch, right after sign-in (Beta 1.2). (Release 1.0: after the Season 2 cinematic,
+// the one time it plays.)
 typeof window < "u" && vgAuth.listeners.push(() => {
-  const go = () => vgBoot.on ? setTimeout(go, 400) : vgNewsShow(!0);
+  const go = () => vgBoot.on ? setTimeout(go, 400) : vgCineMaybe(() => vgNewsShow(!0));
   vgAuth.user && !vgNewsUI.shown && (vgNewsUI.shown = !0, setTimeout(go, 900));
 });
+/* ------------------------------------------------------------------ Release 1.0: the Season 2 opening cinematic */
+// Echo turns on his Crimson Vanguard squad in Halden Station. It plays once, the first time the game is launched
+// after Season 2 has begun: the Season 1 countdown from the server has run out, or the game's own season is 2 or
+// later. Esc, Enter, Space, the Skip button or a controller's A / B skips it. That it was seen is kept on this
+// computer and in your progression (so it follows your account to other computers).
+var VG_CINE = { id: "s2-echo", season: 2, src: "/assets/cinematics/season2-echo.webm" }, vgCine = { open: !1 };
+function vgCineSeen() {
+  try {
+    if (localStorage.getItem(`vangaurd.cine.${VG_CINE.id}`) === "1") return !0;
+  } catch {
+  }
+  return !!(typeof Za == "object" && Za?.cine?.[VG_CINE.id]);
+}
+function vgCineMark() {
+  try {
+    localStorage.setItem(`vangaurd.cine.${VG_CINE.id}`, "1");
+  } catch {
+  }
+  try {
+    typeof Za == "object" && Za && ((Za.cine ||= {})[VG_CINE.id] = Date.now(), om());
+  } catch {
+  }
+}
+function vgCineDue() {
+  try {
+    if (localStorage.getItem("vangaurd.cine.off") === "1") return !1;
+  } catch {
+  }
+  return !vgCineSeen() && (VG_PASS.season >= VG_CINE.season || !!(vgSt.st && vgStNow() >= vgSt.st.endsAt));
+}
+// plays it if it's due, then done()
+async function vgCineMaybe(done) {
+  // (the season countdown comes from the server just after sign-in: give it a moment to arrive)
+  for (let i = 0; i < 16 && !vgSt.st && VG_PASS.season < VG_CINE.season; i++) await new Promise((r) => setTimeout(r, 250));
+  vgCineDue() && !vgCine.open ? vgCinePlay(done, !0) : done?.();
+}
+var vgCineCss = `
+.vg-cine { position: fixed; inset: 0; z-index: 2147482000; background: #000; opacity: 0; transition: opacity .7s ease; }
+.vg-cine.on { opacity: 1; }
+.vg-cine.out { opacity: 0; transition: opacity .9s ease; }
+.vg-cine video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.vg-cine .skip { position: absolute; right: 36px; bottom: 30px; z-index: 2; display: flex; align-items: center; gap: 9px; padding: 10px 16px; border: 1px solid rgba(236,240,234,.34); background: rgba(0,0,0,.5); color: #e9ece6; font: 600 13px/1 system-ui, "Segoe UI", sans-serif; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; opacity: .9; transition: opacity .2s ease, background .2s ease, border-color .2s ease; }
+.vg-cine .skip:hover, .vg-cine .skip:focus-visible { opacity: 1; background: rgba(0,0,0,.72); border-color: rgba(127,227,212,.75); outline: none; }
+.vg-cine .skip kbd { padding: 2px 5px; border: 1px solid rgba(236,240,234,.45); font: 700 11px/1 system-ui, sans-serif; letter-spacing: 0; }
+.vg-cine .play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; padding: 14px 26px; border: 1px solid rgba(127,227,212,.6); background: rgba(0,0,0,.5); color: #e9ece6; font: 700 15px/1 system-ui, "Segoe UI", sans-serif; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; }
+.vg-cine.blocked .play { display: block; }
+@media (prefers-reduced-motion: reduce) { .vg-cine, .vg-cine.out { transition: none; } }
+`;
+// mark: remember it was seen (not when a developer watches it from the button)
+function vgCinePlay(done, mark = !1) {
+  if (typeof document > "u" || vgCine.open) return done?.();
+  if (!document.getElementById("vg-cine-style")) {
+    const st = document.createElement("style");
+    st.id = "vg-cine-style", st.textContent = vgCineCss, document.head.appendChild(st);
+  }
+  try {
+    document.pointerLockElement && document.exitPointerLock();
+  } catch {
+  }
+  vgCine.open = !0;
+  const d = document.createElement("div"), v = document.createElement("video"), ac = pgCtx?.services?.audio?.context;
+  d.className = "vg-cine", d.setAttribute("role", "dialog"), d.setAttribute("aria-label", "Season 2 cinematic");
+  d.innerHTML = '<button type="button" class="play">Play</button><button type="button" class="skip"><kbd>Esc</kbd>Skip</button>';
+  v.preload = "auto", v.playsInline = !0, v.setAttribute("playsinline", "");
+  let src = VG_CINE.src;
+  try {
+    src = window.__resolveStandaloneAsset?.(src) || src;
+  } catch {
+  }
+  v.src = src;
+  try {
+    const S = pgCtx?.settings, m = Number(S?.get?.("audio.master", 1));
+    v.volume = Math.max(0, Math.min(1, Number.isFinite(m) ? m : 1));
+  } catch {
+  }
+  d.insertBefore(v, d.firstChild), document.body.appendChild(d), requestAnimationFrame(() => d.classList.add("on"));
+  // the game's own sound waits
+  let sus = !1;
+  try {
+    ac && ac.state === "running" && (ac.suspend(), sus = !0);
+  } catch {
+  }
+  let over = !1, raf = 0, started = !1;
+  const finish = (played) => {
+    if (over) return;
+    over = !0, cancelAnimationFrame(raf), removeEventListener("keydown", key, !0), mark && played && vgCineMark(), d.classList.add("out");
+    try {
+      v.pause();
+    } catch {
+    }
+    setTimeout(() => {
+      d.remove(), vgCine.open = !1;
+      try {
+        sus && ac.resume();
+      } catch {
+      }
+      done?.();
+    }, 900);
+  };
+  const key = (ev) => {
+    if (!["Escape", "Enter", " ", "Spacebar"].includes(ev.key)) return;
+    ev.preventDefault(), ev.stopPropagation(), d.classList.contains("blocked") && ev.key !== "Escape" ? go() : finish(!0);
+  };
+  const go = () => {
+    d.classList.remove("blocked");
+    const r = v.play();
+    r && r.then ? r.then(() => started = !0).catch(() => d.classList.add("blocked")) : started = !0;
+  };
+  // a controller: A or B skips (once they've been let go of since it started)
+  let padHeld = !0;
+  const pad = () => {
+    try {
+      const g = [...navigator.getGamepads?.() || []].find((q) => q && q.connected), down = !!g && (g.buttons[0]?.pressed || g.buttons[1]?.pressed);
+      padHeld && !down && (padHeld = !1), !padHeld && down && finish(!0);
+    } catch {
+    }
+    over || (raf = requestAnimationFrame(pad));
+  };
+  addEventListener("keydown", key, !0), raf = requestAnimationFrame(pad);
+  d.querySelector(".skip").addEventListener("click", (ev) => (ev.stopPropagation(), finish(!0)));
+  d.querySelector(".play").addEventListener("click", (ev) => (ev.stopPropagation(), go()));
+  v.addEventListener("ended", () => finish(!0));
+  // a file that can't be played: carry on without it (and try again next launch)
+  v.addEventListener("error", () => finish(started));
+  go();
+}
+typeof window < "u" && (window.__VGCINE__ = { play: (mark) => vgCinePlay(null, !!mark), maybe: () => new Promise((r) => vgCineMaybe(() => r(!0))), due: () => vgCineDue(), seen: () => vgCineSeen(), state: vgCine });
 function vgAuthSet(user, token, remember) {
   String(user || "").toLowerCase() !== String(vgAuth.user || "").toLowerCase() && (vgAuth.uid = null);
   vgAuth.user = user || null, vgAuth.token = token || null, vgAuth.offline = !user;
@@ -64403,7 +64531,7 @@ function cJ(A) {
   typeof window < "u" && setInterval(() => {
     const on = F.sessionType === "multiplayer" && !!vgAuth.user, st = vgNetStats();
     on && F.screen === "main" && (Date.now() - Math.max(vgTour.at || 0, vgTour.ask || 0) > 6e4 && (vgTour.ask = Date.now(), vgNetSend({ type: "tourney_list" })), vgGmPaint(), vgGmSync());
-    vgTourItem && (vgTourItem.style.display = F.sessionType === "multiplayer" ? "" : "none"), vgDroneItem && (vgDroneItem.style.display = on && vgAuth.dev && !F.waitingForPlayers && !F.multiplayerMatch ? "" : "none"), vgReplaysItem && (vgReplaysItem.style.display = vgAuth.dev && vgAuth.user && !F.waitingForPlayers && !F.multiplayerMatch ? "" : "none"), vgLobNet.style.display = on ? "" : "none", on && (vgLobNet.innerHTML = st.open ? `<span class="${st.ping == null ? "" : st.ping < 70 ? "g" : st.ping < 130 ? "y" : "r"}">●</span> PING ${st.ping == null ? "--" : Math.round(st.ping)} ms · LOSS ${st.loss.toFixed(0)}%` : '<span class="r">●</span> Connecting…');
+    vgTourItem && (vgTourItem.style.display = F.sessionType === "multiplayer" ? "" : "none"), vgDroneItem && (vgDroneItem.style.display = on && vgAuth.dev && !F.waitingForPlayers && !F.multiplayerMatch ? "" : "none"), vgReplaysItem && (vgReplaysItem.style.display = vgAuth.dev && vgAuth.user && !F.waitingForPlayers && !F.multiplayerMatch ? "" : "none"), vgCineItem && (vgCineItem.style.display = vgAuth.dev && !F.waitingForPlayers && !F.multiplayerMatch ? "" : "none"), vgLobNet.style.display = on ? "" : "none", on && (vgLobNet.innerHTML = st.open ? `<span class="${st.ping == null ? "" : st.ping < 70 ? "g" : st.ping < 130 ? "y" : "r"}">●</span> PING ${st.ping == null ? "--" : Math.round(st.ping)} ms · LOSS ${st.loss.toFixed(0)}%` : '<span class="r">●</span> Connecting…');
   }, 1e3);
   NA("div", "emb", Q, R2), NA("div", "op", Q).textContent = "Vangaurd", NA("h1", "", Q, "<span>VANGAURD</span>"), NA("div", "sub", Q).textContent = "";
   const d = NA("div", "od-menu", u), f = [
@@ -64476,7 +64604,7 @@ function cJ(A) {
       }
       go();
     }), b2;
-  }, vgDroneItem = vgDevBtn("drone", "Drone mode (developers): fly over a multiplayer map", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9.5" width="6" height="5" rx="1.2"/><path d="M9 10 6.2 7.2M15 10l2.8-2.8M9 14l-2.8 2.8M15 14l2.8 2.8"/><ellipse cx="5.2" cy="6.2" rx="3" ry="1.1"/><ellipse cx="18.8" cy="6.2" rx="3" ry="1.1"/><ellipse cx="5.2" cy="17.8" rx="3" ry="1.1"/><ellipse cx="18.8" cy="17.8" rx="3" ry="1.1"/></svg>', () => vgDronePick()), vgReplaysItem = vgDevBtn("replays", "Replays (developers): watch your recorded replays", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.2 3.8v4.4h4.4"/><path d="M10 8.8v6.4l5.2-3.2z" fill="currentColor"/></svg>', () => vgReplayPick()), C = NA("div", "od-card", u), y = NA("div", "od-card-head", C), w = NA("div", "k", y), m = NA("div", "t", C), D = NA("div", "p", C), M = NA("div", "map", C), x = NA("canvas", "", M), S = NA("div", "stats", C), U = NA("div", "od-mp-status", u);
+  }, vgDroneItem = vgDevBtn("drone", "Drone mode (developers): fly over a multiplayer map", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9.5" width="6" height="5" rx="1.2"/><path d="M9 10 6.2 7.2M15 10l2.8-2.8M9 14l-2.8 2.8M15 14l2.8 2.8"/><ellipse cx="5.2" cy="6.2" rx="3" ry="1.1"/><ellipse cx="18.8" cy="6.2" rx="3" ry="1.1"/><ellipse cx="5.2" cy="17.8" rx="3" ry="1.1"/><ellipse cx="18.8" cy="17.8" rx="3" ry="1.1"/></svg>', () => vgDronePick()), vgReplaysItem = vgDevBtn("replays", "Replays (developers): watch your recorded replays", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.2 3.8v4.4h4.4"/><path d="M10 8.8v6.4l5.2-3.2z" fill="currentColor"/></svg>', () => vgReplayPick()), vgCineItem = vgDevBtn("cine", "Season 2 cinematic (developers): watch it now", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="1.6"/><path d="M3.5 9.5h17M3.5 14.5h17M7.5 6v3.5M12 6v3.5M16.5 6v3.5M7.5 14.5V18M12 14.5V18M16.5 14.5V18"/></svg>', () => vgCinePlay(null, !1)), C = NA("div", "od-card", u), y = NA("div", "od-card-head", C), w = NA("div", "k", y), m = NA("div", "t", C), D = NA("div", "p", C), M = NA("div", "map", C), x = NA("canvas", "", M), S = NA("div", "stats", C), U = NA("div", "od-mp-status", u);
   U.setAttribute("role", "status"), U.setAttribute("aria-live", "polite");
   const G = NA("div", "", U), P = NA("button", "od-btn", U);
   P.type = "button", P.textContent = "Set up online connection", P.hidden = !0;
