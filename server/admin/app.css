@@ -417,3 +417,20 @@ select.input option { background: #14181b; color: #e9ece6; }
 .evmaps .evall { flex-basis: 100%; font-weight: 700; }
 .evbtns { display: flex; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 560px) { .evform .evrow { grid-template-columns: 1fr; } .evform .evrow small { grid-column: 1; } }
+
+/* Release 1.0: the Season 2 cinematic */
+.cnpane .evclock b.cnstate { font-size: 18px; letter-spacing: 0.02em; }
+.cnvideo { margin: 0 14px 12px; border: 1px solid var(--line-2); border-radius: var(--radius); overflow: hidden; background: #000; }
+.cnvideo[hidden] { display: none; }
+.cnvideo video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+.cnpane { grid-column: 1 / -1; }
+.cnpane .evbtns { margin: 0 14px 12px; }
+.cnpane form .evbtns { margin: 0; }
+.cnpane .evform .evrow { grid-template-columns: 200px 1fr; }
+.cnpane .cnvideo { max-width: 960px; }
+.cnpane .evform input[type=datetime-local] { max-width: 300px; }
+@media (max-width: 760px) {
+  .cnpane .seg { flex-direction: column; }
+  .cnpane .seg button { border-right: 0; border-bottom: 1px solid var(--line); text-align: left; }
+  .cnpane .seg button:last-child { border-bottom: 0; }
+}

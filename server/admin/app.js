@@ -911,6 +911,108 @@
     if (cb) cb.onclick = async () => { if (!confirm('Remove the season countdown?')) return; try { await api('ops/season/clear', { body: {} }); toast('Season countdown removed.'); viewServer(); } catch (err) { fail(err); } };
   }
 
+  // ---------- Release 1.0: the Season 2 opening cinematic ----------
+  // Echo turns on his Crimson Vanguard squad in Halden Station. Each player sees it once, full screen, the first time
+  // they start the game after it begins (before the news). The owner sets when it starts (with the season countdown,
+  // at a set time, or off), when it stops, who sees it, whether players already in the game see it in the menus, and
+  // how it can be skipped; "Play it again for everyone" makes everyone see it once more. Anyone can watch it here.
+  function cnStart(c, o) { return c.mode === 'date' ? c.startsAt : c.mode === 'season' ? o.seasonTimer?.endsAt || null : null; }
+  function cnPhase(c, o, t) {
+    if (c.mode === 'off') return { k: 'off', label: 'Off' };
+    if (c.until && t >= c.until) return { k: 'over', label: 'Stopped' };
+    const start = cnStart(c, o);
+    if (!start) return { k: 'wait', label: 'Waiting for a season countdown' };
+    if (t < start) return { k: 'soon', label: 'Scheduled' };
+    return { k: 'live', label: c.who === 'devs' ? 'Playing · developers only' : 'Playing' };
+  }
+  function cnPane(o, owner) {
+    const c = o.cinematic;
+    if (!c) return '';
+    const ph = cnPhase(c, o, Date.now()), start = cnStart(c, o), zone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ''; } })();
+    const starts = c.mode === 'off' ? 'Never (it is off)' : c.mode === 'date' ? fmt(c.startsAt) : start ? `When the season countdown ends (${fmt(start)})` : 'When the season countdown ends (none is set up yet)';
+    const skipping = !c.skip ? "Can't be skipped" : c.skipAfter ? `Skip button after ${c.skipAfter} s` : 'Skip button straight away';
+    const seg = (name, cur, opts) => `<span class="seg" role="group" data-cn="${name}">${opts.map(([v, l]) => `<button type="button" data-v="${esc(v)}" class="${String(cur) === String(v) ? 'on' : ''}">${esc(l)}</button>`).join('')}</span>`;
+    const skipMode = !c.skip ? 'no' : c.skipAfter ? 'after' : 'now';
+    return `<section class="pane evpane cnpane"><header><span class="k">Season 2 cinematic</span><span class="sp"></span><span class="tag ${ph.k === 'live' ? 'hot' : ''}">${esc(ph.label)}</span></header>
+      <p>Echo turns on his Crimson Vanguard squad in Halden Station, decorated for Christmas (31 s). Each player sees it once, full screen, the first time they start the game after it begins (before the news). Games older than Release 1.0 don't have it.</p>
+      <div class="evnow"><div class="evclock" data-cnclock></div><dl>
+        <dt>Starts</dt><dd>${esc(starts)}</dd>
+        <dt>Stops</dt><dd>${c.mode === 'off' ? '–' : c.until ? esc(fmt(c.until)) : 'Never'}</dd>
+        <dt>Who sees it</dt><dd>${c.who === 'devs' ? 'Only developers (to try it out)' : 'Everyone'}</dd>
+        <dt>Already playing</dt><dd>${c.live ? 'See it in the menus when it starts (not in a match)' : 'See it the next time they start the game'}</dd>
+        <dt>Skipping</dt><dd>${esc(skipping)}</dd>
+        <dt>Seen</dt><dd>${c.watched} watched to the end · ${c.skipped} skipped${c.round > 1 ? ' (since you played it again for everyone)' : ''}</dd></dl></div>
+      <div class="cnvideo" data-cnvideo hidden></div>
+      ${owner ? `<form id="cnf" class="newsform evform">
+        <div class="evrow"><span>Starts playing</span>${seg('mode', c.mode, [['season', 'When the season countdown ends'], ['date', 'At a set time'], ['off', 'Off']])}</div>
+        <label class="evrow" data-cnshow="date" ${c.mode === 'date' ? '' : 'hidden'}><span>Starts at</span><input class="input" type="datetime-local" name="startsAt" value="${esc(stLocal(c.startsAt))}"></label>
+        <div class="evrow" data-cnshow="on" ${c.mode === 'off' ? 'hidden' : ''}><span>Stops playing</span>${seg('stop', c.until ? 'at' : 'never', [['never', 'Never'], ['at', 'At a set time']])}<small>After that, players who haven't seen it yet won't</small></div>
+        <label class="evrow" data-cnshow="until" ${c.mode !== 'off' && c.until ? '' : 'hidden'}><span>Stops at</span><input class="input" type="datetime-local" name="until" value="${esc(stLocal(c.until))}"></label>
+        <div class="evrow" data-cnshow="on" ${c.mode === 'off' ? 'hidden' : ''}><span>Who sees it</span>${seg('who', c.who, [['all', 'Everyone'], ['devs', 'Only developers']])}<small>Only developers: try it out in the game before everyone sees it</small></div>
+        <div class="evrow" data-cnshow="on" ${c.mode === 'off' ? 'hidden' : ''}><span>Players already in the game</span>${seg('live', c.live ? 1 : 0, [[0, 'Next time they start it'], [1, 'In the menus when it starts']])}<small>In the menus: it plays where they are, within a few seconds (never in the middle of a match)</small></div>
+        <div class="evrow" data-cnshow="on" ${c.mode === 'off' ? 'hidden' : ''}><span>Skipping</span>${seg('skip', skipMode, [['now', 'Skip straight away'], ['after', 'Skip after a few seconds'], ['no', "Can't skip"]])}</div>
+        <label class="evrow" data-cnshow="after" ${c.mode !== 'off' && skipMode === 'after' ? '' : 'hidden'}><span>Skip appears after</span><span class="evdur"><input class="input" type="number" name="skipAfter" min="1" max="30" value="${esc(c.skipAfter || 5)}"> seconds</span></label>
+        <p class="hint">Times are in your time zone${zone ? ` (${esc(zone)})` : ''}. Changes reach every signed-in game straight away.</p>
+        <div class="evbtns"><button class="btn pri" type="submit">Save</button><button class="btn" type="button" id="cnwatch">Watch it</button><button class="btn" type="button" id="cnreplay">Play it again for everyone</button></div>
+      </form>` : `<div class="evbtns"><button class="btn" type="button" id="cnwatch">Watch it</button></div><p class="hint">Only the owner can change when the cinematic plays.</p>`}
+    </section>`;
+  }
+  function cnWire(o, v) {
+    const c = o.cinematic;
+    if (!c) return;
+    const clock = $('[data-cnclock]', v);
+    if (clock) {
+      const tick = () => {
+        if (!clock.isConnected) return clearInterval(iv);
+        const t = Date.now(), ph = cnPhase(c, o, t), start = cnStart(c, o);
+        clock.innerHTML = ph.k === 'soon' ? `<small>Starts in</small><b>${esc(stLeft(start - t))}</b>` : ph.k === 'live' && c.until ? `<small>Stops in</small><b>${esc(stLeft(c.until - t))}</b>` : `<small>Cinematic</small><b class="cnstate">${esc(ph.label)}</b>`;
+      }, iv = setInterval(tick, 1000);
+      tick();
+    }
+    // watch it here (the video comes from the server with your sign-in)
+    const wb = $('#cnwatch', v), box = $('[data-cnvideo]', v);
+    if (wb) wb.onclick = async () => {
+      if (!box.hidden) { box.hidden = true; box.innerHTML = ''; wb.textContent = 'Watch it'; return; }
+      wb.disabled = true;
+      try {
+        const res = await fetch('/admin/api/ops/cinematic/video', { cache: 'no-store', headers: token ? { authorization: `Bearer ${token}` } : {} });
+        if (!res.ok) { let m = ''; try { m = (await res.json()).error; } catch { /* not json */ } throw new Error(m || `Couldn't load the video (${res.status}).`); }
+        const url = URL.createObjectURL(await res.blob());
+        box.innerHTML = `<video controls autoplay playsinline src="${url}"></video>`, box.hidden = false, wb.textContent = 'Close the video';
+      } catch (err) { fail(err); } finally { wb.disabled = false; }
+    };
+    const f = $('#cnf', v);
+    if (!f) return;
+    const val = { mode: c.mode, stop: c.until ? 'at' : 'never', who: c.who, live: c.live ? '1' : '0', skip: !c.skip ? 'no' : c.skipAfter ? 'after' : 'now' };
+    const show = () => {
+      const on = val.mode !== 'off';
+      $$('[data-cnshow]', f).forEach((el) => {
+        const k = el.dataset.cnshow;
+        el.hidden = !(k === 'on' ? on : k === 'date' ? val.mode === 'date' : k === 'until' ? on && val.stop === 'at' : k === 'after' ? on && val.skip === 'after' : true);
+      });
+    };
+    $$('[data-cn]', f).forEach((g) => g.addEventListener('click', (ev) => {
+      const b = ev.target.closest('button[data-v]');
+      if (!b) return;
+      val[g.dataset.cn] = b.dataset.v;
+      $$('button', g).forEach((x) => x.classList.toggle('on', x === b));
+      show();
+    }));
+    const at = (s) => (s ? new Date(s).getTime() : null);
+    f.onsubmit = async (ev) => {
+      ev.preventDefault();
+      const body = { mode: val.mode, startsAt: val.mode === 'date' ? at(f.startsAt.value) : null, until: val.mode !== 'off' && val.stop === 'at' ? at(f.until.value) : null, who: val.who, live: val.live === '1', skip: val.skip !== 'no', skipAfter: val.skip === 'after' ? Math.max(1, Math.min(30, Math.round(+f.skipAfter.value || 5))) : 0 };
+      if (val.mode === 'date' && !body.startsAt) return toast('Pick when it starts playing.', true);
+      if (val.mode !== 'off' && val.stop === 'at' && !body.until) return toast('Pick when it stops playing, or set it to Never.', true);
+      try { await api('ops/cinematic', { body }); toast(val.mode === 'off' ? 'The cinematic is off.' : 'Cinematic settings saved.'); viewServer(); } catch (err) { fail(err); }
+    };
+    const rb = $('#cnreplay', v);
+    if (rb) rb.onclick = async () => {
+      if (!confirm('Play the cinematic again for everyone? Every player sees it once more (when it is playing), including players who have already seen it.')) return;
+      try { await api('ops/cinematic/replay', { body: {} }); toast('Everyone will see the cinematic again.'); viewServer(); } catch (err) { fail(err); }
+    };
+  }
+
   async function viewServer() {
     const v = $('#view'), owner = ui.role === 'owner';
     let o;
@@ -945,6 +1047,7 @@
         <p>Online play always has Team Deathmatch plus this week's mode. It changes every Monday at 00:00 UTC (next change ${esc(fmt(o.weekly.endsAt))}) and goes round ${esc(o.weekly.pool.map((m) => m.name).join(', then '))}. ${o.weekly.pinned ? '<b>Pinned by you</b>: it stays until you set it back to automatic.' : 'It is on automatic.'}</p>
         ${owner ? `<div class="seg" role="group" aria-label="Weekly mode"><button type="button" data-weekly="" class="${o.weekly.pinned ? '' : 'on'}">Automatic</button>${o.weekly.pool.map((m) => `<button type="button" data-weekly="${esc(m.id)}" class="${o.weekly.pinned && o.weekly.mode === m.id ? 'on' : ''}">${esc(m.name)}</button>`).join('')}</div>` : ''}</section>` : ''}
       ${stPane(o, owner)}
+      ${cnPane(o, owner)}
       ${(() => {
         const vs = o.versions || [], open = vs.filter((v) => !v.released), early = o.early || [];
         const opt = (v) => `<option value="${esc(v.build)}" data-url="${esc(v.url || '')}"${v.released ? ' disabled' : ''}>${esc(v.label)} · build ${esc(v.build)}${v.released ? ' · released' : v.prerelease ? ' · pre-release' : ''}${v.seen && !v.tag ? ' · seen in a game' : ''}</option>`;
@@ -1009,6 +1112,7 @@
       $$('[data-rm-early]', v).forEach((b) => { b.onclick = async () => { try { await api('ops/early', { body: { name: b.dataset.rmEarly, add: false } }); toast(`${b.dataset.rmEarly} no longer has early access.`); viewServer(); } catch (e) { fail(e); } }; });
     }
     stWire(o, v);
+    cnWire(o, v);
     $$('[data-weekly]', v).forEach((b) => { b.onclick = async () => { try { await api('ops/weekly', { body: { mode: b.dataset.weekly || null } }); toast(b.dataset.weekly ? `${b.textContent} is pinned as this week's mode.` : 'The weekly mode is back on automatic.'); viewServer(); } catch (e) { fail(e); } }; });
     $$('form.dlcapp', v).forEach((f) => { f.onsubmit = async (ev) => { ev.preventDefault(); try { await api('ops/dlc/app', { body: { dlc: f.dataset.dlc, appId: f.appId.value } }); toast('Steam App ID saved. Games pick it up when they next connect.'); viewServer(); } catch (e) { fail(e); } }; });
     const rf = $('#relf');
@@ -1041,7 +1145,7 @@
   }
 
   // ---------- activity ----------
-  const ACT = { season_timer_set: 'set the season countdown', season_timer_hide: 'hid the season countdown', season_timer_show: 'showed the season countdown again', season_timer_clear: 'removed the season countdown', early_grant: 'gave early access', early_revoke: 'took away early access', weekly: 'changed the weekly mode', announce: 'posted a lobby announcement', announce_clear: 'cleared the lobby announcement', maintenance_on: 'started maintenance', maintenance_off: 'ended maintenance', steam_required: 'turned on "Steam required"', steam_optional: 'turned off "Steam required"', steam_allow_add: 'let this player play without Steam:', steam_allow_remove: 'removed from the no-Steam list:', dev_add: 'made a developer:', dev_remove: 'removed developer', dlc_grant: 'granted DLC to', dlc_revoke: 'took DLC back from', dlc_app: 'set a DLC Steam App ID', release: 'set the latest game build', spectate: 'spectated', news_add: 'posted news', news_delete: 'deleted a news post', bugs_close: 'closed', bugs_reopen: 'reopened', bugs_delete: 'deleted', progress: 'changed the progress of', ban: 'banned', unban: 'unbanned', kick: 'disconnected', dismiss: 'dismissed reports against', reopen: 'reopened reports against', mod_add: 'made a moderator:', mod_remove: 'removed moderator', setup: 'set up the console', ban_expired: 'ban ended for' };
+  const ACT = { season_timer_set: 'set the season countdown', season_timer_hide: 'hid the season countdown', season_timer_show: 'showed the season countdown again', season_timer_clear: 'removed the season countdown', cine_set: 'changed the Season 2 cinematic', cine_replay: 'made everyone see the Season 2 cinematic again', early_grant: 'gave early access', early_revoke: 'took away early access', weekly: 'changed the weekly mode', announce: 'posted a lobby announcement', announce_clear: 'cleared the lobby announcement', maintenance_on: 'started maintenance', maintenance_off: 'ended maintenance', steam_required: 'turned on "Steam required"', steam_optional: 'turned off "Steam required"', steam_allow_add: 'let this player play without Steam:', steam_allow_remove: 'removed from the no-Steam list:', dev_add: 'made a developer:', dev_remove: 'removed developer', dlc_grant: 'granted DLC to', dlc_revoke: 'took DLC back from', dlc_app: 'set a DLC Steam App ID', release: 'set the latest game build', spectate: 'spectated', news_add: 'posted news', news_delete: 'deleted a news post', bugs_close: 'closed', bugs_reopen: 'reopened', bugs_delete: 'deleted', progress: 'changed the progress of', ban: 'banned', unban: 'unbanned', kick: 'disconnected', dismiss: 'dismissed reports against', reopen: 'reopened reports against', mod_add: 'made a moderator:', mod_remove: 'removed moderator', setup: 'set up the console', ban_expired: 'ban ended for' };
   const logItem = (l) => `<div class="item"><time title="${esc(fmt(l.at))}">${esc(fmt(l.at))}</time><div><b>${esc(l.by)}</b> ${esc(ACT[l.action] || l.action)} ${l.action === 'setup' ? '' : `<b>${esc(l.target || '')}</b>`}${l.detail && l.action !== 'setup' ? ` <span class="muted">· ${esc(l.detail)}</span>` : ''}</div></div>`;
   async function viewActivity() {
     const v = $('#view');

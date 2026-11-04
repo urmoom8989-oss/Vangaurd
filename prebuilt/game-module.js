@@ -59859,40 +59859,80 @@ typeof window < "u" && vgAuth.listeners.push(() => {
 });
 /* ------------------------------------------------------------------ Release 1.0: the Season 2 opening cinematic */
 // Echo turns on his Crimson Vanguard squad in Halden Station. It plays once, the first time the game is launched
-// after Season 2 has begun: the Season 1 countdown from the server has run out, or the game's own season is 2 or
-// later. Esc, Enter, Space, the Skip button or a controller's A / B skips it. That it was seen is kept on this
-// computer and in your progression (so it follows your account to other computers).
-var VG_CINE = { id: "s2-echo", season: 2, src: "/assets/cinematics/season2-echo.webm" }, vgCine = { open: !1 };
-function vgCineSeen() {
-  try {
-    if (localStorage.getItem(`vangaurd.cine.${VG_CINE.id}`) === "1") return !0;
-  } catch {
-  }
-  return !!(typeof Za == "object" && Za?.cine?.[VG_CINE.id]);
+// after it has begun. The owner sets it up in the admin console (the main server tells every game): when it starts
+// (with the season countdown, i.e. once Season 1's countdown has run out; at a set time; or off), when it stops
+// (after that it no longer plays for anyone who hasn't seen it), who sees it (everyone, or only developers), whether
+// players already in the game see it in the menus when it starts (checked every few seconds; never in a match), and
+// whether and when it can be skipped. "Play it again for everyone" starts a new round: everyone sees it once more.
+// Without a word from the server (offline, or an older server) it plays once Season 2 begins, skippable.
+// Esc, Enter, Space, the Skip button or a controller's A / B skips it. That it was seen (in which round) is kept on
+// this computer and in your progression (so it follows your account to other computers).
+var VG_CINE = { id: "s2-echo", season: 2, src: "/assets/cinematics/season2-echo.webm" }, vgCine = { open: !1, cfg: null, got: !1, launched: !1, liveT: 0 };
+function vgCineCfgSet(c, serverNow) {
+  Number.isFinite(+serverNow) && +serverNow > 0 && (vgSt.off = +serverNow - Date.now());
+  vgCine.got = !0;
+  vgCine.cfg = c && typeof c == "object" ? { mode: ["season", "date", "off"].includes(c.mode) ? c.mode : "season", startsAt: +c.startsAt || 0, until: +c.until || 0, who: c.who === "devs" ? "devs" : "all", live: !!c.live, skip: c.skip !== !1, skipAfter: Math.max(0, Math.min(30, Math.floor(+c.skipAfter || 0))), round: Math.max(1, Math.floor(+c.round || 1)) } : null;
+  vgCineLive();
 }
-function vgCineMark() {
+const vgCineRound = () => vgCine.cfg?.round || 1;
+function vgCineSeen(round = vgCineRound()) {
   try {
-    localStorage.setItem(`vangaurd.cine.${VG_CINE.id}`, "1");
+    if ((parseInt(localStorage.getItem(`vangaurd.cine.${VG_CINE.id}`), 10) || 0) >= round) return !0;
+  } catch {
+  }
+  return typeof Za == "object" && !!Za?.cine?.[VG_CINE.id] && (+Za.cine[`${VG_CINE.id}@round`] || 1) >= round;
+}
+function vgCineMark(skipped) {
+  const r = vgCineRound();
+  try {
+    localStorage.setItem(`vangaurd.cine.${VG_CINE.id}`, String(r));
   } catch {
   }
   try {
-    typeof Za == "object" && Za && ((Za.cine ||= {})[VG_CINE.id] = Date.now(), om());
+    typeof Za == "object" && Za && ((Za.cine ||= {})[VG_CINE.id] = Date.now(), Za.cine[`${VG_CINE.id}@round`] = r, om());
+  } catch {
+  }
+  // (counted in the admin console)
+  try {
+    vgNetSend({ type: "cine_seen", id: VG_CINE.id, round: r, how: skipped ? "skipped" : "watched" });
   } catch {
   }
 }
-function vgCineDue() {
+function vgCineDue(t = vgStNow()) {
   try {
     if (localStorage.getItem("vangaurd.cine.off") === "1") return !1;
   } catch {
   }
-  return !vgCineSeen() && (VG_PASS.season >= VG_CINE.season || !!(vgSt.st && vgStNow() >= vgSt.st.endsAt));
+  if (vgCineSeen()) return !1;
+  const c = vgCine.cfg, seasonOver = VG_PASS.season >= VG_CINE.season || !!(vgSt.st && t >= vgSt.st.endsAt);
+  if (!c) return seasonOver;
+  if (c.mode === "off" || c.who === "devs" && !vgAuth.dev || c.until && t >= c.until) return !1;
+  return c.mode === "date" ? t >= c.startsAt : seasonOver;
 }
 // plays it if it's due, then done()
 async function vgCineMaybe(done) {
-  // (the season countdown comes from the server just after sign-in: give it a moment to arrive)
-  for (let i = 0; i < 16 && !vgSt.st && VG_PASS.season < VG_CINE.season; i++) await new Promise((r) => setTimeout(r, 250));
-  vgCineDue() && !vgCine.open ? vgCinePlay(done, !0) : done?.();
+  // (what the owner set, and whether you're a developer, come from the server just after sign-in: give them a moment)
+  for (const t0 = Date.now(); !(vgCine.got && vgNet.open) && !vgAuth.offline && Date.now() - t0 < 4e3; ) await new Promise((r) => setTimeout(r, 250));
+  vgCine.launched = !0, vgCineDue() && !vgCine.open ? vgCinePlay(done, !0) : done?.();
 }
+// players already in the game: when it starts, it plays in the menus (not in a match, a queue or a loading screen)
+function vgCineLive() {
+  if (typeof window > "u") return;
+  clearTimeout(vgCine.liveT);
+  if (!vgCine.cfg?.live) return;
+  const tick = () => {
+    vgCine.liveT = setTimeout(tick, 4e3);
+    try {
+      if (!vgCine.launched || vgCine.open || !vgAuth.user || vgBoot.on || document.hidden || pgCtx?.services?.gamemode?.state?.stage !== "menu") return;
+      vgCineDue() && vgCinePlay(null, !0);
+    } catch {
+    }
+  };
+  vgCine.liveT = setTimeout(tick, 1500);
+}
+typeof window < "u" && vgNet.listeners.push((m) => {
+  (m?.type === "connected" && "cinematic" in m || m?.type === "cinematic") && vgCineCfgSet(m.cinematic, m.serverNow);
+});
 var vgCineCss = `
 .vg-cine { position: fixed; inset: 0; z-index: 2147482000; background: #000; opacity: 0; transition: opacity .7s ease; }
 .vg-cine.on { opacity: 1; }
@@ -59900,6 +59940,7 @@ var vgCineCss = `
 .vg-cine video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
 .vg-cine .skip { position: absolute; right: 36px; bottom: 30px; z-index: 2; display: flex; align-items: center; gap: 9px; padding: 10px 16px; border: 1px solid rgba(236,240,234,.34); background: rgba(0,0,0,.5); color: #e9ece6; font: 600 13px/1 system-ui, "Segoe UI", sans-serif; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; opacity: .9; transition: opacity .2s ease, background .2s ease, border-color .2s ease; }
 .vg-cine .skip:hover, .vg-cine .skip:focus-visible { opacity: 1; background: rgba(0,0,0,.72); border-color: rgba(127,227,212,.75); outline: none; }
+.vg-cine .skip.wait { opacity: 0; pointer-events: none; }
 .vg-cine .skip kbd { padding: 2px 5px; border: 1px solid rgba(236,240,234,.45); font: 700 11px/1 system-ui, sans-serif; letter-spacing: 0; }
 .vg-cine .play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; padding: 14px 26px; border: 1px solid rgba(127,227,212,.6); background: rgba(0,0,0,.5); color: #e9ece6; font: 700 15px/1 system-ui, "Segoe UI", sans-serif; letter-spacing: .16em; text-transform: uppercase; cursor: pointer; }
 .vg-cine.blocked .play { display: block; }
@@ -59940,9 +59981,12 @@ function vgCinePlay(done, mark = !1) {
   } catch {
   }
   let over = !1, raf = 0, started = !1;
-  const finish = (played) => {
+  const cfg = mark ? vgCine.cfg : null, canSkip = !cfg || cfg.skip, skipAt = cfg?.skip ? cfg.skipAfter : 0, skipBtn = d.querySelector(".skip");
+  const skipOk = () => canSkip && (v.currentTime || 0) >= skipAt;
+  canSkip ? skipAt > 0 && (skipBtn.classList.add("wait"), v.addEventListener("timeupdate", () => skipOk() && skipBtn.classList.remove("wait"))) : skipBtn.remove();
+  const finish = (played, skipped) => {
     if (over) return;
-    over = !0, cancelAnimationFrame(raf), removeEventListener("keydown", key, !0), mark && played && vgCineMark(), d.classList.add("out");
+    over = !0, cancelAnimationFrame(raf), removeEventListener("keydown", key, !0), mark && played && vgCineMark(skipped), d.classList.add("out");
     try {
       v.pause();
     } catch {
@@ -59958,7 +60002,7 @@ function vgCinePlay(done, mark = !1) {
   };
   const key = (ev) => {
     if (!["Escape", "Enter", " ", "Spacebar"].includes(ev.key)) return;
-    ev.preventDefault(), ev.stopPropagation(), d.classList.contains("blocked") && ev.key !== "Escape" ? go() : finish(!0);
+    ev.preventDefault(), ev.stopPropagation(), d.classList.contains("blocked") && ev.key !== "Escape" ? go() : skipOk() && finish(!0, !0);
   };
   const go = () => {
     d.classList.remove("blocked");
@@ -59970,20 +60014,20 @@ function vgCinePlay(done, mark = !1) {
   const pad = () => {
     try {
       const g = [...navigator.getGamepads?.() || []].find((q) => q && q.connected), down = !!g && (g.buttons[0]?.pressed || g.buttons[1]?.pressed);
-      padHeld && !down && (padHeld = !1), !padHeld && down && finish(!0);
+      padHeld && !down && (padHeld = !1), !padHeld && down && skipOk() && finish(!0, !0);
     } catch {
     }
     over || (raf = requestAnimationFrame(pad));
   };
   addEventListener("keydown", key, !0), raf = requestAnimationFrame(pad);
-  d.querySelector(".skip").addEventListener("click", (ev) => (ev.stopPropagation(), finish(!0)));
+  canSkip && skipBtn.addEventListener("click", (ev) => (ev.stopPropagation(), skipOk() && finish(!0, !0)));
   d.querySelector(".play").addEventListener("click", (ev) => (ev.stopPropagation(), go()));
   v.addEventListener("ended", () => finish(!0));
   // a file that can't be played: carry on without it (and try again next launch)
   v.addEventListener("error", () => finish(started));
   go();
 }
-typeof window < "u" && (window.__VGCINE__ = { play: (mark) => vgCinePlay(null, !!mark), maybe: () => new Promise((r) => vgCineMaybe(() => r(!0))), due: () => vgCineDue(), seen: () => vgCineSeen(), state: vgCine });
+typeof window < "u" && (window.__VGCINE__ = { play: (mark) => vgCinePlay(null, !!mark), maybe: () => new Promise((r) => vgCineMaybe(() => r(!0))), due: () => vgCineDue(), seen: () => vgCineSeen(), state: vgCine, cfg: (c, serverNow) => vgCineCfgSet(c, serverNow) });
 function vgAuthSet(user, token, remember) {
   String(user || "").toLowerCase() !== String(vgAuth.user || "").toLowerCase() && (vgAuth.uid = null);
   vgAuth.user = user || null, vgAuth.token = token || null, vgAuth.offline = !user;

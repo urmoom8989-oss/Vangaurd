@@ -20,7 +20,7 @@ export const DLC = {
 export function createOps(d) {
   // d: { DATA_DIR, now, log, keyOf, nameOf, userOf, roleOf, ownerKey, env }
   const FILE = pathMod.join(d.DATA_DIR, 'ops.json');
-  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null, dlc: {}, dlcApps: {}, weekly: null, early: {}, seasonTimer: null };
+  const st = { announcement: null, maintenance: { on: false, message: '', since: 0, by: null }, steam: { required: false, allow: [] }, devs: [], release: null, dlc: {}, dlcApps: {}, weekly: null, early: {}, seasonTimer: null, cinematic: null };
   try {
     const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
     if (raw && typeof raw === 'object') for (const k of Object.keys(st)) if (raw[k] !== undefined) st[k] = raw[k];
@@ -33,6 +33,8 @@ export function createOps(d) {
   if (typeof st.weekly !== 'string') st.weekly = null; // Release 1.0: a weekly mode the owner pinned (null = automatic)
   if (!st.early || typeof st.early !== 'object') st.early = {}; // Release 1.0: early access to unreleased versions, by account
   if (!st.seasonTimer || typeof st.seasonTimer !== 'object' || !(st.seasonTimer.endsAt > 0)) st.seasonTimer = null; // Release 1.01: the season countdown
+  if (!st.cinematic || typeof st.cinematic !== 'object') st.cinematic = null; // Release 1.0: the Season 2 cinematic (null = the defaults)
+  if (st.cinematic && (!st.cinematic.seen || typeof st.cinematic.seen !== 'object')) st.cinematic.seen = {};
   function save() {
     try {
       fs.mkdirSync(d.DATA_DIR, { recursive: true });
@@ -215,6 +217,59 @@ export function createOps(d) {
     return { timer: seasonTimerView() };
   }
   function clearSeasonTimer() { st.seasonTimer = null; save(); }
+  // ---------- Release 1.0: the Season 2 opening cinematic
+  // The owner sets, in the console: when it starts playing (with the season countdown, i.e. once Season 1's
+  // countdown has run out; at a date and time; or not at all), optionally when it stops playing (after that it no
+  // longer plays for anyone who hasn't seen it yet), who sees it (everyone, or only developers, to try it out first),
+  // whether players who are already in the game see it in the menus when it starts, and whether and when it can be
+  // skipped. Each player sees it once; "Play it again for everyone" starts a new round, so everyone sees it once
+  // more. The games say when someone has watched it to the end or skipped it (counted per round, per account).
+  // Nothing set = the defaults: with the season countdown, for everyone, skippable straight away.
+  const CINE_ID = 's2-echo';
+  const cineDefault = () => ({ mode: 'season', startsAt: null, until: null, who: 'all', live: false, skip: true, skipAfter: 0, round: 1, seen: {}, at: 0, by: null });
+  const cine = () => st.cinematic || cineDefault();
+  let cineSaveT = null;
+  const cineSaveSoon = () => { if (!cineSaveT) { cineSaveT = setTimeout(() => { cineSaveT = null; save(); }, 5000); cineSaveT.unref?.(); } };
+  // what the games are told
+  function cinematicView() {
+    const c = cine();
+    return { id: CINE_ID, mode: c.mode, startsAt: c.startsAt || null, until: c.until || null, who: c.who === 'devs' ? 'devs' : 'all', live: !!c.live, skip: c.skip !== false, skipAfter: c.skipAfter || 0, round: c.round || 1 };
+  }
+  // what the console shows (with how many have watched it or skipped it this round)
+  function cinematicAdminView() {
+    const c = cine(), seen = Object.values(c.seen || {});
+    return { ...cinematicView(), set: !!st.cinematic && !!st.cinematic.at, at: c.at || null, by: c.by ? d.nameOf(c.by) || null : null, watched: seen.filter((x) => x === 'w').length, skipped: seen.filter((x) => x === 's').length };
+  }
+  function setCinematic(by, body) {
+    const num = (v) => (v === null || v === undefined || v === '' ? null : Math.floor(Number(v)));
+    const mode = ['season', 'date', 'off'].includes(body.mode) ? body.mode : null, t = d.now();
+    if (!mode) return { error: 'Pick when it plays.' };
+    const startsAt = mode === 'date' ? num(body.startsAt) : null, until = mode === 'off' ? null : num(body.until);
+    if (mode === 'date' && !(startsAt > 0)) return { error: 'Pick the date and time it starts playing.' };
+    if (startsAt && startsAt > t + 366 * 864e5) return { error: 'That is more than a year away.' };
+    if (until !== null && !(until > 0)) return { error: 'Pick when it stops playing, or leave it empty.' };
+    if (until !== null && until <= t) return { error: 'The time it stops playing has already passed.' };
+    if (until !== null && startsAt && until <= startsAt) return { error: 'It has to stop playing after it starts.' };
+    const prev = cine();
+    st.cinematic = { mode, startsAt, until, who: body.who === 'devs' ? 'devs' : 'all', live: !!body.live, skip: body.skip !== false, skipAfter: Math.max(0, Math.min(30, Math.floor(Number(body.skipAfter) || 0))), round: prev.round || 1, seen: prev.seen || {}, at: t, by };
+    save();
+    return { cinematic: cinematicAdminView() };
+  }
+  function replayCinematic(by) {
+    const prev = cine();
+    st.cinematic = { ...prev, round: (prev.round || 1) + 1, seen: {}, at: d.now(), by };
+    save();
+    return { cinematic: cinematicAdminView() };
+  }
+  // a game says this account watched it (how: 'watched') or skipped it ('skipped') in this round
+  function noteCinematic(key, round, how) {
+    if (!key || Math.floor(Number(round)) !== (cine().round || 1)) return false;
+    if (!st.cinematic) st.cinematic = cineDefault();
+    const seen = st.cinematic.seen, v = how === 'skipped' ? 's' : 'w';
+    if (seen[key] === v || (!(key in seen) && Object.keys(seen).length >= 200000)) return false;
+    seen[key] = v, cineSaveSoon();
+    return true;
+  }
   const names = (keys) => keys.map((k) => ({ name: d.nameOf(k) || k }));
   function view() {
     return {
@@ -243,6 +298,7 @@ export function createOps(d) {
     dlcOf, dlcEdit, dlcApps, setDlcApp,
     earlyBuild, earlyEdit, earlyPrune,
     seasonTimerView, setSeasonTimer, setSeasonTimerHidden, clearSeasonTimer,
+    cinematicView, cinematicAdminView, setCinematic, replayCinematic, noteCinematic,
     setWeekly: (mode) => { st.weekly = typeof mode === 'string' && /^[a-z]{2,12}$/.test(mode) ? mode : null; save(); },
     steamVerify,
   };

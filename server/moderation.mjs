@@ -37,7 +37,7 @@ const SECURITY_HEADERS = {
   'x-frame-options': 'DENY',
   'referrer-policy': 'no-referrer',
   'x-robots-tag': 'noindex, nofollow',
-  'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
 };
 
 // The game's level curve (Beta 1.1 on): level n needs 5,000 + 500 x (n - 1) XP to reach level n + 1. Release 1.0:
@@ -788,6 +788,24 @@ export function createModeration(d) {
         if (need(!r.error, r.error)) return true;
         addLog(by, hide ? (r.timer.hidden ? 'season_timer_hide' : 'season_timer_show') : 'season_timer_set', null, hide ? '' : `ends ${new Date(r.timer.endsAt).toISOString()}${r.timer.maps.length ? ` · over ${r.timer.maps.join(', ')}` : ' · over every map'}`); save(false);
         send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
+      // Release 1.0: the Season 2 cinematic (the owner sets it up; anyone on the console can see it and watch it)
+      case 'ops/cinematic': case 'ops/cinematic/replay': {
+        if (need(post, 'Use POST.', 405)) return true;
+        if (need(s.role === 'owner', 'Only the owner can change this.', 403)) return true;
+        const replay = action === 'ops/cinematic/replay', r = replay ? ops.cinematicReplay(by) : ops.cinematic(by, body);
+        if (need(!r.error, r.error)) return true;
+        const c = r.cinematic, M = { season: 'with the season countdown', date: `from ${new Date(c.startsAt || 0).toISOString()}`, off: 'off' };
+        addLog(by, replay ? 'cine_replay' : 'cine_set', null, replay ? `round ${c.round}` : c.mode === 'off' ? 'off' : `${M[c.mode]}${c.until ? ` until ${new Date(c.until).toISOString()}` : ''} · ${c.who === 'devs' ? 'developers only' : 'everyone'}${c.live ? ' · also in the menus' : ''} · ${c.skip ? (c.skipAfter ? `skip after ${c.skipAfter} s` : 'skippable') : 'no skipping'}`); save(false);
+        send(res, 200, { ok: true, ...ops.view() });
+        return true;
+      }
+      case 'ops/cinematic/video': {
+        let file = null;
+        try { file = fs.readFileSync(pathMod.join(HERE, 'admin', 'cinematics', 'season2-echo.webm')); } catch { file = null; }
+        if (need(file, 'The video is not on this server.', 404)) return true;
+        res.writeHead(200, { 'content-type': 'video/webm', 'content-length': file.length, ...SECURITY_HEADERS }); res.end(file);
         return true;
       }
       case 'ops/dlc/app': {

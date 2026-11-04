@@ -2183,6 +2183,8 @@ function weeklyTell() { const w = weekly(); weeklyLast = w.mode; broadcastAll({ 
 // Release 1.01: tell every game about the season countdown when the owner changes it (with this server's clock, so
 // every countdown shows the same second)
 function seasonTimerTell() { broadcastAll({ type: 'season_timer', timer: ops.seasonTimerView(), serverNow: now() }); }
+// Release 1.0: tell every game when the owner changes the Season 2 cinematic's settings (the main server only)
+function cinematicTell() { if (!REGIONAL) broadcastAll({ type: 'cinematic', cinematic: ops.cinematicView(), serverNow: now() }); }
 setInterval(() => { if (weekly().mode !== weeklyLast) weeklyLast === null ? (weeklyLast = weekly().mode) : (log(`weekly mode is now ${weekly().name}`), weeklyTell()); }, 60e3).unref?.();
 // Release 1.0: only offer regional servers that answer (checked every minute), so a region that is down or not
 // deployed yet is never picked; players then stay on this server.
@@ -2248,7 +2250,7 @@ function maintenanceKick() {
   return n;
 }
 mod.attachOps({
-  view: () => ({ ...ops.view(), seasonTimer: ops.seasonTimerView(), timerMaps: TIMER_MAPS, serverNow: now(), weekly: weekly(), versions: recentVersions(), latest: { build: latest.build, label: latest.label, source: latest.source }, region: REGION, live: Object.fromEntries(Object.keys(MODES).map((m) => { const lm = modeMatch(m); return [m, { inMatch: lm ? lm.players.size : 0, waiting: queues[m].length, max: MAX_PLAYERS }]; })) }),
+  view: () => ({ ...ops.view(), seasonTimer: ops.seasonTimerView(), cinematic: REGIONAL ? null : ops.cinematicAdminView(), timerMaps: TIMER_MAPS, serverNow: now(), weekly: weekly(), versions: recentVersions(), latest: { build: latest.build, label: latest.label, source: latest.source }, region: REGION, live: Object.fromEntries(Object.keys(MODES).map((m) => { const lm = modeMatch(m); return [m, { inMatch: lm ? lm.players.size : 0, waiting: queues[m].length, max: MAX_PLAYERS }]; })) }),
   announce(by, body) {
     const r = ops.setAnnouncement(by, body);
     if (!r.error) broadcastAll({ type: 'announcement', announcement: r.announcement });
@@ -2293,6 +2295,19 @@ mod.attachOps({
     return r;
   },
   seasonTimerClear() { ops.clearSeasonTimer(); seasonTimerTell(); },
+  // Release 1.0: the Season 2 cinematic (set on the main server: the games get it from there)
+  cinematic(by, body) {
+    if (REGIONAL) return { error: 'Set this on the main (North America) server\'s console.' };
+    const r = ops.setCinematic(by, body);
+    if (!r.error) cinematicTell();
+    return r;
+  },
+  cinematicReplay(by) {
+    if (REGIONAL) return { error: 'Set this on the main (North America) server\'s console.' };
+    const r = ops.replayCinematic(by);
+    cinematicTell();
+    return r;
+  },
   weekly(mode) {
     if (mode && !WEEKLY_POOL.includes(mode)) return { error: 'That mode is not in the weekly rotation.' };
     ops.setWeekly(mode || null), weeklyTell();
@@ -2342,6 +2357,8 @@ function handle(c, raw) {
       break;
     }
     case 'ping': send(c, { type: 'pong', t: msg.t, seq: msg.seq, serverTime: now() }); break;
+    // Release 1.0: this player watched the Season 2 cinematic to the end, or skipped it (counted in the console)
+    case 'cine_seen': if (!REGIONAL && c.account) ops.noteCinematic(keyOf(c.account), msg.round, msg.how === 'skipped' ? 'skipped' : 'watched'); break;
     case 'mark': onMark(c, msg); break;
     case 'streak': onStreak(c, msg); break;
     case 'hello': {
@@ -2522,7 +2539,7 @@ wss.on('connection', (ws, req) => {
   });
   ws.on('error', () => {});
   send(c, {
-    type: 'connected', playerId: c.id, version: VERSION, weekly: weekly(), seasonTimer: REGIONAL ? undefined : ops.seasonTimerView(), serverNow: now(), matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label, emailAuth: mailer.enabled, steamUpdates: !RELEASE_PAGE,
+    type: 'connected', playerId: c.id, version: VERSION, weekly: weekly(), seasonTimer: REGIONAL ? undefined : ops.seasonTimerView(), cinematic: REGIONAL ? undefined : ops.cinematicView(), serverNow: now(), matchMinSize: MIN_PLAYERS, matchMaxSize: MAX_PLAYERS, minClientBuild: GATE ? latest.build : 0, latestLabel: latest.label, emailAuth: mailer.enabled, steamUpdates: !RELEASE_PAGE,
     region: REGION, regionName: REGION_NAMES[REGION] || REGION.toUpperCase(), regions: !REGIONAL && liveRegions().length ? [{ id: REGION, name: REGION_NAMES[REGION] || REGION, url: null }, ...liveRegions()] : null, announcement: ops.announcementView(), maintenance: ops.state.maintenance.on ? { message: ops.maintenanceMessage() } : null, requireSteam: !!ops.state.steam.required,
     dlcApps: ops.dlcApps(),
   });
