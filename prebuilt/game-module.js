@@ -23435,7 +23435,8 @@ function vgGfxMigrate(d, stored) {
 /* ------------------------------------------------------------------ Release 1.0: Auto quality, automatic 3D resolution, upscaling */
 // vgGfx is what is in effect right now: up (the picture is scaled up by the game, see vgUpWanted), scale (the 3D
 // resolution in effect), dyn (the automatic 3D resolution), and the frame-rate watcher's state.
-var VG_DYN_STEPS = [0.5, 0.56, 0.62, 0.67, 0.72, 0.77, 0.83, 0.9, 1];
+// (below 50 % only on the Low level, where the old default was 35 %: no PC ends up slower than it was)
+var VG_DYN_STEPS = [0.35, 0.42, 0.5, 0.56, 0.62, 0.67, 0.72, 0.77, 0.83, 0.9, 1];
 var vgGfx = { up: !1, scale: 1, dyn: 1, engine: null, tier: -1, lastT: 0, win: 0, n: 0, slow: 0, ok: 0, slowLv: 0, okLv: 0, cool: 0, probe: 6, upAt: -1e9, lvCool: 0, lvUpAt: -1e9, ceil: null, refDt: 0, note: "" };
 // What the graphics card can probably do, from its name: 0 software, 1 built-in graphics, 2 a mid-range card,
 // 3 a strong card. Only a first guess: the frame-rate watcher corrects it.
@@ -23452,7 +23453,7 @@ function vgDynOn(S) {
 }
 // the 3D resolution in effect: the automatic one, or the slider's
 function vgResScale(S) {
-  return vgDynOn(S) ? vgGfx.dyn : Math.max(0.25, Math.min(1, Number(S.get("graphics.renderScale", 1)) || 1));
+  return vgDynOn(S) ? Math.max(vgUpWanted(S) ? 0.5 : 0.35, vgGfx.dyn) : Math.max(0.25, Math.min(1, Number(S.get("graphics.renderScale", 1)) || 1));
 }
 // Upscaling by the game: whenever post-processing always runs (any anti-aliasing, or Post-processing above Low), the
 // canvas stays full size, the picture is drawn into the post-processing targets at 3D resolution and a last pass
@@ -23478,6 +23479,8 @@ function vgAutoInit(S, renderer) {
   const G = vgGfx;
   renderer != null && (G.tier = vgGpuTier(renderer));
   const tier = G.tier < 0 ? 2 : G.tier, lv = vgGfxLv();
+  // (built-in graphics on a high-density screen: the canvas stays at the screen's own pixel grid)
+  tier <= 1 && S.get("graphics.quality") === "auto" && Number(S.get("graphics.maxPixelRatio", 1)) > 1 && S.set("graphics.maxPixelRatio", 1);
   if (!(Number(S.get("graphics.dynScale")) > 0)) G.dyn = [0.67, 0.77, 1, 1][tier];
   else G.dyn = VG_DYN_STEPS.reduce((a, b) => Math.abs(b - S.get("graphics.dynScale")) < Math.abs(a - S.get("graphics.dynScale")) ? b : a, 1);
   if (S.get("graphics.quality") !== "auto") return;
@@ -23535,7 +23538,7 @@ function vgDrsTick(ctx, now, perf) {
   let fps = Math.max(24, Number(S.get("graphics.targetFps", 60)) || 60);
   const cap = Number(S.get("graphics.fpsCap", 0)) || 0;
   cap > 0 && (fps = Math.min(fps, cap)), cap < 0 && G.refDt > 0 && (fps = Math.min(fps, 1e3 / G.refDt));
-  const target = 1e3 / fps, slow = avg > target * 1.1 + 0.4, steps = VG_DYN_STEPS;
+  const target = 1e3 / fps, slow = avg > target * 1.1 + 0.4, steps = VG_DYN_STEPS, lo = vgUpWanted(S) ? 2 : 0;
   // the graphics card's own time for a frame, where the browser gives it
   let gpu = 0;
   try {
@@ -23547,17 +23550,18 @@ function vgDrsTick(ctx, now, perf) {
   } catch {
     gpu = 0;
   }
-  slow ? (G.slow++, G.ok = 0, G.slowLv++, G.okLv = 0) : (G.ok++, G.slow = 0, G.okLv++, G.slowLv = 0);
   let i = steps.indexOf(G.dyn);
-  i < 0 && (i = steps.length - 1);
+  i < 0 && (i = steps.length - 1), i < lo && (i = lo);
   // slow although the graphics card has time to spare: it's the processor, and a smaller picture wouldn't help
   const cpuBound = slow && gpu > 0 && gpu < target * 0.6;
+  // (for Auto, slow only counts once the 3D resolution has nothing left to give)
+  slow ? (G.slow++, G.ok = 0, G.okLv = 0, !dyn || i <= lo || cpuBound ? G.slowLv++ : G.slowLv = 0) : (G.ok++, G.slow = 0, G.okLv++, G.slowLv = 0);
   if (dyn && now >= G.cool) {
-    if (slow && !cpuBound && G.slow >= 2 && i > 0) {
+    if (slow && !cpuBound && G.slow >= 2 && i > lo) {
       const want = G.dyn * Math.sqrt(Math.min(1, target / avg));
       let j = i - 1;
-      for (; j > 0 && steps[j] > want; ) j--;
-      now - G.upAt < 8e3 && (G.probe = Math.min(120, G.probe * 2)), G.cool = now + 2500, G.slow = 0, G.ok = 0, vgDynSet(S, steps[j]);
+      for (; j > lo && steps[j] > want; ) j--;
+      now - G.upAt < 8e3 && (G.probe = Math.min(120, G.probe * 2), G.upAt = -1e9), G.cool = now + 2500, G.slow = 0, G.ok = 0, vgDynSet(S, steps[j]);
       return;
     }
     if (!slow && i < steps.length - 1) {
@@ -23572,12 +23576,12 @@ function vgDrsTick(ctx, now, perf) {
   }
   if (auto && now >= G.lvCool) {
     const lv = vgGfxLv(), cur = Math.max(0, lv.indexOf(S.get("graphics.autoLevel", "high")));
-    if (slow && G.slowLv >= 5 && (!dyn || i === 0 || cpuBound) && cur > 0) {
-      now - G.lvUpAt < 6e4 && (G.ceil = cur - 1), G.lvCool = now + 12e3, G.slowLv = 0, G.okLv = 0, vgAutoSet(S, lv[cur - 1]), dyn && vgDynSet(S, 0.77), G.note = "down";
+    if (slow && G.slowLv >= 5 && (!dyn || i <= lo || cpuBound) && cur > 0) {
+      now - G.lvUpAt < 6e4 && (G.ceil = cur - 1, G.lvUpAt = -1e9), G.lvCool = now + 12e3, G.slowLv = 0, G.okLv = 0, vgAutoSet(S, lv[cur - 1]), dyn && vgDynSet(S, 0.77), G.note = "down";
       return;
     }
     const proof = gpu > 0 ? gpu < target * 0.5 : cap === 0 && avg < target * 0.55;
-    !slow && proof && G.okLv >= 40 && (!dyn || i === steps.length - 1) && cur < lv.length - 1 && (G.ceil == null || cur + 1 <= G.ceil) && (G.lvUpAt = now, G.lvCool = now + 12e3, G.okLv = 0, vgAutoSet(S, lv[cur + 1]), G.note = "up");
+    !slow && proof && G.okLv >= 40 && (!dyn || i === steps.length - 1) && cur < lv.length - 1 && (G.ceil == null || cur + 1 <= G.ceil) && (G.lvUpAt = now, G.lvCool = now + 12e3, G.okLv = 0, vgAutoSet(S, lv[cur + 1]), G.dyn < 0.5 && dyn && vgDynSet(S, 0.5), G.note = "up");
   }
 }
 function vgGfxLink(s, p, v) {
@@ -60225,7 +60229,7 @@ function vgCinePlay(done, mark = !1) {
   v.addEventListener("error", () => finish(started));
   go();
 }
-typeof window < "u" && (window.__VGFX__ = { gfx: vgGfx, tier: vgGpuTier, migrate: vgGfxMigrate, tick: vgDrsTick, autoSet: vgAutoSet, steps: VG_DYN_STEPS, warm: vgWarmStats, up: (S) => vgUpWanted(S) });
+typeof window < "u" && (window.__VGFX__ = { gfx: vgGfx, tier: vgGpuTier, migrate: vgGfxMigrate, tick: vgDrsTick, autoSet: vgAutoSet, steps: VG_DYN_STEPS, warm: vgWarmStats, up: (S) => vgUpWanted(S), cap: (c) => vgFpsCap(c) });
 typeof window < "u" && (window.__VGCINE__ = { play: (mark) => vgCinePlay(null, !!mark), maybe: () => new Promise((r) => vgCineMaybe(() => r(!0))), due: () => vgCineDue(), seen: () => vgCineSeen(), state: vgCine, cfg: (c, serverNow) => vgCineCfgSet(c, serverNow) });
 function vgAuthSet(user, token, remember) {
   String(user || "").toLowerCase() !== String(vgAuth.user || "").toLowerCase() && (vgAuth.uid = null);
@@ -64291,7 +64295,7 @@ function rJ(A) {
         path: "graphics.dynRes",
         label: "Automatic 3D resolution",
         type: "toggle",
-        desc: "Raises and lowers the 3D resolution by itself (between 50% and 100%) to hold the target frame rate. Turn it off to set the 3D resolution yourself."
+        desc: "Raises and lowers the 3D resolution by itself (between 50% and 100%; down to 35% on Low) to hold the target frame rate. Turn it off to set the 3D resolution yourself."
       },
       {
         path: "graphics.targetFps",
