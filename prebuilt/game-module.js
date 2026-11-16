@@ -23536,7 +23536,7 @@ function vgDrsTick(ctx, now, perf) {
   if (G.win += dt, G.n++, dt > G.mx && (G.mx = dt), G.win < 1e3 || G.n < 3) return;
   // (one long frame in the second, a hitch, doesn't count)
   const avg = G.n >= 5 ? (G.win - G.mx) / (G.n - 1) : G.win / G.n;
-  G.win = 0, G.n = 0, G.mx = 0;
+  G.win = 0, G.n = 0, G.mx = 0, G.avg = avg;
   let fps = Math.max(24, Number(S.get("graphics.targetFps", 60)) || 60);
   const cap = Number(S.get("graphics.fpsCap", 0)) || 0;
   cap > 0 && (fps = Math.min(fps, cap)), cap < 0 && G.refDt > 0 && (fps = Math.min(fps, 1e3 / G.refDt));
