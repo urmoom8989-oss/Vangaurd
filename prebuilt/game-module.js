@@ -28439,6 +28439,11 @@ var aY = class {
   }
   beginGpu() {
     if (!this.timerExt || this._activeQuery) return;
+    if (this._queries.length > 120) {
+      for (const q of this._queries) this.gl.deleteQuery(q);
+      this._queries.length = 0, this.timerExt = null;
+      return;
+    }
     const A = this.gl.createQuery();
     this.gl.beginQuery(this.timerExt.TIME_ELAPSED_EXT, A), this._activeQuery = A;
   }
