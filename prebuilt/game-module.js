@@ -23387,7 +23387,7 @@ function vgGfxAaOf(q) {
   return { low: "off", medium: "fxaa", high: "taa", ultra: "tsr_high" }[q] || "taa";
 }
 function vgTexQ(q) {
-  return { low: { an: 4, skip: 1 }, medium: { an: 8, skip: 1 }, high: { an: 8, skip: 0 }, ultra: { an: 16, skip: 0 } }[q] || { an: 8, skip: 0 };
+  return { low: { an: 4, skip: 1 }, medium: { an: 8, skip: 1 }, high: { an: 16, skip: 0 }, ultra: { an: 16, skip: 0 } }[q] || { an: 16, skip: 0 };
 }
 function vgAaMode(m) {
   return {
@@ -77062,7 +77062,7 @@ var Ty, Py, vV, pE, KF, zF, r8, SV = YA((() => {
       const t = (i, a, s) => {
         i.defines[a] !== s && (i.defines[a] = s, i.needsUpdate = !0);
       };
-      t(this.mGtao, "SLICES", A.aoSlices), t(this.mGtao, "STEPS", A.aoSteps), t(this.mRaysBlur, "SAMPLES", A.raySamples), t(this.mDofGather, "RINGS", A.dofRings), (!e || e.bloomLevels !== A.bloomLevels) && this._allocBloom(), this.historyValid = !1;
+      t(this.mGtao, "SLICES", A.aoSlices), t(this.mGtao, "STEPS", A.aoSteps), t(this.mRaysBlur, "SAMPLES", A.raySamples), t(this.mDofGather, "RINGS", A.dofRings), (!e || e.bloomLevels !== A.bloomLevels) && this._allocBloom(), e !== A && (this.historyValid = !1);
     }
     _ensureSmaa(A) {
       if (!(this.smaaEffect && this._smaaPreset === A && this.ldrRT)) {
@@ -77287,7 +77287,7 @@ var Ty, Py, vV, pE, KF, zF, r8, SV = YA((() => {
       o.motionBlur && r.motionBlur && n.motionBlur > 0 && (w = this._cameraMotionPx(l, g) * n.motionBlur > 0.75), this.stats.motionBlurActive = w;
       const m = this.mFinal.uniforms;
       m.uBright.value = vgBright;
-      m.tColor.value = I, m.tDepth.value = this.sceneRT.depthTexture, m.tBloom.value = u ? this.bloomUp[0]?.texture ?? this.bloomDown[0].texture : this.blackTex, m.uBloom.value = u ? n.bloomIntensity : 0, m.tRays.value = this.raysB.texture, m.uRays.value = d ? n.raysIntensity * Q : 0, m.uRaysColor.value.set(n.raysColor[0], n.raysColor[1], n.raysColor[2]), m.tSunVis.value = this.sunVis.texture, m.uFlare.value = f ? n.flareIntensity * Q : 0, m.uSunUV.value.set(this.stats.sunUV[0], this.stats.sunUV[1]), m.uSunFactor.value = Q, m.tDof.value = this.dofBlur.texture, m.uDofOn.value = y ? 1 : 0, m.tAfter.value = this.afterRT.texture, m.uAspect.value = B, m.uFrame.value = this.frame % 4096, m.uTime.value = e, m.uToScreen.value = i ? 0 : 1, m.uToneMapper.value = KF[n.toneMapper] ?? 0, m.uExposure.value = h, m.uSharpen.value = o.sharpen ? (n.sharpen ?? r.sharpen) * (t ? 1 : 0.6) : 0, m.uCA.value.set(o.ca ? n.chromaticAberration * E : 0, c.caExtra * E), m.uMBOn.value = w ? 1 : 0, m.uMBScale.value = n.motionBlur, m.uMBMaxPx.value = n.motionBlurMaxPx * E;
+      m.tColor.value = I, m.tDepth.value = this.sceneRT.depthTexture, m.tBloom.value = u ? this.bloomUp[0]?.texture ?? this.bloomDown[0].texture : this.blackTex, m.uBloom.value = u ? n.bloomIntensity : 0, m.tRays.value = this.raysB.texture, m.uRays.value = d ? n.raysIntensity * Q : 0, m.uRaysColor.value.set(n.raysColor[0], n.raysColor[1], n.raysColor[2]), m.tSunVis.value = this.sunVis.texture, m.uFlare.value = f ? n.flareIntensity * Q : 0, m.uSunUV.value.set(this.stats.sunUV[0], this.stats.sunUV[1]), m.uSunFactor.value = Q, m.tDof.value = this.dofBlur.texture, m.uDofOn.value = y ? 1 : 0, m.tAfter.value = this.afterRT.texture, m.uAspect.value = B, m.uFrame.value = this.frame % 4096, m.uTime.value = e, m.uToScreen.value = i ? 0 : 1, m.uToneMapper.value = KF[n.toneMapper] ?? 0, m.uExposure.value = h, m.uSharpen.value = o.sharpen ? Math.min(1, (n.sharpen ?? r.sharpen) * (t ? 1 : 0.6) + (this.vgUpOn ? (1 - vgGfx.scale) * 0.5 : 0)) : 0, m.uCA.value.set(o.ca ? n.chromaticAberration * E : 0, c.caExtra * E), m.uMBOn.value = w ? 1 : 0, m.uMBScale.value = n.motionBlur, m.uMBMaxPx.value = n.motionBlurMaxPx * E;
       const D = n.look, M = n.grade;
       o.grade ? (m.uLookSlope.value.fromArray(D.slope), m.uLookOffset.value.fromArray(D.offset), m.uLookPower.value.fromArray(D.power), m.uLookSat.value = D.saturation, m.uLift.value.fromArray(M.lift), m.uGammaG.value.fromArray(M.gamma), m.uGain.value.fromArray(M.gain), m.uShadowTint.value.fromArray(M.shadowTint), m.uHighTint.value.fromArray(M.highlightTint), m.uSaturation.value = M.saturation, m.uContrast.value = M.contrast) : (m.uLookSlope.value.set(1, 1, 1), m.uLookOffset.value.set(0, 0, 0), m.uLookPower.value.set(1, 1, 1), m.uLookSat.value = 1, m.uLift.value.set(0, 0, 0), m.uGammaG.value.set(1, 1, 1), m.uGain.value.set(1, 1, 1), m.uShadowTint.value.set(0, 0, 0), m.uHighTint.value.set(0, 0, 0), m.uSaturation.value = 1, m.uContrast.value = 1), m.uVignette.value.set(o.vignette ? n.vignette + n.vignetteADS * c.ads : 0, n.vignetteRoundness), m.uGrain.value.set(o.grain ? n.grain : 0, n.grainScale * E), m.uDamage.value = c.damage, m.uLowHealth.value = c.lowHealth, m.uFlash.value = c.flash, m.uAfter.value = c.after, m.uRadial.value = c.radial, m.uDouble.value = c.double, m.uDesat.value = Math.min(1, c.desat), m.uDarken.value = Math.min(1, c.darken), m.uBlackout.value = Math.min(1, c.blackout);
       const x = zF[n.debugView] ?? 0;
@@ -78032,7 +78032,7 @@ function TV(A) {
     ($.startsWith("graphics") || $.startsWith("postfx")) && U();
   }
   function Y(V) {
-    a && V && a.setSize(V.width * V.pixelRatio, V.height * V.pixelRatio);
+    a && V && !vgGfx.up && a.setSize(Math.floor(V.width * V.pixelRatio), Math.floor(V.height * V.pixelRatio));
   }
   const W = {
     render(V, $) {
