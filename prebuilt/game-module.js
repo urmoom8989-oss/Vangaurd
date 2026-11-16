@@ -15625,7 +15625,10 @@ function cP(A, e, t) {
       v.map.isWebGLCubeRenderTarget !== !0 && (v.map.width !== a.x || v.map.height !== a.y) && v.map.setSize(a.x, a.y);
       const N = v.map.isWebGLCubeRenderTarget ? 6 : v.getViewportCount();
       _.isPointLight !== !0 && v.updateMatrices(_, m);
+      const vgPart = v.isSunLightShadow === !0 && v._vgPart === !0;
+      let vgBound = !1;
       for (let Y = 0; Y < N; Y++) {
+        if (vgPart && v._vgSkip[Y]) continue;
         const W = v.getCamera(Y);
         if (_.isPointLight) {
           const V = v.camera, $ = v.matrix, tA = _.distance || V.far;
@@ -15634,9 +15637,11 @@ function cP(A, e, t) {
         if (v.map.isWebGLCubeRenderTarget)
           A.setRenderTarget(v.map, Y), A.clear();
         else {
-          Y === 0 && (A.setRenderTarget(v.map), A.clear());
+          vgPart ? vgBound || (A.setRenderTarget(v.map), vgBound = !0) : Y === 0 && (A.setRenderTarget(v.map), A.clear());
           const V = v.getViewport(Y);
           n.set(s.x * V.x, s.y * V.y, s.x * V.z, s.y * V.w), S.viewport(n);
+          // (taking turns: only this cascade's part of the map is cleared)
+          vgPart && (S.scissor(n), S.setScissorTest(!0), A.clear(), S.setScissorTest(!1));
         }
         i = v.getFrustum(Y), E(w, m, W, _, this.type);
       }
@@ -23265,11 +23270,13 @@ WU();
 var QP = {
   graphics: {
     brightness: 1,
-    quality: "low",
+    quality: "auto",
     fov: 90,
-    renderScale: 0.35,
-    maxPixelRatio: 1,
-    shadows: !1,
+    renderScale: 1,
+    dynRes: !0,
+    targetFps: 60,
+    maxPixelRatio: 1.5,
+    shadows: !0,
     shadowMapSize: 2048,
     toneMapping: "agx",
     exposure: 1,
@@ -23279,12 +23286,12 @@ var QP = {
     fpsCap: 0,
     displayMode: "windowed",
     resolution: "native",
-    viewDistance: "near",
-    shadowQuality: "low",
-    aa: "off",
-    textureQuality: "low",
-    effectsQuality: "low",
-    postQuality: "low"
+    viewDistance: "far",
+    shadowQuality: "high",
+    aa: "taa",
+    textureQuality: "high",
+    effectsQuality: "high",
+    postQuality: "high"
   },
   controls: {
     sensitivity: 3,
@@ -23380,7 +23387,7 @@ function vgGfxAaOf(q) {
   return { low: "off", medium: "fxaa", high: "taa", ultra: "tsr_high" }[q] || "taa";
 }
 function vgTexQ(q) {
-  return { low: { an: 4, skip: 1 }, medium: { an: 8, skip: 1 }, high: { an: 8, skip: 0 }, ultra: { an: 16, skip: 0 } }[q] || { an: 8, skip: 0 };
+  return { low: { an: 4, skip: 1 }, medium: { an: 8, skip: 1 }, high: { an: 16, skip: 0 }, ultra: { an: 16, skip: 0 } }[q] || { an: 16, skip: 0 };
 }
 function vgAaMode(m) {
   return {
@@ -23393,20 +23400,191 @@ function vgAaMode(m) {
     tsr_epic: { aa: "taa", al: 0.07, alv: 0.1, ga: 1.15, sh: 0.45 }
   }[m] || null;
 }
-function vgGfxMigrate(d) {
+// stored: what this profile had saved for graphics before the defaults were laid under it (null = a new profile)
+function vgGfxMigrate(d, stored) {
   const g = d.graphics || (d.graphics = {});
+  // a new profile: the defaults (Auto quality, automatic 3D resolution)
+  if (!stored) {
+    g.gfxV = 3;
+    return;
+  }
+  // (settings saved before a default existed take the default of their day, not today's)
+  for (const [k, v] of [["quality", "low"], ["renderScale", 0.35], ["maxPixelRatio", 1], ["shadows", !1]]) k in stored || (g[k] = v);
+  if (!g.gfxV) {
+    const q = vgGfxLv().includes(g.quality) ? g.quality : "low";
+    g.textureQuality = q, g.effectsQuality = q, g.postQuality = q, g.aa = vgGfxAaOf(q);
+    g.shadowQuality = g.shadows === !0 ? q === "low" ? "medium" : q : "low";
+    g.shadows = g.shadowQuality !== "low", g.quality = g.shadowQuality === q ? q : "custom";
+    g.viewDistance = vgViewOf(q), g.showFps = !1, (d.hud || (d.hud = {})).netStats = !1, g.gfxV = 2;
+  }
   // version 2: view distance, from the preset (or from post-processing on a Custom one)
   if (g.gfxV === 1) {
     const q = vgGfxLv().includes(g.quality) ? g.quality : vgGfxLv().includes(g.postQuality) ? g.postQuality : "low";
     g.viewDistance = vgViewOf(q), g.gfxV = 2;
+  }
+  // version 3 (Release 1.0): Auto quality and automatic 3D resolution. The old default was the Low preset at 35 % 3D
+  // resolution, and no preset changed the 35 %. A profile still at exactly 35 % never chose it: it gets automatic 3D
+  // resolution; if it is also still on Low, it gets the Auto preset. Anything else stays as it was set.
+  if (g.gfxV === 2) {
+    const never = Math.abs((Number(g.renderScale) || 0) - 0.35) < 1e-3;
+    never ? (g.dynRes = !0, g.renderScale = 1, g.maxPixelRatio = Math.max(Number(g.maxPixelRatio) || 1, 1.5), g.quality === "low" && (g.quality = "auto")) : g.dynRes = !1;
+    "targetFps" in stored || (g.targetFps = 60);
+    g.gfxV = 3;
+  }
+}
+/* ------------------------------------------------------------------ Release 1.0: Auto quality, automatic 3D resolution, upscaling */
+// vgGfx is what is in effect right now: up (the picture is scaled up by the game, see vgUpWanted), scale (the 3D
+// resolution in effect), dyn (the automatic 3D resolution), and the frame-rate watcher's state.
+// (below 50 % only on the Low level, where the old default was 35 %: no PC ends up slower than it was)
+var VG_DYN_STEPS = [0.35, 0.42, 0.5, 0.56, 0.62, 0.67, 0.72, 0.77, 0.83, 0.9, 1];
+var vgGfx = { up: !1, scale: 1, dyn: 1, engine: null, tier: -1, lastT: 0, win: 0, n: 0, mx: 0, slow: 0, ok: 0, slowLv: 0, okLv: 0, cool: 0, probe: 6, upAt: -1e9, lvCool: 0, lvUpAt: -1e9, ceil: null, refDt: 0, note: "" };
+// What the graphics card can probably do, from its name: 0 software, 1 built-in graphics, 2 a mid-range card,
+// 3 a strong card. Only a first guess: the frame-rate watcher corrects it.
+function vgGpuTier(r) {
+  r = String(r || "").toLowerCase();
+  if (!r || /swiftshader|llvmpipe|softpipe|software|basic render/.test(r)) return 0;
+  if (/rtx|\brx\s?(5[6-9]|6[6-9]|7[6-9]|9\d)\d\d|titan|quadro rtx|arc\(tm\) [ab][57]|arc [ab][57]|gtx\s?(1070|1080|980 ti)|apple m\d (pro|max|ultra)|apple m[3-9]/.test(r)) return 3;
+  if (/gtx\s?(9[5-9]0|10[5-6]0|16[5-9]0)|\brx\s?(4[6-9]0|5[5-9]0|5[5-9]00|6[4-5]00)|\barc\b|apple m\d|iris\(r\) xe|iris xe|radeon (rx vega|pro)|quadro/.test(r)) return 2;
+  if (/intel|uhd|hd graphics|iris|radeon|vega|mali|adreno|powervr|geforce|nvidia/.test(r)) return /geforce|nvidia/.test(r) ? 2 : 1;
+  return 2;
+}
+function vgDynOn(S) {
+  return S.get("graphics.dynRes", !1) === !0;
+}
+// the 3D resolution in effect: the automatic one, or the slider's
+function vgResScale(S) {
+  return vgDynOn(S) ? Math.max(vgUpWanted(S) ? 0.5 : 0.35, vgGfx.dyn) : Math.max(0.25, Math.min(1, Number(S.get("graphics.renderScale", 1)) || 1));
+}
+// Upscaling by the game: whenever post-processing always runs (any anti-aliasing, or Post-processing above Low), the
+// canvas stays full size, the picture is drawn into the post-processing targets at 3D resolution and a last pass
+// scales it up. Otherwise (Low with no anti-aliasing: the fastest path, straight to the screen with no
+// post-processing) the canvas itself is drawn small and the browser stretches it, as before.
+function vgUpWanted(S) {
+  const g = S.data?.graphics || {}, am = vgAaMode(g.aa);
+  return (g.postQuality || g.quality || "high") !== "low" || !!(am && am.aa !== "none");
+}
+// Auto: the preset's levels without the textures (reloading those mid-match would stutter; they follow the card)
+function vgAutoSet(S, lv) {
+  const was = S._gfxLock;
+  S._gfxLock = !0;
+  try {
+    for (const k of vgGfxKeys()) k !== "graphics.textureQuality" && S.get(k) !== vgGfxVal(k, lv) && S.set(k, vgGfxVal(k, lv));
+    S.get("graphics.shadows") !== (lv !== "low") && S.set("graphics.shadows", lv !== "low"), S.get("graphics.autoLevel") !== lv && S.set("graphics.autoLevel", lv);
+  } finally {
+    S._gfxLock = was;
+  }
+}
+// when the game starts, and when Auto is picked: where Auto begins (where it left off, or the guess from the card)
+function vgAutoInit(S, renderer) {
+  const G = vgGfx;
+  renderer != null && (G.tier = vgGpuTier(renderer));
+  const tier = G.tier < 0 ? 2 : G.tier, lv = vgGfxLv();
+  // (built-in graphics on a high-density screen: the canvas stays at the screen's own pixel grid)
+  tier <= 1 && S.get("graphics.quality") === "auto" && Number(S.get("graphics.maxPixelRatio", 1)) > 1 && S.set("graphics.maxPixelRatio", 1);
+  if (!(Number(S.get("graphics.dynScale")) > 0)) G.dyn = [0.67, 0.77, 1, 1][tier];
+  else G.dyn = VG_DYN_STEPS.reduce((a, b) => Math.abs(b - S.get("graphics.dynScale")) < Math.abs(a - S.get("graphics.dynScale")) ? b : a, 1);
+  if (S.get("graphics.quality") !== "auto") return;
+  const was = S._gfxLock;
+  S._gfxLock = !0;
+  try {
+    const tq = ["medium", "medium", "high", "ultra"][tier];
+    S.get("graphics.textureQuality") !== tq && S.set("graphics.textureQuality", tq);
+  } finally {
+    S._gfxLock = was;
+  }
+  vgAutoSet(S, lv.includes(S.get("graphics.autoLevel")) ? S.get("graphics.autoLevel") : lv[tier]);
+}
+function vgDynSet(S, v) {
+  const G = vgGfx;
+  if (v === G.dyn) return;
+  G.dyn = v;
+  try {
+    S.set("graphics.dynScale", v);
+  } catch {
+  }
+  // (with upscaling only the post-processing targets change size; otherwise the canvas does)
+  G.up ? G.scale = vgResScale(S) : G.engine?.resize();
+}
+// The frame-rate watcher, once a frame. While playing (no menu open, the window in front) it averages the frame time
+// over a second and compares it with the target frame rate (no higher than the frame rate limit; with VSync, no
+// higher than the screen's refresh rate).
+//  (The longest frame of each second is left out: a single hitch isn't slowness. Frames over 3 seconds are loading.)
+//  Automatic 3D resolution: too slow for 2 seconds running -> down, straight to the resolution that should hold the
+//  target (the picture costs about in proportion to its pixels). Up one step when there is room: by the graphics
+//  card's own timer or, uncapped, by the frame time; where neither can tell (a frame rate limit, VSync), by trying
+//  after a quiet spell, and waiting twice as long after a try that failed.
+//  (Slow while the graphics card has time to spare means the processor is the limit: the resolution is left alone.)
+//  Auto quality: still too slow for 5 seconds at the lowest 3D resolution -> one level down. One level up only
+//  with proof of room (half the frame time to spare for 40 seconds at full resolution), and never back to a level
+//  that proved too slow in this session.
+function vgDrsTick(ctx, now, perf) {
+  const G = vgGfx, S = ctx.settings, dt = G.lastT ? now - G.lastT : 0;
+  G.lastT = now;
+  const auto = S.get("graphics.quality") === "auto", dyn = vgDynOn(S);
+  if (!dyn && !auto) return;
+  let play = !1, menu = "";
+  try {
+    menu = ctx.services.hud.menu, play = menu === "none" && !document.hidden && !!window.__APP_STARTUP_READY__ && !ctx.time.frozen && !ctx.time.deterministic && !ctx.flags?.shotMode;
+  } catch {
+  }
+  if (!play || dt <= 0 || dt > 3e3) {
+    // (in the menus the game is light: what the screen refreshes at)
+    !play && menu && menu !== "none" && fpRafOn && fpRafDt > 3 && fpRafDt < 40 && (G.refDt = G.refDt ? Math.min(G.refDt, fpRafDt) : fpRafDt);
+    G.win = 0, G.n = 0, G.mx = 0;
     return;
   }
-  if (g.gfxV) return;
-  const q = vgGfxLv().includes(g.quality) ? g.quality : "low";
-  g.textureQuality = q, g.effectsQuality = q, g.postQuality = q, g.aa = vgGfxAaOf(q);
-  g.shadowQuality = g.shadows === !0 ? q === "low" ? "medium" : q : "low";
-  g.shadows = g.shadowQuality !== "low", g.quality = g.shadowQuality === q ? q : "custom";
-  g.viewDistance = vgViewOf(q), g.showFps = !1, (d.hud || (d.hud = {})).netStats = !1, g.gfxV = 2;
+  if (G.win += dt, G.n++, dt > G.mx && (G.mx = dt), G.win < 1e3 || G.n < 3) return;
+  // (one long frame in the second, a hitch, doesn't count)
+  const avg = G.n >= 5 ? (G.win - G.mx) / (G.n - 1) : G.win / G.n;
+  G.win = 0, G.n = 0, G.mx = 0, G.avg = avg;
+  let fps = Math.max(24, Number(S.get("graphics.targetFps", 60)) || 60);
+  const cap = Number(S.get("graphics.fpsCap", 0)) || 0;
+  cap > 0 && (fps = Math.min(fps, cap)), cap < 0 && G.refDt > 0 && (fps = Math.min(fps, 1e3 / G.refDt));
+  const target = 1e3 / fps, slow = avg > target * 1.1 + 0.4, steps = VG_DYN_STEPS, lo = vgUpWanted(S) ? 2 : 0;
+  // the graphics card's own time for a frame, where the browser gives it
+  let gpu = 0;
+  try {
+    if (perf?.timerExt && perf.gpuCount >= 20) {
+      const n = Math.min(perf.gpuCount, 40);
+      for (let k = 1; k <= n; k++) gpu += perf.gpu[(perf.gpuIdx - k + perf.N) % perf.N];
+      gpu /= n;
+    }
+  } catch {
+    gpu = 0;
+  }
+  let i = steps.indexOf(G.dyn);
+  i < 0 && (i = steps.length - 1), i < lo && (i = lo);
+  // slow although the graphics card has time to spare: it's the processor, and a smaller picture wouldn't help
+  const cpuBound = slow && gpu > 0 && gpu < target * 0.6;
+  // (for Auto, slow only counts once the 3D resolution has nothing left to give)
+  slow ? (G.slow++, G.ok = 0, G.okLv = 0, !dyn || i <= lo || cpuBound ? G.slowLv++ : G.slowLv = 0) : (G.ok++, G.slow = 0, G.okLv++, G.slowLv = 0);
+  if (dyn && now >= G.cool) {
+    if (slow && !cpuBound && G.slow >= 2 && i > lo) {
+      const want = G.dyn * Math.sqrt(Math.min(1, target / avg));
+      let j = i - 1;
+      for (; j > lo && steps[j] > want; ) j--;
+      now - G.upAt < 8e3 && (G.probe = Math.min(120, G.probe * 2), G.upAt = -1e9), G.cool = now + 2500, G.slow = 0, G.ok = 0, vgDynSet(S, steps[j]);
+      return;
+    }
+    if (!slow && i < steps.length - 1) {
+      const grow = (steps[i + 1] / steps[i]) ** 2, room = gpu > 0 ? gpu * grow < target * 0.9 : cap === 0 ? avg * grow < target * 0.95 : G.ok >= G.probe;
+      if (room && G.ok >= 3) {
+        G.upAt = gpu > 0 || cap === 0 ? -1e9 : now, G.cool = now + 2500, G.ok = 0, vgDynSet(S, steps[i + 1]);
+        return;
+      }
+    }
+    // a try at a higher resolution that held: the next one needn't wait as long
+    !slow && G.probe > 6 && now - G.upAt > 2e4 && G.ok >= 10 && (G.probe = Math.max(6, G.probe / 2));
+  }
+  if (auto && now >= G.lvCool) {
+    const lv = vgGfxLv(), cur = Math.max(0, lv.indexOf(S.get("graphics.autoLevel", "high")));
+    if (slow && G.slowLv >= 5 && (!dyn || i <= lo || cpuBound) && cur > 0) {
+      now - G.lvUpAt < 6e4 && (G.ceil = cur - 1, G.lvUpAt = -1e9), G.lvCool = now + 12e3, G.cool = now + 4e3, G.slowLv = 0, G.okLv = 0, vgAutoSet(S, lv[cur - 1]), dyn && vgDynSet(S, 0.77), G.note = "down";
+      return;
+    }
+    const proof = gpu > 0 ? gpu < target * 0.5 : cap === 0 && avg < target * 0.55;
+    !slow && proof && G.okLv >= 40 && (!dyn || i === steps.length - 1) && cur < lv.length - 1 && (G.ceil == null || cur + 1 <= G.ceil) && (G.lvUpAt = now, G.lvCool = now + 12e3, G.cool = now + 4e3, G.okLv = 0, vgAutoSet(S, lv[cur + 1]), G.dyn < 0.5 && dyn && vgDynSet(S, 0.5), G.note = "up");
+  }
 }
 function vgGfxLink(s, p, v) {
   if (s._gfxLock) return;
@@ -23415,6 +23593,11 @@ function vgGfxLink(s, p, v) {
   s._gfxLock = !0;
   try {
     if (p === "graphics.quality") {
+      if (v === "auto") {
+        // Auto: start again from where it left off (or the guess from the graphics card), with nothing ruled out
+        vgGfx.ceil = null, vgGfx.slowLv = 0, vgGfx.okLv = 0, s._gfxLock = !1, vgAutoInit(s, null);
+        return;
+      }
       if (!vgGfxLv().includes(v)) return;
       for (const k of K) s.get(k) !== vgGfxVal(k, v) && s.set(k, vgGfxVal(k, v));
       s.set("graphics.shadows", v !== "low");
@@ -23424,24 +23607,27 @@ function vgGfxLink(s, p, v) {
     s._gfxLock = !1;
   }
 }
+var vgSetPaths = /* @__PURE__ */ new Map();
 var Rv = "opus-of-duty.settings.v1", EP = class {
   constructor(A, { persist: e = !0, overrides: t = null } = {}) {
-    if (this.events = A, this.persist = e, this.data = Fv(QP), e) try {
-      const i = localStorage.getItem(Rv);
-      i && rp(this.data, JSON.parse(i));
+    if (this.events = A, this.persist = e, this.data = Fv(QP), this._vgStored = null, e) try {
+      const i = localStorage.getItem(Rv), j = i && JSON.parse(i);
+      j && (this._vgStored = j.graphics && typeof j.graphics == "object" ? { ...j.graphics } : {}, rp(this.data, j));
     } catch {
     }
     t && rp(this.data, t);
     try {
-      vgGfxMigrate(this.data);
+      vgGfxMigrate(this.data, this._vgStored);
     } catch {
     }
+    this._vgStored = null;
   }
   get(A, e) {
-    let t = this.data;
-    for (const i of A.split(".")) {
+    let t = this.data, p = vgSetPaths.get(A);
+    p || vgSetPaths.set(A, p = A.split("."));
+    for (let i = 0; i < p.length; i++) {
       if (t == null) return e;
-      t = t[i];
+      t = t[p[i]];
     }
     return t === void 0 ? e : t;
   }
@@ -28002,14 +28188,14 @@ var wS = {
       powerPreference: "high-performance",
       preserveDrawingBuffer: !1
     });
-    s.outputColorSpace = Ii, s.toneMapping = wS[e.get("graphics.toneMapping")] ?? 6, s.toneMappingExposure = e.get("graphics.exposure", 1), s.shadowMap.enabled = e.get("graphics.shadows", !0), s.shadowMap.type = 1, s.info.autoReset = !1, s.domElement.tabIndex = 0, A.appendChild(s.domElement), this.renderer = s, this.scene = new KB(), this.scene.name = "MainScene", this.scene.background = new ue(7307151);
+    s.debug.checkShaderErrors = typeof window < "u" && (!!window.__VG_TEST__ || /[?&]debug=1/.test(String(window.location?.search || ""))), s.outputColorSpace = Ii, s.toneMapping = wS[e.get("graphics.toneMapping")] ?? 6, s.toneMappingExposure = e.get("graphics.exposure", 1), s.shadowMap.enabled = e.get("graphics.shadows", !0), s.shadowMap.type = 1, s.info.autoReset = !1, s.domElement.tabIndex = 0, A.appendChild(s.domElement), this.renderer = s, this.scene = new KB(), this.scene.name = "MainScene", this.scene.background = new ue(7307151);
     const n = Gu(e.get("graphics.fov", 90));
-    this.camera = new ca(n, 16 / 9, 0.03, 1500), this.camera.name = "PlayerCamera", this.camera.position.set(0, 1.64, 0), this.camera.layers.enable(Pr.WORLD), this.camera.layers.enable(Pr.VIEWMODEL), this.camera.layers.enable(Pr.FX), this.scene.add(this.camera), this.width = 1, this.height = 1, this.pixelRatio = 1, this.resizeListeners = [], this.rendererString = tY(s), this._onResize = () => this.resize(), window.addEventListener("resize", this._onResize), this.resize();
+    this.camera = new ca(n, 16 / 9, 0.03, 1500), this.camera.name = "PlayerCamera", this.camera.position.set(0, 1.64, 0), this.camera.layers.enable(Pr.WORLD), this.camera.layers.enable(Pr.VIEWMODEL), this.camera.layers.enable(Pr.FX), this.scene.add(this.camera), this.width = 1, this.height = 1, this.pixelRatio = 1, this.resizeListeners = [], this.rendererString = tY(s), t || vgAutoInit(e, this.rendererString?.renderer || ""), this._onResize = () => this.resize(), window.addEventListener("resize", this._onResize), this.resize();
   }
   resize() {
     let A = this.fixedSize ? this.fixedSize.width : window.innerWidth, e = this.fixedSize ? this.fixedSize.height : window.innerHeight, t = this.shotMode ? 1 : Math.min(window.devicePixelRatio || 1, this.settings.get("graphics.maxPixelRatio", 1.5));
-    const i = this.settings.get("graphics.renderScale", 1), dm = !this.shotMode && !this.fixedSize && this.settings.get("graphics.displayMode", "windowed") === "fullscreen" ? /^(\d+)x(\d+)$/.exec(String(this.settings.get("graphics.resolution", "native"))) : null;
-    dm && (A = +dm[1], e = +dm[2], t = 1), this.width = A, this.height = e, this.pixelRatio = t * i, this.renderer.setPixelRatio(this.pixelRatio), this.renderer.setSize(A, e, !dm), dm && (this.renderer.domElement.style.width = "100%", this.renderer.domElement.style.height = "100%"), this.camera.aspect = A / e, this.camera.updateProjectionMatrix();
+    const i = this.shotMode ? this.settings.get("graphics.renderScale", 1) : vgResScale(this.settings), up = !this.shotMode && vgUpWanted(this.settings), dm = !this.shotMode && !this.fixedSize && this.settings.get("graphics.displayMode", "windowed") === "fullscreen" ? /^(\d+)x(\d+)$/.exec(String(this.settings.get("graphics.resolution", "native"))) : null;
+    dm && (A = +dm[1], e = +dm[2], t = 1), this.width = A, this.height = e, this.pixelRatio = t * i, vgGfx.up = up, vgGfx.scale = i, vgGfx.engine = this, this.renderer.setPixelRatio(up ? t : this.pixelRatio), this.renderer.setSize(A, e, !dm), dm && (this.renderer.domElement.style.width = "100%", this.renderer.domElement.style.height = "100%"), this.camera.aspect = A / e, this.camera.updateProjectionMatrix();
     for (const a of this.resizeListeners) try {
       a(A, e, this.pixelRatio);
     } catch (s) {
@@ -28041,6 +28227,18 @@ function tY(A) {
   }
 }
 var fpQ = [], fpCh = null, fpLastRaf = 0, fpRafOn = !1, fpRafDt = 16.7;
+// The frame rate limit in effect: the setting. With no limit, the main menu, loadouts and armory are held at 60:
+// there is nothing to aim at there, and running flat out only heats the PC up before the match.
+function vgFpsCap(ctx) {
+  const c = Number(ctx.settings.get("graphics.fpsCap", 0)) || 0;
+  if (c !== 0) return c;
+  let m = "";
+  try {
+    m = ctx.services.hud.menu;
+  } catch {
+  }
+  return m === "main" || m === "entry" || m === "loadouts" || m === "armory" ? 60 : 0;
+}
 function fpRafStart() {
   if (fpRafOn || typeof requestAnimationFrame != "function") return;
   fpRafOn = !0;
@@ -28103,7 +28301,7 @@ var iY = class {
     if (!this.running || this._timer !== null || this.paused && this._budget <= 0) return;
     // Frame pacing. setTimeout chains are clamped to >= 4 ms by the browser, which capped the game at ~140 fps;
     // uncapped and short waits use a MessageChannel instead. Only the optional VSync setting uses requestAnimationFrame.
-    const A = this.paused ? 0 : Number(this.ctx.settings.get("graphics.fpsCap", 0)) || 0, tok = {}, go = () => {
+    const A = this.paused ? 0 : vgFpsCap(this.ctx), tok = {}, go = () => {
       this._timer === tok && (this._timer = null, this._tick(performance.now()));
     };
     if (this._timer = tok, typeof document < "u" && document.hidden) {
@@ -28151,6 +28349,10 @@ var iY = class {
   frame(A = performance.now()) {
     const { time: e, input: t } = this.ctx;
     this.perf.beginFrame(A);
+    try {
+      vgDrsTick(this.ctx, A, this.perf);
+    } catch {
+    }
     const i = e.fixedStep;
     let a;
     if (e.frozen) a = 0;
@@ -28180,7 +28382,8 @@ var iY = class {
     } catch (s) {
       this.reportError("core", "afterLate", s);
     }
-    this.render(a, e.t), t.endFrame(), e.frame++, this.perf.endFrame();
+    // (a hidden window, minimised or behind others, shows nothing: the match goes on, the drawing waits)
+    typeof document < "u" && document.hidden && !e.deterministic && !this.ctx.flags?.shotMode || this.render(a, e.t), t.endFrame(), e.frame++, this.perf.endFrame();
     try {
       this.hooks.afterFrame?.(e.frame);
     } catch (s) {
@@ -28236,6 +28439,11 @@ var aY = class {
   }
   beginGpu() {
     if (!this.timerExt || this._activeQuery) return;
+    if (this._queries.length > 120) {
+      for (const q of this._queries) this.gl.deleteQuery(q);
+      this._queries.length = 0, this.timerExt = null;
+      return;
+    }
     const A = this.gl.createQuery();
     this.gl.beginQuery(this.timerExt.TIME_ELAPSED_EXT, A), this._activeQuery = A;
   }
@@ -33389,7 +33597,7 @@ varying vec3 vCamoN;`).replace("base *= 1.0 + ( sWr.b - 0.5 ) * 1.6 * sMatC.y;",
         Y.animDt += v;
         let W = 1;
         if (Y.alive)
-          Y.onScreen || (W = Y.camDist > 20 ? 4 : 2);
+          Y.onScreen ? Y.camDist > 45 && (W = 2) : W = Y.camDist > 20 ? 4 : 2;
         else if (Y.ragdoll.sleeping) {
           Y.animDt = 0, Y.sinkOffset && _(Y);
           continue;
@@ -45406,12 +45614,13 @@ var I3, b2, u3, Q3, E3, JB, go, dc, wI, p3, D2, G9 = YA((() => {
       label: "Graphics quality",
       type: "seg",
       options: [
+        "auto",
         "low",
         "medium",
         "high",
         "ultra"
       ],
-      labels: ["Low", "Medium", "High", "Epic"]
+      labels: ["Auto", "Low", "Medium", "High", "Epic"]
     },
     {
       path: "graphics.motionBlur",
@@ -60027,6 +60236,9 @@ function vgCinePlay(done, mark = !1) {
   v.addEventListener("error", () => finish(started));
   go();
 }
+typeof window < "u" && (window.__VGFX__ = { gfx: vgGfx, tier: vgGpuTier, migrate: vgGfxMigrate, tick: vgDrsTick, autoSet: vgAutoSet, steps: VG_DYN_STEPS, get warm() {
+  return vgWarmStats;
+}, up: (S) => vgUpWanted(S), cap: (c) => vgFpsCap(c) });
 typeof window < "u" && (window.__VGCINE__ = { play: (mark) => vgCinePlay(null, !!mark), maybe: () => new Promise((r) => vgCineMaybe(() => r(!0))), due: () => vgCineDue(), seen: () => vgCineSeen(), state: vgCine, cfg: (c, serverNow) => vgCineCfgSet(c, serverNow) });
 function vgAuthSet(user, token, remember) {
   String(user || "").toLowerCase() !== String(vgAuth.user || "").toLowerCase() && (vgAuth.uid = null);
@@ -64017,8 +64229,8 @@ function rJ(A) {
         path: "graphics.quality",
         label: "Quality preset",
         type: "cycle",
-        options: [["low", "LOW"], ["medium", "MEDIUM"], ["high", "HIGH"], ["ultra", "EPIC"]],
-        desc: "Sets View distance, Shadows, Anti-aliasing, Textures, Effects and Post-processing below to the same level. Changing one of them on its own switches the preset to Custom."
+        options: [["auto", "AUTO"], ["low", "LOW"], ["medium", "MEDIUM"], ["high", "HIGH"], ["ultra", "EPIC"]],
+        desc: "Auto picks the level for your PC and keeps adjusting it to hold the target frame rate. The others set View distance, Shadows, Anti-aliasing, Textures, Effects and Post-processing below to the same level. Changing one of them on its own switches the preset to Custom."
       },
       {
         path: "graphics.viewDistance",
@@ -64086,7 +64298,20 @@ function rJ(A) {
         max: 1,
         step: 0.05,
         fmt: (t) => Math.round(t * 100) + "%",
-        desc: "Internal render resolution as a percentage of the display. Lower values improve performance."
+        desc: "Internal render resolution as a percentage of the display. Lower values improve performance. Used when Automatic 3D resolution is off."
+      },
+      {
+        path: "graphics.dynRes",
+        label: "Automatic 3D resolution",
+        type: "toggle",
+        desc: "Raises and lowers the 3D resolution by itself (between 50% and 100%; down to 35% on Low) to hold the target frame rate. Turn it off to set the 3D resolution yourself."
+      },
+      {
+        path: "graphics.targetFps",
+        label: "Target frame rate",
+        type: "cycle",
+        options: [[30, "30"], [45, "45"], [60, "60"], [90, "90"], [120, "120"], [144, "144"], [165, "165"], [240, "240"]],
+        desc: "The frame rate that the Auto preset and Automatic 3D resolution aim to hold. Higher targets trade picture quality for smoothness."
       },
       {
         path: "graphics.fpsCap",
@@ -68139,7 +68364,7 @@ float lgtSkyVisibility( vec3 viewPos, vec3 viewNormal ) {
         20,
         55,
         150
-      ], this.casterExtension = 250, this.radiusQuantum = 0.5, this._cameras = [], this._matrices = [], this._frustums = [], this._cascadeData = [], this._texel = [], this._viewportCount = A;
+      ], this.casterExtension = 250, this.radiusQuantum = 0.5, this._cameras = [], this._matrices = [], this._frustums = [], this._cascadeData = [], this._texel = [], this._viewportCount = A, this._vgSkip = [], this._vgPart = !1, this._vgTick = 0, this._vgMap = null, this._vgSize = 0;
       const t = A > 2 ? 2 : A, i = Math.ceil(A / t);
       this._cols = t, this._frameExtents.set(t, i);
       for (let a = 0; a < A; a++)
@@ -68171,7 +68396,13 @@ float lgtSkyVisibility( vec3 viewPos, vec3 viewNormal ) {
       const o = t.isPerspectiveCamera ? Math.tan(gi.degToRad(t.fov * 0.5)) / (t.zoom || 1) : 1, r = o * (t.aspect || 1);
       Math.sqrt(1 + o * o + r * r);
       const c = Math.sqrt(o * o + r * r), l = Math.max(t.near || 0.05, 0.01), g = this.splits, B = 0.12;
+      // Release 1.0: the two far cascades take turns. Each frame one of them is redrawn; the other keeps the map and
+      // the matrix it was drawn with last frame (so it still lines up). Everything is redrawn when the map is new
+      // or has changed size.
+      const vgT = ++this._vgTick, vgOk = vgGfx.shadowTurns !== !1 && i >= 4 && this.map !== null && this._vgMap === this.map && this._vgSize === this.mapSize.x;
+      this._vgPart = vgOk, this._vgMap = this.map, this._vgSize = this.mapSize.x;
       for (let h = 0; h < i; h++) {
+        if (this._vgSkip[h] = vgOk && h >= i - 2 && (h + vgT & 1) === 1) continue;
         const I = h === 0 ? l : g[h], u = g[h + 1], Q = g[h], d = h === 0 ? I : Q - B * (Q - (h === 1 ? l : g[h - 1])), f = u - B * (u - I), p = d * c, E = u * c;
         let C = (u * u - d * d + E * E - p * p) / (2 * (u - d));
         C = Math.min(Math.max(C, d), u);
@@ -76466,6 +76697,39 @@ void main() {
   gl_FragColor = vec4(c.rgb * uScaleBias.x + uScaleBias.y, 1.0);
 }`;
 }));
+var VG_UP_FRAG = `
+precision highp float;
+uniform sampler2D tSrc;
+uniform vec2 uSrc;
+uniform float uLin;
+varying vec2 vUv;
+vec3 enc(vec3 c) {
+  return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+vec3 S(vec2 uv) {
+  vec3 c = textureLod(tSrc, uv, 0.0).rgb;
+  return uLin > 0.5 ? enc(c) : c;
+}
+void main() {
+  vec2 sp = vUv * uSrc;
+  vec2 tp1 = floor(sp - 0.5) + 0.5;
+  vec2 f = sp - tp1;
+  vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+  vec2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+  vec2 w3 = f * f * (-0.5 + 0.5 * f);
+  vec2 w12 = w1 + w2;
+  vec2 t = 1.0 / uSrc;
+  vec2 tp12 = (tp1 + w2 / w12) * t;
+  vec2 tp0 = (tp1 - 1.0) * t;
+  vec2 tp3 = (tp1 + 2.0) * t;
+  vec3 r = S(vec2(tp12.x, tp0.y)) * (w12.x * w0.y) + S(vec2(tp0.x, tp12.y)) * (w0.x * w12.y) + S(tp12) * (w12.x * w12.y)
+         + S(vec2(tp3.x, tp12.y)) * (w3.x * w12.y) + S(vec2(tp12.x, tp3.y)) * (w12.x * w3.y);
+  r /= w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
+  vec3 a = S(tp1 * t), b = S((tp1 + vec2(1.0, 0.0)) * t), c = S((tp1 + vec2(0.0, 1.0)) * t), d = S((tp1 + 1.0) * t);
+  r = clamp(r, min(min(a, b), min(c, d)), max(max(a, b), max(c, d)));
+  gl_FragColor = vec4(r, 1.0);
+}`;
 function VF(A, e) {
   let t = 1, i = 0;
   for (; A > 0; )
@@ -76766,7 +77030,16 @@ var Ty, Py, vV, pE, KF, zF, r8, SV = YA((() => {
           uDebug: A(0)
         },
         fragmentShader: s8
+      }), this.mUp = Ns({
+        name: "upscale",
+        uniforms: {
+          tSrc: A(null),
+          uSrc: A(new jA(1, 1)),
+          uLin: A(0)
+        },
+        fragmentShader: VG_UP_FRAG
       }), this.materials = [
+        this.mUp,
         this.mDepthLin,
         this.mDepthDown,
         this.mGtao,
@@ -76798,7 +77071,7 @@ var Ty, Py, vV, pE, KF, zF, r8, SV = YA((() => {
       const t = (i, a, s) => {
         i.defines[a] !== s && (i.defines[a] = s, i.needsUpdate = !0);
       };
-      t(this.mGtao, "SLICES", A.aoSlices), t(this.mGtao, "STEPS", A.aoSteps), t(this.mRaysBlur, "SAMPLES", A.raySamples), t(this.mDofGather, "RINGS", A.dofRings), (!e || e.bloomLevels !== A.bloomLevels) && this._allocBloom(), this.historyValid = !1;
+      t(this.mGtao, "SLICES", A.aoSlices), t(this.mGtao, "STEPS", A.aoSteps), t(this.mRaysBlur, "SAMPLES", A.raySamples), t(this.mDofGather, "RINGS", A.dofRings), (!e || e.bloomLevels !== A.bloomLevels) && this._allocBloom(), e !== A && (this.historyValid = !1);
     }
     _ensureSmaa(A) {
       if (!(this.smaaEffect && this._smaaPreset === A && this.ldrRT)) {
@@ -76839,8 +77112,9 @@ var Ty, Py, vV, pE, KF, zF, r8, SV = YA((() => {
     setSize(A, e) {
       if (A = Math.max(1, Math.floor(A)), e = Math.max(1, Math.floor(e)), A === this.width && e === this.height) return;
       this.width = A, this.height = e;
-      for (const o of this.targets) o.dispose();
-      this.targets.length = 0, this.bloomDown = [], this.bloomUp = [], this.ldrRT = null;
+      const vgH = this.historyValid && this.histA && this.mCopy ? this.frame & 1 ? this.histA : this.histB : null;
+      for (const o of this.targets) o !== vgH && o.dispose();
+      this.targets.length = 0, this.bloomDown = [], this.bloomUp = [], this.ldrRT = null, this.upRT = null, this.up2RT = null, this._vgHist = vgH;
       const t = Math.max(1, A >> 1), i = Math.max(1, e >> 1), a = Math.max(1, A >> 2), s = Math.max(1, e >> 2);
       this.fullSize.set(A, e), this.halfSize.set(t, i), this.quarterSize.set(a, s), this.sceneRT = this._target(A, e, {
         name: "scene",
@@ -76886,6 +77160,32 @@ var Ty, Py, vV, pE, KF, zF, r8, SV = YA((() => {
         name: "ldr",
         colorSpace: Ii
       })), this.historyValid = !1, this._clearTargets = !0;
+      if (this._vgHist) {
+        const o = this._vgHist, r = this.mCopy.uniforms;
+        this._vgHist = null;
+        try {
+          r.tSrc.value = o.texture, r.uMode.value = 0, r.uScaleBias.value.set(1, 0, 0, 0), this._draw(this.mCopy, this.histA), this._draw(this.mCopy, this.histB), this.renderer.setRenderTarget(null), this.historyValid = !0;
+        } catch {
+          this.historyValid = !1;
+        }
+        r.tSrc.value = null, o.dispose();
+      }
+    }
+    // upscaling: where the finished picture goes before the last pass (8-bit, at 3D resolution). After SMAA the
+    // picture is linear in an sRGB target; straight from the final pass it is already encoded for the screen.
+    _vgUpTarget(A) {
+      return A ? this.up2RT ||= this._target(this.width, this.height, {
+        type: rt,
+        name: "up2",
+        colorSpace: Ii
+      }) : this.upRT ||= this._target(this.width, this.height, {
+        type: rt,
+        name: "up"
+      });
+    }
+    _vgUpDraw(A, e) {
+      const t = this.mUp.uniforms;
+      t.tSrc.value = A.texture, t.uSrc.value.set(A.width, A.height), t.uLin.value = e ? 1 : 0, this._draw(this.mUp, null);
     }
     _draw(A, e) {
       this.quad.draw(this.renderer, A, e);
@@ -76906,7 +77206,10 @@ var Ty, Py, vV, pE, KF, zF, r8, SV = YA((() => {
     }
     render(A, e) {
       const t = this.renderer, i = this.camera, a = this.scene, s = this.params, n = this.flags, o = this.quality;
-      t.getDrawingBufferSize(this._size), this.setSize(this._size.x, this._size.y);
+      t.getDrawingBufferSize(this._size);
+      // (upscaling: everything is drawn at 3D resolution; the last pass takes it up to the canvas)
+      const vgK = vgGfx.up ? vgGfx.scale : 1;
+      this.setSize(Math.max(1, Math.round(this._size.x * vgK)), Math.max(1, Math.round(this._size.y * vgK))), this.vgUpOn = vgGfx.up && (this.width !== this._size.x || this.height !== this._size.y);
       const r = this.width, c = this.height;
       this.frame++;
       const l = n.aa ? s.aa && s.aa !== "auto" ? s.aa : o.aa : "none";
@@ -76993,7 +77296,7 @@ var Ty, Py, vV, pE, KF, zF, r8, SV = YA((() => {
       o.motionBlur && r.motionBlur && n.motionBlur > 0 && (w = this._cameraMotionPx(l, g) * n.motionBlur > 0.75), this.stats.motionBlurActive = w;
       const m = this.mFinal.uniforms;
       m.uBright.value = vgBright;
-      m.tColor.value = I, m.tDepth.value = this.sceneRT.depthTexture, m.tBloom.value = u ? this.bloomUp[0]?.texture ?? this.bloomDown[0].texture : this.blackTex, m.uBloom.value = u ? n.bloomIntensity : 0, m.tRays.value = this.raysB.texture, m.uRays.value = d ? n.raysIntensity * Q : 0, m.uRaysColor.value.set(n.raysColor[0], n.raysColor[1], n.raysColor[2]), m.tSunVis.value = this.sunVis.texture, m.uFlare.value = f ? n.flareIntensity * Q : 0, m.uSunUV.value.set(this.stats.sunUV[0], this.stats.sunUV[1]), m.uSunFactor.value = Q, m.tDof.value = this.dofBlur.texture, m.uDofOn.value = y ? 1 : 0, m.tAfter.value = this.afterRT.texture, m.uAspect.value = B, m.uFrame.value = this.frame % 4096, m.uTime.value = e, m.uToScreen.value = i ? 0 : 1, m.uToneMapper.value = KF[n.toneMapper] ?? 0, m.uExposure.value = h, m.uSharpen.value = o.sharpen ? (n.sharpen ?? r.sharpen) * (t ? 1 : 0.6) : 0, m.uCA.value.set(o.ca ? n.chromaticAberration * E : 0, c.caExtra * E), m.uMBOn.value = w ? 1 : 0, m.uMBScale.value = n.motionBlur, m.uMBMaxPx.value = n.motionBlurMaxPx * E;
+      m.tColor.value = I, m.tDepth.value = this.sceneRT.depthTexture, m.tBloom.value = u ? this.bloomUp[0]?.texture ?? this.bloomDown[0].texture : this.blackTex, m.uBloom.value = u ? n.bloomIntensity : 0, m.tRays.value = this.raysB.texture, m.uRays.value = d ? n.raysIntensity * Q : 0, m.uRaysColor.value.set(n.raysColor[0], n.raysColor[1], n.raysColor[2]), m.tSunVis.value = this.sunVis.texture, m.uFlare.value = f ? n.flareIntensity * Q : 0, m.uSunUV.value.set(this.stats.sunUV[0], this.stats.sunUV[1]), m.uSunFactor.value = Q, m.tDof.value = this.dofBlur.texture, m.uDofOn.value = y ? 1 : 0, m.tAfter.value = this.afterRT.texture, m.uAspect.value = B, m.uFrame.value = this.frame % 4096, m.uTime.value = e, m.uToScreen.value = i ? 0 : 1, m.uToneMapper.value = KF[n.toneMapper] ?? 0, m.uExposure.value = h, m.uSharpen.value = o.sharpen ? Math.min(1, (n.sharpen ?? r.sharpen) * (t ? 1 : 0.6) + (this.vgUpOn ? (1 - vgGfx.scale) * 0.5 : 0)) : 0, m.uCA.value.set(o.ca ? n.chromaticAberration * E : 0, c.caExtra * E), m.uMBOn.value = w ? 1 : 0, m.uMBScale.value = n.motionBlur, m.uMBMaxPx.value = n.motionBlurMaxPx * E;
       const D = n.look, M = n.grade;
       o.grade ? (m.uLookSlope.value.fromArray(D.slope), m.uLookOffset.value.fromArray(D.offset), m.uLookPower.value.fromArray(D.power), m.uLookSat.value = D.saturation, m.uLift.value.fromArray(M.lift), m.uGammaG.value.fromArray(M.gamma), m.uGain.value.fromArray(M.gain), m.uShadowTint.value.fromArray(M.shadowTint), m.uHighTint.value.fromArray(M.highlightTint), m.uSaturation.value = M.saturation, m.uContrast.value = M.contrast) : (m.uLookSlope.value.set(1, 1, 1), m.uLookOffset.value.set(0, 0, 0), m.uLookPower.value.set(1, 1, 1), m.uLookSat.value = 1, m.uLift.value.set(0, 0, 0), m.uGammaG.value.set(1, 1, 1), m.uGain.value.set(1, 1, 1), m.uShadowTint.value.set(0, 0, 0), m.uHighTint.value.set(0, 0, 0), m.uSaturation.value = 1, m.uContrast.value = 1), m.uVignette.value.set(o.vignette ? n.vignette + n.vignetteADS * c.ads : 0, n.vignetteRoundness), m.uGrain.value.set(o.grain ? n.grain : 0, n.grainScale * E), m.uDamage.value = c.damage, m.uLowHealth.value = c.lowHealth, m.uFlash.value = c.flash, m.uAfter.value = c.after, m.uRadial.value = c.radial, m.uDouble.value = c.double, m.uDesat.value = Math.min(1, c.desat), m.uDarken.value = Math.min(1, c.darken), m.uBlackout.value = Math.min(1, c.blackout);
       const x = zF[n.debugView] ?? 0;
@@ -77002,7 +77305,9 @@ var Ty, Py, vV, pE, KF, zF, r8, SV = YA((() => {
         x === 10 ? (S.tSrc.value = this.aoA.texture, S.uMode.value = 1) : x === 11 ? (S.tSrc.value = this.linDepth.texture, S.uMode.value = 2) : (S.tSrc.value = u ? this.bloomUp[0].texture : this.blackTex, S.uMode.value = 0), S.uScaleBias.value.set(x === 12 ? n.bloomIntensity * 4 : 1, 0, 0, 0), this._draw(this.mCopy, null);
         return;
       }
-      i ? (this._draw(this.mFinal, this.ldrRT), this.smaaPass.setDepthTexture?.(this.sceneRT.depthTexture), this.smaaPass.render(a, this.ldrRT, null, A)) : this._draw(this.mFinal, null);
+      const vgU = this.vgUpOn ? this._vgUpTarget(i) : null;
+      i ? (this._draw(this.mFinal, this.ldrRT), this.smaaPass.setDepthTexture?.(this.sceneRT.depthTexture), this.smaaPass.renderToScreen !== !vgU && (this.smaaPass.renderToScreen = !vgU), this.smaaPass.render(a, this.ldrRT, vgU, A)) : this._draw(this.mFinal, vgU);
+      vgU && this._vgUpDraw(vgU, i);
     }
     _renderBloom(A, e) {
       const t = this.params, i = this.bloomDown, a = this.bloomUp, s = this.mBloomDown.uniforms;
@@ -77510,6 +77815,57 @@ var bC, NV = YA((() => {
     }
   };
 })), LV = /* @__PURE__ */ oi({ default: () => TV });
+// Shader warm-up after a spawn (so a new soldier, weapon or effect doesn't stutter the first time it is drawn). Only
+// materials that haven't been prepared yet are: per material, its version and the kinds of mesh it was prepared for
+// (plain, skinned, instanced). When the scene's lights change every program does, so everything is prepared once more.
+var vgWarmSeen = /* @__PURE__ */ new WeakMap(), vgWarmGen = 0, vgWarmLights = "", vgWarmStats = { runs: 0, full: 0, objects: 0 };
+function vgWarmNew(renderer, compileAsync, scene, camera, target) {
+  let nL = 0, nS = 0, h = 0;
+  scene.traverseVisible((o) => {
+    o.isLight && o.layers.test(camera.layers) && (nL++, o.castShadow && nS++, h = h * 31 + o.type.length * 7 + (o.castShadow ? 3 : 1) | 0);
+  });
+  const sig = `${nL}:${nS}:${h}:${scene.environment?.uuid || ""}:${scene.fog ? 1 : 0}`;
+  sig !== vgWarmLights && (vgWarmLights = sig, vgWarmGen++, vgWarmStats.full++);
+  const list = [], marks = [];
+  const need = (m, bit) => {
+    if (!m || typeof m != "object") return !1;
+    let s = vgWarmSeen.get(m);
+    s || vgWarmSeen.set(m, s = { v: -1, g: -1, f: 0 });
+    (s.v !== m.version || s.g !== vgWarmGen) && (s.f = 0);
+    if (s.f & bit) return !1;
+    return marks.push(m, bit), !0;
+  };
+  scene.traverse((o) => {
+    if (!(o.isMesh || o.isPoints || o.isLine || o.isSprite)) return;
+    const m = o.material;
+    if (!m) return;
+    const bit = o.isSkinnedMesh ? 2 : o.isInstancedMesh ? 4 : o.isBatchedMesh ? 8 : 1;
+    let any = !1;
+    if (Array.isArray(m)) for (let k = 0; k < m.length; k++) any = need(m[k], bit) || any;
+    else any = need(m, bit);
+    any && list.push(o);
+  });
+  if (!list.length) return;
+  vgWarmStats.runs++, vgWarmStats.objects += list.length;
+  const some = {
+    traverse(cb) {
+      for (let k = 0; k < list.length; k++) cb(list[k]);
+    },
+    traverseVisible() {
+    }
+  }, was = renderer.getRenderTarget();
+  try {
+    renderer.setRenderTarget(target), compileAsync.call(renderer, some, camera, scene).catch(() => {
+    });
+  } finally {
+    renderer.setRenderTarget(was);
+  }
+  // (after preparing: a see-through two-sided material's version moves while it is prepared)
+  for (let k = 0; k < marks.length; k += 2) {
+    const m = marks[k], s = vgWarmSeen.get(m);
+    s.v = m.version, s.g = vgWarmGen, s.f |= marks[k + 1];
+  }
+}
 function TV(A) {
   const { renderer: e, settings: t, events: i } = A;
   let a = null, s = !0, n = "high", o = e.toneMapping;
@@ -77685,7 +78041,7 @@ function TV(A) {
     ($.startsWith("graphics") || $.startsWith("postfx")) && U();
   }
   function Y(V) {
-    a && V && a.setSize(V.width * V.pixelRatio, V.height * V.pixelRatio);
+    a && V && !vgGfx.up && a.setSize(Math.floor(V.width * V.pixelRatio), Math.floor(V.height * V.pixelRatio));
   }
   const W = {
     render(V, $) {
@@ -77785,8 +78141,7 @@ function TV(A) {
         d !== "done" || eA || (eA = setTimeout(() => {
           if (eA = 0, !(!a || !s || !f))
             try {
-              E(A.scene, A.camera).catch(() => {
-              });
+              vgWarmNew(e, f, A.scene, A.camera, a.sceneRT);
             } catch {
             }
         }, 250));
@@ -80400,7 +80755,7 @@ function t6(A) {
     const J = kA();
     o.update(SA, T, J), r.update(SA, T, J);
     for (const mA in c) c[mA].update(SA);
-    l.update(SA), B.update(SA), g.update(SA, T), A.renderer.getDrawingBufferSize(S);
+    l.update(SA), B.update(SA), g.update(SA, T), A.renderer.getDrawingBufferSize(S), vgGfx.up && S.multiplyScalar(vgGfx.scale);
     const gA = t.fov * Math.PI / 180, wA = S.y / (2 * Math.tan(gA / 2)), H = o.mesh.material.uniforms;
     H.uSunDir.value.copy(U), H.uTime.value = T, H.uPixelScale.value = wA, r.mesh.material.uniforms.uPixelScale.value = wA, WA();
     const sA = C("motes", !0) && h.quality >= 0.7 ? 0.35 : 0;
@@ -105057,7 +105412,7 @@ async function Pz() {
   })), vgBright = Number(c.get("graphics.brightness", 1)) || 1, r.on("settings:changed", ({ path: G }) => {
     G === "graphics.brightness" && (vgBright = Number(c.get("graphics.brightness", 1)) || 1, vgCalDraw());
     G === "graphics.viewDistance" && vgViewApply(g.camera, c);
-    (G === "graphics.renderScale" || G === "graphics.maxPixelRatio" || G === "graphics.resolution") && g.resize(), G === "graphics.displayMode" && (dmApply(), g.resize()), G === "graphics.fpsCap" && dmVsync();
+    (G === "graphics.renderScale" || G === "graphics.maxPixelRatio" || G === "graphics.resolution" || G === "graphics.dynRes" || G === "graphics.aa" || G === "graphics.postQuality") && g.resize(), G === "graphics.displayMode" && (dmApply(), g.resize()), G === "graphics.fpsCap" && dmVsync();
   });
   vgViewApply(g.camera, c), setTimeout(() => vgViewApply(g.camera, c), 0);
   const dmVsync = () => {
@@ -105097,7 +105452,7 @@ async function Pz() {
   }), u = new $P(g.renderer), vgTexBoot = (u.maxAnisotropy = Math.max(1, Math.min(u.hwAniso, vgTexQ(c.get("graphics.textureQuality", "low")).an))), Q = new aY(g.renderer, g.rendererString, {
     capacity: a ? 6e4 : 600,
     autoPublish: !a,
-    measureGpu: a || s
+    measureGpu: !0
   }), d = document.getElementById("hud"), f = document.getElementById("ui"), p = document.getElementById("boot-overlay");
   let E = !i;
   const C = {
