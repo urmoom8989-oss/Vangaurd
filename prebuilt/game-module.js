@@ -23284,6 +23284,7 @@ var QP = {
     filmGrain: !1,
     showFps: !1,
     fpsCap: 0,
+    vsync: !1,
     displayMode: "windowed",
     resolution: "native",
     viewDistance: "far",
@@ -23431,6 +23432,7 @@ function vgGfxMigrate(d, stored) {
     "targetFps" in stored || (g.targetFps = 60);
     g.gfxV = 3;
   }
+  Number(g.fpsCap) === -1 && (g.vsync = !0, g.fpsCap = 0);
 }
 /* ------------------------------------------------------------------ Release 1.0: Auto quality, automatic 3D resolution, upscaling */
 // vgGfx is what is in effect right now: up (the picture is scaled up by the game, see vgUpWanted), scale (the 3D
@@ -23538,7 +23540,7 @@ function vgDrsTick(ctx, now, perf) {
   const avg = G.n >= 5 ? (G.win - G.mx) / (G.n - 1) : G.win / G.n;
   G.win = 0, G.n = 0, G.mx = 0, G.avg = avg;
   let fps = Math.max(24, Number(S.get("graphics.targetFps", 60)) || 60);
-  const cap = Number(S.get("graphics.fpsCap", 0)) || 0;
+  const cap = vgFpsCap(ctx);
   cap > 0 && (fps = Math.min(fps, cap)), cap < 0 && G.refDt > 0 && (fps = Math.min(fps, 1e3 / G.refDt));
   const target = 1e3 / fps, slow = avg > target * 1.1 + 0.4, steps = VG_DYN_STEPS, lo = vgUpWanted(S) ? 2 : 0;
   // the graphics card's own time for a frame, where the browser gives it
@@ -28227,17 +28229,13 @@ function tY(A) {
   }
 }
 var fpQ = [], fpCh = null, fpLastRaf = 0, fpRafOn = !1, fpRafDt = 16.7;
-// The frame rate limit in effect: the setting. With no limit, the main menu, loadouts and armory are held at 60:
-// there is nothing to aim at there, and running flat out only heats the PC up before the match.
+// The frame rate limit in effect: -1 with VSync on (one frame per screen refresh), otherwise the Frame rate limit, or
+// 0 for none. With VSync off the game never waits for the monitor, in a match or in the menus.
 function vgFpsCap(ctx) {
-  const c = Number(ctx.settings.get("graphics.fpsCap", 0)) || 0;
-  if (c !== 0) return c;
-  let m = "";
-  try {
-    m = ctx.services.hud.menu;
-  } catch {
-  }
-  return m === "main" || m === "entry" || m === "loadouts" || m === "armory" ? 60 : 0;
+  const S = ctx.settings;
+  if (S.get("graphics.vsync", !1) === !0) return -1;
+  const c = Number(S.get("graphics.fpsCap", 0)) || 0;
+  return c > 0 ? c : 0;
 }
 function fpRafStart() {
   if (fpRafOn || typeof requestAnimationFrame != "function") return;
@@ -64311,7 +64309,13 @@ function rJ(A) {
         label: "Target frame rate",
         type: "cycle",
         options: [[30, "30"], [45, "45"], [60, "60"], [90, "90"], [120, "120"], [144, "144"], [165, "165"], [240, "240"]],
-        desc: "The frame rate that the Auto preset and Automatic 3D resolution aim to hold. Higher targets trade picture quality for smoothness."
+        desc: "What the Auto preset and Automatic 3D resolution aim for. It is not a limit: when your PC runs faster than this they spend the spare speed on a sharper picture, so the frame rate settles near it. Raise it for more frames per second."
+      },
+      {
+        path: "graphics.vsync",
+        label: "VSync",
+        type: "toggle",
+        desc: "Off (default): the game runs as fast as your PC can and never waits for your monitor. On: one frame per screen refresh, for the smoothest motion with a little more input lag. The Frame rate limit applies when VSync is off."
       },
       {
         path: "graphics.fpsCap",
@@ -64319,7 +64323,6 @@ function rJ(A) {
         type: "cycle",
         options: [
           [0, "UNLIMITED"],
-          [-1, "VSYNC"],
           [60, "60"],
           [120, "120"],
           [144, "144"],
@@ -64327,7 +64330,7 @@ function rJ(A) {
           [240, "240"],
           [360, "360"]
         ],
-        desc: "Unlimited (default) renders as fast as your PC can, not tied to your monitor. VSync locks the frame rate to your monitor's refresh rate. A number caps the frame rate."
+        desc: "Unlimited (default) renders as fast as your PC can. A number caps the frame rate. Not used while VSync is on."
       },
       { sec: "Post processing" },
       {
@@ -105412,12 +105415,12 @@ async function Pz() {
   })), vgBright = Number(c.get("graphics.brightness", 1)) || 1, r.on("settings:changed", ({ path: G }) => {
     G === "graphics.brightness" && (vgBright = Number(c.get("graphics.brightness", 1)) || 1, vgCalDraw());
     G === "graphics.viewDistance" && vgViewApply(g.camera, c);
-    (G === "graphics.renderScale" || G === "graphics.maxPixelRatio" || G === "graphics.resolution" || G === "graphics.dynRes" || G === "graphics.aa" || G === "graphics.postQuality") && g.resize(), G === "graphics.displayMode" && (dmApply(), g.resize()), G === "graphics.fpsCap" && dmVsync();
+    (G === "graphics.renderScale" || G === "graphics.maxPixelRatio" || G === "graphics.resolution" || G === "graphics.dynRes" || G === "graphics.aa" || G === "graphics.postQuality") && g.resize(), G === "graphics.displayMode" && (dmApply(), g.resize()), (G === "graphics.fpsCap" || G === "graphics.vsync") && dmVsync();
   });
   vgViewApply(g.camera, c), setTimeout(() => vgViewApply(g.camera, c), 0);
   const dmVsync = () => {
     try {
-      window.vangaurdDesktop?.setVsync?.(Number(c.get("graphics.fpsCap", 0)) === -1)?.catch?.(() => {
+      window.vangaurdDesktop?.setVsync?.(c.get("graphics.vsync", !1) === !0)?.catch?.(() => {
       });
     } catch {
     }

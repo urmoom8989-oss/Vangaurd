@@ -146,7 +146,8 @@ jobs:
           What's new:
           - A much sharper picture. The new Auto graphics preset (the default) picks the level for your PC and keeps adjusting it to hold your target frame rate (60 unless you change it in Settings > Graphics). Before, everyone started on Low at 35% resolution and no preset changed that.
           - Automatic 3D resolution: the game raises and lowers its 3D resolution by itself to hold the target frame rate, and below 100% the picture is scaled up by a sharper filter. You can still set the 3D resolution by hand.
-          - Smoother play: no more hitch each time a soldier spawns, far shadows cost less, nothing is drawn while the game is minimised, and the menus no longer run your graphics card flat out.
+          - Smoother play: no more hitch each time a soldier spawns, far shadows cost less, and nothing is drawn while the game is minimised.
+          - VSync is its own setting (Settings > Graphics), off by default: the game never waits for your monitor unless you turn it on.
           - A new Season Pass page, animated: your season and level with an angled XP bar, the Season 1 Season Pass Rewards (opens the reward track) and a secret operator.
           - The secret operator Echo: get 50 eliminations on Halden Station to unlock him. His tile fills in as you go.
           - The pass and your player level are one and the same: it's called Level everywhere, and each reward on the track shows the level it comes at.
