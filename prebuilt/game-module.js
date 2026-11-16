@@ -23437,7 +23437,7 @@ function vgGfxMigrate(d, stored) {
 // resolution in effect), dyn (the automatic 3D resolution), and the frame-rate watcher's state.
 // (below 50 % only on the Low level, where the old default was 35 %: no PC ends up slower than it was)
 var VG_DYN_STEPS = [0.35, 0.42, 0.5, 0.56, 0.62, 0.67, 0.72, 0.77, 0.83, 0.9, 1];
-var vgGfx = { up: !1, scale: 1, dyn: 1, engine: null, tier: -1, lastT: 0, win: 0, n: 0, slow: 0, ok: 0, slowLv: 0, okLv: 0, cool: 0, probe: 6, upAt: -1e9, lvCool: 0, lvUpAt: -1e9, ceil: null, refDt: 0, note: "" };
+var vgGfx = { up: !1, scale: 1, dyn: 1, engine: null, tier: -1, lastT: 0, win: 0, n: 0, mx: 0, slow: 0, ok: 0, slowLv: 0, okLv: 0, cool: 0, probe: 6, upAt: -1e9, lvCool: 0, lvUpAt: -1e9, ceil: null, refDt: 0, note: "" };
 // What the graphics card can probably do, from its name: 0 software, 1 built-in graphics, 2 a mid-range card,
 // 3 a strong card. Only a first guess: the frame-rate watcher corrects it.
 function vgGpuTier(r) {
@@ -23508,6 +23508,7 @@ function vgDynSet(S, v) {
 // The frame-rate watcher, once a frame. While playing (no menu open, the window in front) it averages the frame time
 // over a second and compares it with the target frame rate (no higher than the frame rate limit; with VSync, no
 // higher than the screen's refresh rate).
+//  (The longest frame of each second is left out: a single hitch isn't slowness. Frames over 3 seconds are loading.)
 //  Automatic 3D resolution: too slow for 2 seconds running -> down, straight to the resolution that should hold the
 //  target (the picture costs about in proportion to its pixels). Up one step when there is room: by the graphics
 //  card's own timer or, uncapped, by the frame time; where neither can tell (a frame rate limit, VSync), by trying
@@ -23526,15 +23527,16 @@ function vgDrsTick(ctx, now, perf) {
     menu = ctx.services.hud.menu, play = menu === "none" && !document.hidden && !!window.__APP_STARTUP_READY__ && !ctx.time.frozen && !ctx.time.deterministic && !ctx.flags?.shotMode;
   } catch {
   }
-  if (!play || dt <= 0 || dt > 500) {
+  if (!play || dt <= 0 || dt > 3e3) {
     // (in the menus the game is light: what the screen refreshes at)
     !play && menu && menu !== "none" && fpRafOn && fpRafDt > 3 && fpRafDt < 40 && (G.refDt = G.refDt ? Math.min(G.refDt, fpRafDt) : fpRafDt);
-    G.win = 0, G.n = 0;
+    G.win = 0, G.n = 0, G.mx = 0;
     return;
   }
-  if (G.win += dt, G.n++, G.win < 1e3 || G.n < 3) return;
-  const avg = G.win / G.n;
-  G.win = 0, G.n = 0;
+  if (G.win += dt, G.n++, dt > G.mx && (G.mx = dt), G.win < 1e3 || G.n < 3) return;
+  // (one long frame in the second, a hitch, doesn't count)
+  const avg = G.n >= 5 ? (G.win - G.mx) / (G.n - 1) : G.win / G.n;
+  G.win = 0, G.n = 0, G.mx = 0;
   let fps = Math.max(24, Number(S.get("graphics.targetFps", 60)) || 60);
   const cap = Number(S.get("graphics.fpsCap", 0)) || 0;
   cap > 0 && (fps = Math.min(fps, cap)), cap < 0 && G.refDt > 0 && (fps = Math.min(fps, 1e3 / G.refDt));
@@ -23577,11 +23579,11 @@ function vgDrsTick(ctx, now, perf) {
   if (auto && now >= G.lvCool) {
     const lv = vgGfxLv(), cur = Math.max(0, lv.indexOf(S.get("graphics.autoLevel", "high")));
     if (slow && G.slowLv >= 5 && (!dyn || i <= lo || cpuBound) && cur > 0) {
-      now - G.lvUpAt < 6e4 && (G.ceil = cur - 1, G.lvUpAt = -1e9), G.lvCool = now + 12e3, G.slowLv = 0, G.okLv = 0, vgAutoSet(S, lv[cur - 1]), dyn && vgDynSet(S, 0.77), G.note = "down";
+      now - G.lvUpAt < 6e4 && (G.ceil = cur - 1, G.lvUpAt = -1e9), G.lvCool = now + 12e3, G.cool = now + 4e3, G.slowLv = 0, G.okLv = 0, vgAutoSet(S, lv[cur - 1]), dyn && vgDynSet(S, 0.77), G.note = "down";
       return;
     }
     const proof = gpu > 0 ? gpu < target * 0.5 : cap === 0 && avg < target * 0.55;
-    !slow && proof && G.okLv >= 40 && (!dyn || i === steps.length - 1) && cur < lv.length - 1 && (G.ceil == null || cur + 1 <= G.ceil) && (G.lvUpAt = now, G.lvCool = now + 12e3, G.okLv = 0, vgAutoSet(S, lv[cur + 1]), G.dyn < 0.5 && dyn && vgDynSet(S, 0.5), G.note = "up");
+    !slow && proof && G.okLv >= 40 && (!dyn || i === steps.length - 1) && cur < lv.length - 1 && (G.ceil == null || cur + 1 <= G.ceil) && (G.lvUpAt = now, G.lvCool = now + 12e3, G.cool = now + 4e3, G.okLv = 0, vgAutoSet(S, lv[cur + 1]), G.dyn < 0.5 && dyn && vgDynSet(S, 0.5), G.note = "up");
   }
 }
 function vgGfxLink(s, p, v) {
@@ -60229,7 +60231,9 @@ function vgCinePlay(done, mark = !1) {
   v.addEventListener("error", () => finish(started));
   go();
 }
-typeof window < "u" && (window.__VGFX__ = { gfx: vgGfx, tier: vgGpuTier, migrate: vgGfxMigrate, tick: vgDrsTick, autoSet: vgAutoSet, steps: VG_DYN_STEPS, warm: vgWarmStats, up: (S) => vgUpWanted(S), cap: (c) => vgFpsCap(c) });
+typeof window < "u" && (window.__VGFX__ = { gfx: vgGfx, tier: vgGpuTier, migrate: vgGfxMigrate, tick: vgDrsTick, autoSet: vgAutoSet, steps: VG_DYN_STEPS, get warm() {
+  return vgWarmStats;
+}, up: (S) => vgUpWanted(S), cap: (c) => vgFpsCap(c) });
 typeof window < "u" && (window.__VGCINE__ = { play: (mark) => vgCinePlay(null, !!mark), maybe: () => new Promise((r) => vgCineMaybe(() => r(!0))), due: () => vgCineDue(), seen: () => vgCineSeen(), state: vgCine, cfg: (c, serverNow) => vgCineCfgSet(c, serverNow) });
 function vgAuthSet(user, token, remember) {
   String(user || "").toLowerCase() !== String(vgAuth.user || "").toLowerCase() && (vgAuth.uid = null);
